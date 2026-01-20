@@ -81,11 +81,11 @@ usePageTheme('light');
     <!-- Franchise End -->
 
     <!-- Services Start -->
-    <Services :userTypes="userTypes" />
+    <Services />
     <!-- Services End -->
 
     <!-- Technology Start -->
-    <Technology :userTypes="userTypes" />
+    <Technology />
     <!-- Technology End -->
 
     <!-- Sustainability Start -->
@@ -93,7 +93,7 @@ usePageTheme('light');
     <!-- Sustainability End -->
 
     <!-- Partners Start -->
-    <Partners :feedbacks="feedbacks" :userTypes="userTypes" />
+    <Partners />
     <!-- Partners End -->
 
     <!-- Join Start -->
@@ -105,7 +105,7 @@ usePageTheme('light');
     <!-- Careers End -->
 
     <!-- Testimonials Start -->
-    <Testimonials />
+    <Testimonials :feedbacks="feedbacks" :userTypes="userTypes" />
     <!-- Testimonials End -->
 
     <!-- Contact Start -->

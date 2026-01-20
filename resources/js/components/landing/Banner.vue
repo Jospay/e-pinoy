@@ -48,25 +48,24 @@ const driver = userTypes.find((t) => t.name === 'driver');
         <h1 class="px-2 py-2 text-lg font-bold text-white sm:text-3xl xl:px-5">
           Get Started
         </h1>
-        <a
-          href="#"
-          target="_blank"
-          class="rounded-xl border-3 border-white bg-brand-red px-2 py-2 text-lg font-bold text-white transition-all hover:opacity-85 sm:text-xl xl:px-8"
-        >
-          Become a Franchise Partner
-        </a>
-
         <Link
           v-if="franchisee"
           :href="`/register/${franchisee.encrypted_id}`"
+          class="rounded-xl border-3 border-white bg-brand-red px-2 py-2 text-lg font-bold text-white transition-all hover:opacity-85 sm:text-xl xl:px-8"
+        >
+          Become a Franchise Partner
+        </Link>
+
+        <Link
+          v-if="driver"
+          :href="`/register/${driver.encrypted_id}`"
           class="rounded-xl border-3 border-white bg-brand-red px-7 py-2 text-lg font-bold text-white transition-all hover:opacity-85 sm:text-xl xl:px-8"
         >
           Become a Driver
         </Link>
 
         <Link
-          v-if="driver"
-          :href="`/register/${driver.encrypted_id}`"
+          href="#"
           class="rounded-xl border-3 border-white bg-white px-7 py-2 text-lg font-bold text-brand-blue transition-all hover:opacity-85 sm:text-xl xl:px-8"
         >
           Download App

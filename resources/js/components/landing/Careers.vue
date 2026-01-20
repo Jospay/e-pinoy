@@ -1,3 +1,8 @@
+<script setup lang="ts">
+import { selectUserType } from '@/routes';
+import { Link } from '@inertiajs/vue3';
+</script>
+
 <template>
   <div
     id="careers"
@@ -44,11 +49,13 @@
         >
           Join EMSi and be part of the Team today!
         </p>
-        <button
+
+        <Link
+          :href="selectUserType()"
           class="w-full rounded-xl bg-brand-red py-3 text-xl font-bold text-white sm:w-fit sm:px-16"
         >
           Click here to Join <i class="fa-solid fa-arrow-right ps-3"></i>
-        </button>
+        </Link>
       </div>
     </div>
   </div>

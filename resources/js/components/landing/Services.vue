@@ -1,3 +1,12 @@
+<script setup lang="ts">
+const scrollToCareers = () => {
+  const section = document.getElementById('careers');
+  if (section) {
+    section.scrollIntoView({ behavior: 'smooth' });
+  }
+};
+</script>
+
 <template>
   <div id="services" class="scroll-mt-22 bg-white">
     <div class="mx-auto w-full max-w-[1050px] px-5 pt-2 pb-10">
@@ -93,14 +102,47 @@
         </div>
 
         <div
-          class="col-span-12 grid place-items-center rounded-2xl bg-gradient-to-r from-brand-blue to-[#05AEE9] py-6 shadow-brand-shadow lg:col-span-6"
+          class="perspective col-span-12 h-full min-h-[180px] cursor-pointer lg:col-span-6"
+          @click="scrollToCareers"
         >
-          <h1 class="text-center text-3xl font-bold text-white">
-            MORE <br />
-            SERVICES
-          </h1>
+          <div
+            class="preserve-3d group relative h-full transition-transform duration-700 hover:rotate-y-180"
+          >
+            <!-- Front side -->
+            <div
+              class="absolute inset-0 grid h-full place-items-center rounded-xl border-3 border-white bg-brand-blue p-6 backface-hidden"
+            >
+              <h1 class="text-center text-3xl font-bold text-white">
+                MORE <br />
+                SERVICES
+              </h1>
+            </div>
+            <!-- Back side -->
+            <div
+              class="absolute inset-0 grid h-full rotate-y-180 place-items-center rounded-xl border-3 border-brand-blue bg-white p-6 backface-hidden"
+            >
+              <h1 class="text-center text-3xl font-bold text-brand-blue">
+                CAREERS
+              </h1>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.perspective {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+</style>

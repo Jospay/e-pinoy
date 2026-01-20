@@ -166,10 +166,10 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div
+    <!-- <div
       class="mx-auto mt-14 w-fit rounded-2xl bg-brand-red px-16 py-3 text-center text-xl font-bold text-white sm:px-20"
     >
       View more <i class="fa-solid fa-arrow-right ps-3"></i>
-    </div>
+    </div> -->
   </div>
 </template>

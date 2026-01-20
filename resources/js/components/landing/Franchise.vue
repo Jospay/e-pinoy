@@ -1,4 +1,14 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
+
+interface Props {
+  userTypes: { name: string; encrypted_id: string }[];
+}
+
+const { userTypes } = defineProps<Props>();
+
+const franchisee = userTypes.find((t) => t.name === 'owner');
+</script>
 
 <template>
   <div id="franchise" class="scroll-mt-14 px-5 py-12">
@@ -54,13 +64,14 @@
       </div>
 
       <div class="pt-12 text-center">
-        <a
-          href=""
+        <Link
+          v-if="franchisee"
+          :href="`/register/${franchisee.encrypted_id}`"
           class="xs:text-lg rounded-xl bg-brand-red px-5 py-4 font-bold text-white transition-all hover:opacity-85 sm:text-xl xl:px-10"
         >
           Become a Franchise Partner
           <i class="fa-solid fa-arrow-right xs:ps-4"></i>
-        </a>
+        </Link>
       </div>
     </div>
   </div>
