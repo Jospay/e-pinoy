@@ -218,7 +218,9 @@ const submitFeedback = async () => {
                 </div>
               </div>
 
-              <div class="flex flex-1 flex-col justify-between p-5 text-center">
+              <div
+                class="flex flex-1 flex-col justify-between px-5 pb-5 text-center"
+              >
                 <div>
                   <p class="text-xl font-bold text-brand-blue">{{ fb.name }}</p>
                   <p class="text-xs text-blue-900">

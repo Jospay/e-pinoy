@@ -21,7 +21,7 @@ const franchisee = userTypes.find((t) => t.name === 'owner');
         </p>
         <p class="text-md text-gray-700">
           EMSi offers a franchise program for individuals and organizations who
-          want to operate elevtric transport services under the EMSi system.
+          want to operate electric transport services under the EMSi system.
         </p>
       </div>
 

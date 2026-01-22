@@ -16,6 +16,7 @@ import Technology from '@/components/landing/Technology.vue';
 import Testimonials from '@/components/landing/Testimonials.vue';
 import Partners from '@/components/landing/Partners.vue';
 import Solutions from '@/components/landing/Solutions.vue';
+import QRCode from '@/components/landing/QRCode.vue';
 
 // 1. Define the data structure
 interface FranchiseData {
@@ -111,5 +112,7 @@ usePageTheme('light');
     <!-- Contact Start -->
     <Contact />
     <!-- Contact End-->
+
+    <QRCode />
   </HomeLayout>
 </template>
