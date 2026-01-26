@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
   FileText,
   HandCoins,
+  BusFront,
   HelpCircle,
   History,
   LayoutGrid,
@@ -44,7 +45,7 @@ import NavMain from './NavMain.vue';
 // 🧠 1. Get the logged-in user
 const page = usePage();
 const user = page.props.auth.user;
-const userFranchise = user.owner?.franchises?.[0];
+// const userFranchise = user.owner?.franchises?.[0];
 
 // 🧭 2. Map user_type_id to role name
 const typeMap: Record<number, string> = {
@@ -131,6 +132,12 @@ const navConfig: Record<string, NavItem[]> = {
       title: 'Allocation Management',
       href: superAdmin.allocation.index(),
       icon: HandCoins,
+      group: 'Finance',
+    },
+    {
+      title: 'Vehicle Type Management',
+      href: superAdmin.vehicleType.index(),
+      icon: BusFront,
       group: 'Finance',
     },
     {

@@ -100,6 +100,7 @@ class DatabaseSeeder extends Seeder
         $this->call(RevenueSeeder::class);
 
         $this->call(PercentageTypeSeeder::class);
+        $this->call(VehicleTypeSeeder::class);
         $this->call(RevenueBreakdownSeeder::class);
 
         $this->call(InventorySeeder::class);
