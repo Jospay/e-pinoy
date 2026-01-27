@@ -24,11 +24,9 @@ class DashboardController extends Controller
         return Inertia::render('owner/dashboard/Index', [
             'franchiseExists' => (bool) $franchise,
 
-
             'activeVehicles' => $this->countVehicles($franchiseId, 1),
             'pendingVehicles' => $this->countVehicles($franchiseId, 6),
             'vehiclesUnderMaintenance' => $this->countVehicles($franchiseId, 5),
-
 
             'activeDrivers' => $this->countDrivers($franchiseId, 1),
             'pendingDrivers' => $this->countDrivers($franchiseId, 6),
@@ -36,22 +34,19 @@ class DashboardController extends Controller
             'activeTechnicians' => $this->countTechnicians($franchiseId, 1),
             'pendingTechnicians' => $this->countTechnicians($franchiseId, 1),
 
-
             'dailyEarnings' => $this->dailyEarnings($franchiseId),
             'yesterdayEarnings' => $this->yesterdayEarnings($franchiseId),
-
 
             'dailyTrips' => $this->dailyTrips($franchiseId),
             'yesterdayTrips' => $this->yesterdayTrips($franchiseId),
 
-
             'pendingBoundaryDueCount' => $this->countPendingBoundaryContracts($franchiseId),
-
 
             'revenueExpensesData' => $this->getRevenueExpensesData($franchiseId, $year),
 
-
             'netProfitData' => $this->getNetProfitData($franchiseId, $year, 7),
+
+            'vehicleTypes' => $this->getVehicleTypesData($franchise),
         ]);
     }
 
@@ -178,4 +173,52 @@ class DashboardController extends Controller
             ])
             ->toArray();
     }
+
+    protected function getVehicleTypesData($franchise): array
+{
+    if (!$franchise) return [];
+
+    // Get all vehicle types from the database
+    $allVehicleTypes = \App\Models\VehicleType::all();
+
+    // Get vehicle types that ARE in franchise_vehicle_type for this franchise
+    $assignedVehicleTypes = $franchise->vehicleTypes()
+        ->withPivot('status_id')
+        ->get();
+
+    // Create a map for quick lookup
+    $assignedMap = $assignedVehicleTypes->keyBy('id');
+
+    return $allVehicleTypes->map(function ($vehicleType) use ($assignedMap) {
+        // Check if this vehicle type has a record in franchise_vehicle_type
+        $hasRecord = $assignedMap->has($vehicleType->id);
+
+        if ($hasRecord) {
+            // HAS RECORD in franchise_vehicle_type - get the actual status
+            $assigned = $assignedMap[$vehicleType->id];
+            $status = \App\Models\Status::find($assigned->pivot->status_id);
+
+            return [
+                'id' => $vehicleType->id,
+                'name' => $vehicleType->name,
+                'is_assigned' => true,
+                'status' => [
+                    'id' => $status->id,
+                    'name' => $status->name, // Could be 'active' or 'pending'
+                ],
+            ];
+        } else {
+            // NO RECORD in franchise_vehicle_type - show as "locked"
+            return [
+                'id' => $vehicleType->id,
+                'name' => $vehicleType->name,
+                'is_assigned' => false,
+                'status' => [
+                    'id' => null,
+                    'name' => 'locked', // Virtual status (not in DB)
+                ],
+            ];
+        }
+    })->toArray();
+}
 }

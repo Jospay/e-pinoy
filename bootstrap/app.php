@@ -25,11 +25,13 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        $middleware->alias([
-            'user_type' => UserTypeMiddleware::class,
-            'check.active' => CheckActiveStatus::class,
-            'check.inactive' => CheckInactiveStatus::class
-        ]);
+        // Combine all aliases here
+    $middleware->alias([
+        'user_type' => UserTypeMiddleware::class,
+        'check.active' => CheckActiveStatus::class,
+        'check.inactive' => CheckInactiveStatus::class,
+        'has.active.type' => \App\Http\Middleware\EnsureHasActiveVehicleType::class,
+    ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

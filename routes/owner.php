@@ -19,10 +19,15 @@ use App\Http\Controllers\Owner\SupportCenterController;
 use App\Http\Controllers\Owner\SuspendDriverController;
 use App\Http\Controllers\Owner\VehicleController;
 use App\Http\Controllers\Owner\VehicleDriverController;
+use App\Http\Controllers\Owner\VehicleTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->prefix('owner')->name('owner.')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/vehicle-types/{vehicleType}/request-unlock', [VehicleTypeController::class, 'requestUnlock'])
+        ->name('vehicle-types.request-unlock');
+
+    Route::middleware(['has.active.type'])->group(function () {
     Route::resource('/boundary-contracts', BoundaryContractController::class);
     Route::get('/revenue-management', [RevenueManagementController::class, 'index'])->name('revenueManagement');
     Route::get('/expense-management', [ExpenseManagementController::class, 'index'])->name('expenseManagement');
@@ -58,4 +63,5 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
 
     Route::get('/franchise/my-contract', [FranchiseController::class, 'myContract'])
         ->name('franchise.my-contract');
+        });
 });

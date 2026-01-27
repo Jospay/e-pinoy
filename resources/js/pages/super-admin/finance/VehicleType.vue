@@ -105,9 +105,11 @@ const submitForm = () => {
         <Card
           v-for="item in percentageTypes"
           :key="item.id"
-          class="flex flex-col justify-between transition-all hover:shadow-md"
+          class="flex flex-col justify-between pb-0 transition-all hover:shadow-md"
         >
-          <CardHeader class="flex items-center justify-between py-3">
+          <CardHeader
+            class="flex items-center justify-between border border-red-500 pt-3"
+          >
             <CardTitle class="font-mono text-xl font-extrabold">
               {{ item.name }}
             </CardTitle>

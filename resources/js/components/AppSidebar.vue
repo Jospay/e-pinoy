@@ -18,6 +18,7 @@ import superAdmin from '@/routes/super-admin';
 import technician from '@/routes/technician';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import {
   Banknote,
   BanknoteArrowDown,
@@ -46,7 +47,9 @@ import NavMain from './NavMain.vue';
 const page = usePage();
 const user = page.props.auth.user;
 // const userFranchise = user.owner?.franchises?.[0];
-
+const hasActiveVehicleType = computed(
+  () => page.props.auth.hasActiveVehicleType,
+);
 // 🧭 2. Map user_type_id to role name
 const typeMap: Record<number, string> = {
   1: 'super_admin',
@@ -247,24 +250,25 @@ const navConfig: Record<string, NavItem[]> = {
   ],
 
   owner: [
-    {
-      title: 'Dashboard',
-      href: owner.dashboard(),
-      icon: LayoutGrid,
-      group: 'Overview',
-    },
     // {
     //   title: 'Notifications',
     //   href: owner.notifications(),
     //   icon: Bell,
     //   group: 'Overview',
     // },
+    {
+      title: 'Dashboard',
+      href: owner.dashboard(),
+      icon: LayoutGrid,
+      group: 'Overview',
+    },
 
     {
       title: 'Payout',
       href: owner.payout(),
       icon: Banknote,
       group: 'Payment',
+      requiresActive: true,
     },
 
     {
@@ -272,18 +276,21 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.driversApplication.index(),
       icon: Users,
       group: 'Management',
+      requiresActive: true,
     },
     {
       title: 'Driver Management',
       href: owner.drivers.index(),
       icon: Users,
       group: 'Management',
+      requiresActive: true,
     },
     {
       title: 'Vehicle Management',
       href: owner.vehicles.index(),
       icon: CarTaxiFront,
       group: 'Management',
+      requiresActive: true,
     },
     // {
     //   title: 'Assign Drivers',
@@ -296,6 +303,7 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.boundaryContracts.index(),
       icon: FileText,
       group: 'Management',
+      requiresActive: true,
     },
     // {
     //   title: 'Suspend Drivers',
@@ -316,18 +324,21 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.revenueManagement(),
       icon: DollarSign,
       group: 'Finance',
+      requiresActive: true,
     },
     {
       title: 'Payroll Management',
       href: owner.driverownerpayroll(),
       icon: FileSpreadsheet,
       group: 'Finance',
+      requiresActive: true,
     },
     {
       title: 'Expense Management',
       href: owner.expenseManagement(),
       icon: FileSpreadsheet,
       group: 'Finance',
+      requiresActive: true,
     },
 
     {
@@ -335,6 +346,7 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.driverownerreport(),
       icon: ChartNoAxesCombined,
       group: 'Finance',
+      requiresActive: true,
     },
 
     {
@@ -342,12 +354,14 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.supportCenter(),
       icon: HelpCircle,
       group: 'Support',
+      requiresActive: true,
     },
     {
       title: 'Maintenance Requests',
       href: owner.maintenanceRequests.index(),
       icon: Wrench,
       group: 'Support',
+      requiresActive: true,
     },
 
     {
@@ -355,6 +369,7 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.franchise.myContract(),
       icon: ReceiptText,
       group: 'Others',
+      requiresActive: true,
     },
   ],
 
@@ -401,7 +416,20 @@ const navConfig: Record<string, NavItem[]> = {
 };
 
 // 🧩 4. Load the correct nav items for the user
-const allNavItems = navConfig[userType] || [];
+// 🧩 Filter the items based on the status
+const allNavItems = computed(() => {
+  const items = navConfig[userType] || [];
+
+  // If the owner doesn't have an active vehicle type, mark restricted items as disabled
+  if (userType === 'owner' && !hasActiveVehicleType.value) {
+    return items.map((item) => ({
+      ...item,
+      disabled: item.requiresActive ? true : false,
+    }));
+  }
+
+  return items;
+});
 </script>
 
 <template>

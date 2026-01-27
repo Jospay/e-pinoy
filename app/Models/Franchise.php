@@ -69,6 +69,11 @@ class Franchise extends Model
         return $this->belongsToMany(UserTechnician::class);
     }
 
+    public function VehicleTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(VehicleType::class);
+    }
+
     // relationship to expenses, one to many
     public function expenses(): HasMany
     {

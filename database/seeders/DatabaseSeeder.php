@@ -95,12 +95,12 @@ class DatabaseSeeder extends Seeder
 
         User::factory(30)->create(['user_type_id' => 5]);
         $this->call(TechnicianAssignmentSeeder::class);
-
         $this->call(BoundaryContractSeeder::class);
         $this->call(RevenueSeeder::class);
 
         $this->call(PercentageTypeSeeder::class);
         $this->call(VehicleTypeSeeder::class);
+        $this->call(VehicleTypeFranchiseSeeder::class);
         $this->call(RevenueBreakdownSeeder::class);
 
         $this->call(InventorySeeder::class);
