@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActionVerificationController;
+use App\Http\Controllers\SuperAdmin\AccreditationController;
 use App\Http\Controllers\SuperAdmin\AllocationController;
 use App\Http\Controllers\SuperAdmin\BoundaryContractController;
 use App\Http\Controllers\SuperAdmin\DashboardController;
@@ -65,6 +66,8 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::delete('/vehicle/{vehicle}', [VehicleController::class, 'destroy'])->name('vehicle.destroy');
     Route::patch('/vehicle/{vehicle}/change', [VehicleController::class, 'changeStatus'])->name('vehicle.change');
     Route::get('/vehicle/{vehicle}/maintenances', [VehicleController::class, 'maintenanceHistory'])->name('vehicle.maintenances');
+
+    Route::get('/accreditation', [AccreditationController::class, 'index'])->name('accreditation.index');
 
     Route::get('/earning', [EarningController::class, 'index'])->name('earning.index');
     Route::get('/earning/show', [EarningController::class, 'show'])->name('earning.show');

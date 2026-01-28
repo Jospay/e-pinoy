@@ -132,21 +132,28 @@
 
   <!-- Start All Rights Reserved -->
   <div class="mx-auto w-full max-w-[1400px] bg-white px-5 py-3">
-    <div
-      class="text-md flex flex-wrap items-center justify-between gap-3 text-brand-blue"
-    >
-      <p>
-        © 2026
-        <a href="#" class="font-bold">E-Pinoy Mobility System Inc.</a> All
-        Rights Reserved.
-      </p>
+    <div class="text-md grid grid-cols-12 text-brand-blue">
+      <div
+        class="col-span-12 mb-3 text-center lg:col-span-6 lg:mb-0 lg:text-start"
+      >
+        <p>
+          © 2026
+          <a href="#" class="font-bold">E-Pinoy Mobility System Inc.</a> All
+          Rights Reserved.
+        </p>
+      </div>
 
-      <p>
-        Designed & Developed by:
-        <a href="https://bb88advertising.com/" target="_blank" class="font-bold"
-          >BB 88 Advertising and Digital Solution Inc.</a
-        >
-      </p>
+      <div class="col-span-12 text-center lg:col-span-6 lg:text-end">
+        <p>
+          Designed & Developed by:
+          <a
+            href="https://bb88advertising.com/"
+            target="_blank"
+            class="font-bold"
+            >BB 88 Advertising and Digital Solution Inc.</a
+          >
+        </p>
+      </div>
     </div>
   </div>
   <!-- End All Rights Reserved -->

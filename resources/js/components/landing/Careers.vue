@@ -52,7 +52,7 @@ import { Link } from '@inertiajs/vue3';
 
         <Link
           :href="selectUserType()"
-          class="w-full rounded-xl bg-brand-red py-3 text-xl font-bold text-white sm:w-fit sm:px-16"
+          class="w-full rounded-xl bg-brand-red py-3 text-center text-xl font-bold text-white sm:w-fit sm:px-16"
         >
           Click here to Join <i class="fa-solid fa-arrow-right ps-3"></i>
         </Link>

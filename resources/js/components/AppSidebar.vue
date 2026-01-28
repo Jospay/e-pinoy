@@ -24,6 +24,7 @@ import {
   BanknoteArrowDown,
   Box,
   CarTaxiFront,
+  Car,
   ChartNoAxesCombined,
   DollarSign,
   FileSpreadsheet,
@@ -87,6 +88,13 @@ const navConfig: Record<string, NavItem[]> = {
       title: 'Vehicle Management',
       href: superAdmin.vehicle.index(),
       icon: CarTaxiFront,
+      group: 'Fleet',
+    },
+
+    {
+      title: 'Franchise Accreditation',
+      href: superAdmin.accreditation.index(),
+      icon: Car,
       group: 'Fleet',
     },
     {
@@ -292,6 +300,7 @@ const navConfig: Record<string, NavItem[]> = {
       group: 'Management',
       requiresActive: true,
     },
+
     // {
     //   title: 'Assign Drivers',
     //   href: owner.vehicleDrivers.index(),

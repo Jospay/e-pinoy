@@ -103,7 +103,7 @@ function submit() {
                 {{ form.errors.message }}
               </div>
 
-              <div class="pt-4 pb-4 text-end lg:pb-0">
+              <div class="pt-4 pb-4 text-center lg:pb-0 lg:text-end">
                 <button
                   type="submit"
                   :disabled="form.processing"
@@ -168,11 +168,19 @@ function submit() {
                 Follow us on social media for the latest updates!
               </h3>
               <div class="flex flex-wrap gap-3 pt-4">
-                <img src="@/assets/epinoy/fb.png" class="h-20" alt="" />
-                <img src="@/assets/epinoy/yt.png" class="h-20" alt="" />
-                <img src="@/assets/epinoy/insta.png" class="h-20" alt="" />
-                <img src="@/assets/epinoy/x.png" class="h-20" alt="" />
-                <img src="@/assets/epinoy/tiktok.png" class="h-20" alt="" />
+                <img src="@/assets/epinoy/fb.png" class="h-10 md:h-18" alt="" />
+                <img src="@/assets/epinoy/yt.png" class="h-10 md:h-18" alt="" />
+                <img
+                  src="@/assets/epinoy/insta.png"
+                  class="h-10 md:h-18"
+                  alt=""
+                />
+                <img src="@/assets/epinoy/x.png" class="h-10 md:h-18" alt="" />
+                <img
+                  src="@/assets/epinoy/tiktok.png"
+                  class="h-10 md:h-18"
+                  alt=""
+                />
               </div>
             </div>
           </div>
