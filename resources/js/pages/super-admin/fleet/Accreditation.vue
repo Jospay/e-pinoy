@@ -20,12 +20,13 @@ import {
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
 import { debounce } from 'lodash-es';
 import { MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
-import axios from 'axios';
+import { toast } from 'vue-sonner';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const props = defineProps<{
   vehicles: { data: any[] };
@@ -33,6 +34,7 @@ const props = defineProps<{
   filters: {
     franchise: number[];
     status: string;
+    vehicle_type?: string | null;
   };
 }>();
 
@@ -40,40 +42,57 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Accreditation Management', href: '#' },
 ];
 
-// -------------------------------------
-// Reactive State
-// -------------------------------------
+// --------------------
+// Inertia Form
+// --------------------
+const form = useForm({
+  franchise_id: null as number | null,
+  vehicle_type_id: null as number | null,
+});
+
+// --------------------
+// State
+// --------------------
 const selectedFranchise = ref<string[]>(
   (props.filters.franchise || []).map(String),
 );
 
 const selectedStatus = ref(props.filters.status || 'active');
 
-// v-model wrapper for MultiSelect
+const activeTab = ref<string>(props.filters.vehicle_type ?? 'Taxi Car');
+
+const tableData = ref([...props.vehicles.data]);
+
+watch(
+  () => props.vehicles.data,
+  (val) => {
+    tableData.value = [...val];
+  },
+  { deep: true },
+);
+
 const selectedContext = computed<string[]>({
   get: () => selectedFranchise.value,
-  set: (val) => {
-    selectedFranchise.value = val;
-  },
+  set: (val) => (selectedFranchise.value = val),
 });
 
-// MultiSelect options
 const contextOptions = computed(() =>
-  props.franchises.map((item) => ({
-    id: String(item.id),
-    label: item.name,
+  props.franchises.map((f) => ({
+    id: String(f.id),
+    label: f.name,
   })),
 );
 
-// -------------------------------------
-// URL / Filter Update
-// -------------------------------------
+// --------------------
+// Filters
+// --------------------
 const updateFilters = () => {
   router.get(
     superAdmin.accreditation.index().url,
     {
       status: selectedStatus.value,
-      franchise: selectedFranchise.value || [],
+      franchise: selectedFranchise.value,
+      vehicle_type: activeTab.value,
     },
     {
       preserveScroll: true,
@@ -82,49 +101,45 @@ const updateFilters = () => {
   );
 };
 
-// Watch filters (debounced)
 watch(
-  [selectedStatus],
-  debounce(() => {
-    updateFilters();
-  }, 300),
+  [selectedStatus, selectedFranchise, activeTab],
+  debounce(updateFilters, 300),
 );
 
-// -------------------------------------
-// Approve Accreditation Function
-// -------------------------------------
-const approveAccreditation = async (
-  franchiseId: number,
-  vehicleTypeId: number,
-) => {
-  try {
-    await axios.post(route('accreditation.approve'), {
-      franchise_id: franchiseId,
-      vehicle_type_id: vehicleTypeId,
-    });
+// --------------------
+// Actions
+// --------------------
+const approveAccreditation = (franchiseId: number, vehicleTypeId: number) => {
+  form.franchise_id = franchiseId;
+  form.vehicle_type_id = vehicleTypeId;
 
-    // Update the status_id in local table immediately
-    const vehicle = vehicles.data.find(
-      (v) =>
-        v.franchise_id === franchiseId && v.vehicle_type_id === vehicleTypeId,
-    );
-    if (vehicle) {
-      vehicle.status_id = 1;
-      vehicle.status_label = 'Active';
-    }
-  } catch (error) {
-    console.error('Failed to approve accreditation:', error);
-  }
+  form.post(superAdmin.accreditation.approve().url, {
+    preserveScroll: true,
+    onSuccess: () => {
+      router.reload({ only: ['vehicles'] });
+      toast.success('Approved successfully!');
+    },
+  });
 };
 
-// -------------------------------------
-// DataTable Columns
-// -------------------------------------
+const declineAccreditation = (franchiseId: number, vehicleTypeId: number) => {
+  form.franchise_id = franchiseId;
+  form.vehicle_type_id = vehicleTypeId;
+
+  form.post(superAdmin.accreditation.decline().url, {
+    preserveScroll: true,
+    onSuccess: () => {
+      router.reload({ only: ['vehicles'] });
+      toast.success('Declined successfully!');
+    },
+  });
+};
+
+// --------------------
+// Columns
+// --------------------
 const vehicleColumns = computed<ColumnDef<any>[]>(() => [
-  {
-    accessorKey: 'franchise_name',
-    header: 'Franchise',
-  },
+  { accessorKey: 'franchise_name', header: 'Franchise' },
   {
     accessorKey: 'vehicle_type',
     header: 'Vehicle Category',
@@ -135,14 +150,18 @@ const vehicleColumns = computed<ColumnDef<any>[]>(() => [
     accessorKey: 'status_label',
     header: 'Status',
     cell: ({ row }) => {
-      const isActive = row.original.status_id === 1;
+      const status = row.original.status_id;
+
       return h(
         Badge,
         {
-          variant: isActive ? 'default' : 'outline',
-          class: isActive
-            ? 'bg-green-500 hover:bg-green-600'
-            : 'border-amber-500 text-amber-600',
+          variant: 'outline',
+          class:
+            status === 1
+              ? 'bg-green-500 text-white hover:bg-green-600'
+              : status === 6
+                ? 'border-amber-500 text-amber-600'
+                : 'border-red-500 text-red-600',
         },
         () => row.original.status_label,
       );
@@ -155,8 +174,14 @@ const vehicleColumns = computed<ColumnDef<any>[]>(() => [
       h('div', { class: 'text-center' }, [
         h(DropdownMenu, null, () => [
           h(DropdownMenuTrigger, { asChild: true }, () =>
-            h(Button, { variant: 'ghost', class: 'h-8 w-8 p-0' }, () =>
-              h(MoreHorizontal, { class: 'h-4 w-4' }),
+            h(
+              Button,
+              {
+                variant: 'ghost',
+                class: 'h-8 w-8 p-0',
+                disabled: form.processing,
+              },
+              () => h(MoreHorizontal, { class: 'h-4 w-4' }),
             ),
           ),
           h(DropdownMenuContent, { align: 'end' }, () => [
@@ -175,8 +200,15 @@ const vehicleColumns = computed<ColumnDef<any>[]>(() => [
             ),
             h(
               DropdownMenuItem,
-              { class: 'text-red-600 cursor-pointer' },
-              () => 'Reject Request',
+              {
+                class: 'text-red-600 cursor-pointer',
+                onClick: () =>
+                  declineAccreditation(
+                    row.original.franchise_id,
+                    row.original.vehicle_type_id,
+                  ),
+              },
+              () => 'Deny Request',
             ),
           ]),
         ]),
@@ -189,48 +221,52 @@ const vehicleColumns = computed<ColumnDef<any>[]>(() => [
   <Head title="Accreditation Management" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div
-      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
-      <div
-        class="relative rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
-      >
+    <div class="flex h-full flex-1 flex-col gap-4 p-4">
+      <!-- Vehicle Type Tabs -->
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList class="w-full justify-start p-1.5">
+          <TabsTrigger value="Taxi Car" class="cursor-pointer font-semibold">
+            Taxi Car
+          </TabsTrigger>
+          <TabsTrigger value="Tricycle" class="cursor-pointer font-semibold">
+            Tricycle
+          </TabsTrigger>
+          <TabsTrigger value="Bus" class="cursor-pointer font-semibold">
+            Bus
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div class="rounded-xl border p-4">
         <div class="mb-4 flex items-center justify-between">
           <h2 class="font-mono text-xl font-semibold">
             Franchise Accreditations
           </h2>
 
           <div class="flex gap-4">
-            <!-- Status Filter -->
             <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px] cursor-pointer">
+              <SelectTrigger class="w-[150px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="deny">Deny</SelectItem>
               </SelectContent>
             </Select>
 
-            <!-- Franchise Filter -->
             <MultiSelect
               v-model="selectedContext"
               :options="contextOptions"
               placeholder="Select Franchises"
               all-label="All Franchises"
-              @change="
-                (val) => {
-                  selectedFranchise = val;
-                  updateFilters();
-                }
-              "
             />
           </div>
         </div>
 
         <DataTable
           :columns="vehicleColumns"
-          :data="vehicles.data"
+          :data="tableData"
           search-placeholder="Search franchises..."
         />
       </div>

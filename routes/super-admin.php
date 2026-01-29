@@ -68,6 +68,9 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/vehicle/{vehicle}/maintenances', [VehicleController::class, 'maintenanceHistory'])->name('vehicle.maintenances');
 
     Route::get('/accreditation', [AccreditationController::class, 'index'])->name('accreditation.index');
+    Route::post('/accreditation/approve', [AccreditationController::class, 'approve'])->name('accreditation.approve');
+    Route::post('/accreditation/decline', [AccreditationController::class, 'decline'])->name('accreditation.decline');
+
 
     Route::get('/earning', [EarningController::class, 'index'])->name('earning.index');
     Route::get('/earning/show', [EarningController::class, 'show'])->name('earning.show');

@@ -11,13 +11,17 @@ class AccreditationDatatableResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name, // Now this shows "Taxi Car", "Bus", etc.
-            // Map the franchises that are linked to this type via the seeder
+            'name' => $this->name, // "Taxi Car", "Bus", etc.
+
             'accredited_types' => $this->franchises->map(function ($franchise) {
                 return [
-                    'type_name' => $franchise->name, // Shows the Franchise Name in the badge
-                    'status_id' => $franchise->pivot->status_id,
-                    'status_label' => $franchise->pivot->status_id == 1 ? 'Active' : 'Pending',
+                    'type_name' => $franchise->name,
+                    'status_id' => (int) $franchise->pivot->status_id,
+                    'status_label' => match ((int) $franchise->pivot->status_id) {
+                        1 => 'Active',
+                        6 => 'Pending',
+                        default => 'Deny',
+                    },
                 ];
             }),
         ];

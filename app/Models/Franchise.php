@@ -114,4 +114,11 @@ class Franchise extends Model
     {
         return $this->hasMany(SupportTicket::class);
     }
+
+    public function vehicleType(): BelongsToMany
+    {
+        return $this->belongsToMany(VehicleType::class)
+                    ->withPivot('status_id') // Add this
+                    ->withTimestamps();
+    }
 }

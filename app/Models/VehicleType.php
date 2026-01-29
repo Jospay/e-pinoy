@@ -24,8 +24,11 @@ class VehicleType extends Model
         return $this->hasMany(RevenueBreakdown::class);
     }
 
-    public function franchises(): BelongsToMany
-    {
-        return $this->belongsToMany(Franchise::class);
-    }
+    // In VehicleType.php
+public function franchises(): BelongsToMany
+{
+    return $this->belongsToMany(Franchise::class)
+                ->withPivot('status_id') // Add this
+                ->withTimestamps();
+}
 }
