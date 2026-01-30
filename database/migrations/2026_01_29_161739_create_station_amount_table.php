@@ -15,7 +15,7 @@ return new class extends Migration
         $table->id();
         $table->foreignId('first_bus_station_id')->constrained('bus_stations')->onDelete('cascade');
         $table->foreignId('second_bus_station_id')->constrained('bus_stations')->onDelete('cascade');
-        $table->tinyInteger('amount');
+        $table->decimal('amount', 10, 2);
         $table->unique(['first_bus_station_id', 'second_bus_station_id']);
         $table->timestamps();
     });
