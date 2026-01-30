@@ -18,6 +18,7 @@ export interface NavItem {
   group?: string;
   isActive?: boolean;
   requiresActive?: boolean;
+  requiresBus?: boolean;
   disabled?: boolean;
 }
 

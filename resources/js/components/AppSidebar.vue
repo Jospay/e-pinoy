@@ -320,6 +320,7 @@ const navConfig: Record<string, NavItem[]> = {
       href: owner.busstationmanagement(),
       icon: Bus,
       group: 'Management',
+      requiresBus: true, // Add this custom flag
     },
     // {
     //   title: 'Suspend Drivers',
@@ -432,19 +433,28 @@ const navConfig: Record<string, NavItem[]> = {
 };
 
 // 🧩 4. Load the correct nav items for the user
-// 🧩 Filter the items based on the status
 const allNavItems = computed(() => {
   const items = navConfig[userType] || [];
+  const canAccessBus = (page.props.auth as any).canAccessBus;
 
-  // If the owner doesn't have an active vehicle type, mark restricted items as disabled
-  if (userType === 'owner' && !hasActiveVehicleType.value) {
-    return items.map((item) => ({
+  return items.map((item) => {
+    let isDisabled = false;
+
+    // 1. Check existing "requiresActive" logic
+    if (item.requiresActive && !hasActiveVehicleType.value) {
+      isDisabled = true;
+    }
+
+    // 2. Check your new "requiresBus" logic
+    if (item.requiresBus && !canAccessBus) {
+      isDisabled = true;
+    }
+
+    return {
       ...item,
-      disabled: item.requiresActive ? true : false,
-    }));
-  }
-
-  return items;
+      disabled: isDisabled,
+    };
+  });
 });
 </script>
 

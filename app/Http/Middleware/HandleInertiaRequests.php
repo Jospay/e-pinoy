@@ -40,12 +40,19 @@ class HandleInertiaRequests extends Middleware
 
     $user = $request->user();
     $hasActiveVehicleType = false;
+    $canAccessBus = false; // Initialize the variable
 
-    // Logic to check for active vehicle types specifically for Owners (user_type_id 2)
     if ($user && $user->user_type_id === 2) {
         $franchise = $user->ownerDetails?->franchises()->first();
         if ($franchise) {
+            // General check (keeps your existing logic working)
             $hasActiveVehicleType = $franchise->vehicleTypes()
+                ->where('status_id', 1)
+                ->exists();
+
+            // Specific check for BUS (Vehicle Type 2)
+            $canAccessBus = $franchise->vehicleTypes()
+                ->where('vehicle_type_id', 2)
                 ->where('status_id', 1)
                 ->exists();
         }
@@ -57,7 +64,8 @@ class HandleInertiaRequests extends Middleware
         'quote' => ['message' => trim($message), 'author' => trim($author)],
         'auth' => [
             'user' => $user,
-            'hasActiveVehicleType' => $hasActiveVehicleType, // Shared globally
+            'hasActiveVehicleType' => $hasActiveVehicleType,
+            'canAccessBus' => $canAccessBus, // Add this line!
         ],
         'flash' => [
             'success' => fn () => $request->session()->get('success'),
