@@ -216,9 +216,10 @@ const hasPendingOrDenied = computed(() =>
       >
         <div>
           <h1 class="text-3xl font-bold tracking-tight">Station Management</h1>
-          <p class="text-gray-600">
+          <!-- <p class="text-gray-600">
             Manage terminal sequence for Franchise #{{ franchise_id }}
-          </p>
+          </p> -->
+          <p class="text-gray-600">Manage terminal sequence</p>
         </div>
         <div
           class="flex items-center gap-3 rounded-xl border bg-white p-2 shadow-sm"

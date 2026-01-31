@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActionVerificationController;
+use App\Http\Controllers\SuperAdmin\StationManagementController;
 use App\Http\Controllers\SuperAdmin\AccreditationController;
 use App\Http\Controllers\SuperAdmin\AllocationController;
 use App\Http\Controllers\SuperAdmin\BoundaryContractController;
@@ -71,6 +72,9 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::post('/accreditation/approve', [AccreditationController::class, 'approve'])->name('accreditation.approve');
     Route::post('/accreditation/decline', [AccreditationController::class, 'decline'])->name('accreditation.decline');
 
+    Route::get('/station-management', [StationManagementController::class, 'index'])->name('stationManagement.index');
+    Route::post('/station-management/approve', [StationManagementController::class, 'approve'])->name('stationManagement.approve');
+    Route::post('/station-management/decline', [StationManagementController::class, 'decline'])->name('stationManagement.decline');
 
     Route::get('/earning', [EarningController::class, 'index'])->name('earning.index');
     Route::get('/earning/show', [EarningController::class, 'show'])->name('earning.show');
