@@ -11,24 +11,16 @@ class VehicleType extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = 'id';
+    public $timestamps = false;
 
     protected $fillable = [
         'id',
         'name',
     ];
 
-    // relationship to revenue breakdowns, one to many
-    public function revenueBreakdowns(): HasMany
+    public function franchises(): BelongsToMany
     {
-        return $this->hasMany(RevenueBreakdown::class);
+        return $this->belongsToMany(Franchise::class)
+                    ->withPivot('status_id');
     }
-
-    // In VehicleType.php
-public function franchises(): BelongsToMany
-{
-    return $this->belongsToMany(Franchise::class)
-                ->withPivot('status_id') // Add this
-                ->withTimestamps();
-}
 }

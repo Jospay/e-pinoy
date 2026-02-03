@@ -3,9 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BusStation extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'franchise_id',
         'status_id',
@@ -15,18 +20,18 @@ class BusStation extends Model
         'longitude',
     ];
 
-    public function franchise()
+    public function franchise(): BelongsTo
     {
         return $this->belongsTo(Franchise::class);
     }
 
-    public function fromAmounts()
+    public function fromAmounts(): HasMany
     {
-        return $this->hasMany(StationAmount::class, 'first_bus_station_id');
+        return $this->hasMany(StationAmount::class, 'from_bus_station_id');
     }
 
-    public function toAmounts()
+    public function toAmounts(): HasMany
     {
-        return $this->hasMany(StationAmount::class, 'second_bus_station_id');
+        return $this->hasMany(StationAmount::class, 'to_bus_station_id');
     }
 }
