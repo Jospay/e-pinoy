@@ -30,10 +30,17 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
 import { debounce } from 'lodash-es';
-import { MoreHorizontal, MapPin } from 'lucide-vue-next';
+import {
+  MoreHorizontal,
+  MapPin,
+  ArrowUpRight,
+  ArrowDownLeft,
+} from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
-import LocationBusStation from '@/components/LocationBusStation.vue';
+import LocationBusStation, {
+  type MarkerData,
+} from '@/components/LocationBusStation.vue';
 import MultiSelect from '@/components/MultiSelect.vue';
 
 const props = defineProps<{
@@ -50,25 +57,17 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Station Management', href: '#' },
 ];
 
-// --------------------
-// State & Forms
-// --------------------
 const form = useForm({ id: null as number | null });
 const selectedFranchise = ref<string[]>(
   (props.filters.franchise || []).map(String),
 );
-const selectedStatus = ref(props.filters.status || 'pending');
-
-// activeTab is now a constant since we only deal with Bus
+const selectedStatus = ref(props.filters.status || 'active');
 const activeTab = 'Bus';
 
 const isDetailModalOpen = ref(false);
 const selectedStation = ref<any>(null);
 
-// --------------------
-// Map Data Preparation
-// --------------------
-const detailMarkers = computed(() => {
+const detailMarkers = computed<MarkerData[]>(() => {
   if (!selectedStation.value) return [];
   return [
     {
@@ -91,22 +90,18 @@ const mapCenter = computed((): [number, number] => {
   return [14.5995, 120.9842];
 });
 
-// --------------------
-// Actions
-// --------------------
 const updateFilters = () => {
   router.get(
     superAdmin.stationManagement.index().url,
     {
       status: selectedStatus.value,
       franchise: selectedFranchise.value,
-      vehicle_type: activeTab, // Always 'Bus'
+      vehicle_type: activeTab,
     },
     { preserveScroll: true, replace: true },
   );
 };
 
-// Removed activeTab from watch list
 watch([selectedStatus, selectedFranchise], debounce(updateFilters, 300));
 
 const openDetailModal = (station: any) => {
@@ -136,21 +131,16 @@ const declineStation = (stationId: number) => {
   });
 };
 
-// --------------------
-// Table Columns
-// --------------------
 const stationColumns = computed<ColumnDef<any>[]>(() => [
   {
     accessorKey: 'station_name',
     header: 'Station Name',
     cell: ({ row }) =>
-      h('div', { class: 'flex flex-col' }, [
-        h(
-          'span',
-          { class: 'font-bold text-slate-900' },
-          row.original.station_name,
-        ),
-      ]),
+      h(
+        'div',
+        { class: 'font-bold text-slate-900' },
+        row.original.station_name,
+      ),
   },
   {
     accessorKey: 'code_no',
@@ -249,9 +239,9 @@ const stationColumns = computed<ColumnDef<any>[]>(() => [
           </div>
           <div class="flex flex-wrap gap-3">
             <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[140px]"
-                ><SelectValue placeholder="Status"
-              /></SelectTrigger>
+              <SelectTrigger class="w-[140px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
@@ -266,8 +256,8 @@ const stationColumns = computed<ColumnDef<any>[]>(() => [
                   label: f.name,
                 }))
               "
-              placeholder="Franchise"
-              class="min-w-[200px]"
+              placeholder="Select Franchises"
+              all-label="All Franchises"
             />
           </div>
         </div>
@@ -282,81 +272,151 @@ const stationColumns = computed<ColumnDef<any>[]>(() => [
 
     <Dialog :open="isDetailModalOpen" @update:open="isDetailModalOpen = $event">
       <DialogContent class="max-w-md overflow-hidden p-0">
-        <DialogHeader class="p-6 pb-2">
-          <DialogTitle class="flex items-center gap-2">
-            <MapPin class="h-5 w-5 text-blue-600" />
-            Station Location
-          </DialogTitle>
-          <DialogDescription>
-            Viewing
-            <span class="font-bold text-slate-900">{{
-              selectedStation?.station_name
-            }}</span>
-          </DialogDescription>
-        </DialogHeader>
+        <div class="flex max-h-[90vh] flex-col">
+          <DialogHeader class="p-6 pb-2">
+            <DialogTitle class="flex items-center gap-2">
+              <MapPin class="h-5 w-5 text-blue-600" />
+              Station Location
+            </DialogTitle>
+            <DialogDescription>
+              Viewing
+              <span class="font-bold text-slate-900">{{
+                selectedStation?.station_name
+              }}</span>
+            </DialogDescription>
+          </DialogHeader>
 
-        <div class="space-y-4 p-6 pt-2">
           <div
-            class="grid grid-cols-2 gap-4 rounded-xl border bg-slate-50 p-4 text-xs"
+            class="flex-1 overflow-y-auto"
+            style="scrollbar-gutter: stable both-edges"
           >
-            <div>
-              <p class="font-black text-slate-400 uppercase">Code</p>
-              <p class="font-bold">{{ selectedStation?.code_no }}</p>
+            <div class="space-y-4 p-2 pt-2">
+              <div
+                class="grid grid-cols-2 gap-4 rounded-xl border bg-slate-50 p-4 text-xs"
+              >
+                <div>
+                  <p class="font-black text-slate-400 uppercase">Code</p>
+                  <p class="font-bold text-slate-700">
+                    {{ selectedStation?.code_no }}
+                  </p>
+                </div>
+                <div>
+                  <p class="font-black text-slate-400 uppercase">Franchise</p>
+                  <p class="font-bold text-slate-700">
+                    {{ selectedStation?.franchise_name }}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                class="relative h-64 overflow-hidden rounded-xl border-2 border-slate-100"
+              >
+                <LocationBusStation
+                  v-if="selectedStation"
+                  :locations="detailMarkers"
+                  :selectable="false"
+                  :center="mapCenter"
+                  :zoom="15"
+                />
+              </div>
+
+              <div class="space-y-2">
+                <p class="text-[10px] font-black text-slate-400 uppercase">
+                  Connected Routes & Fare Rates
+                </p>
+
+                <div
+                  v-if="
+                    selectedStation?.routes && selectedStation.routes.length > 0
+                  "
+                  class="space-y-3"
+                >
+                  <div
+                    v-for="(route, idx) in selectedStation.routes"
+                    :key="idx"
+                    class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
+                  >
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <component
+                          :is="
+                            route.type === 'outbound'
+                              ? ArrowUpRight
+                              : ArrowDownLeft
+                          "
+                          :class="[
+                            'h-4 w-4',
+                            route.type === 'outbound'
+                              ? 'text-blue-500'
+                              : 'text-emerald-500',
+                          ]"
+                        />
+                        <span
+                          class="text-[10px] font-bold text-slate-400 uppercase"
+                        >
+                          {{ route.type === 'outbound' ? 'To' : 'From' }}
+                        </span>
+                        <span class="text-xs font-bold text-slate-700">{{
+                          route.station_name
+                        }}</span>
+                      </div>
+                      <Badge variant="secondary" class="text-[10px] font-bold">
+                        ₱{{ route.amount }}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-else
+                  class="flex items-center gap-3 rounded-lg border border-dashed border-amber-200 bg-amber-50 p-3"
+                >
+                  <div class="rounded-full bg-amber-100 p-1.5 text-amber-600">
+                    <MapPin class="h-3.5 w-3.5" />
+                  </div>
+                  <p class="text-[11px] font-medium text-amber-800 italic">
+                    This is your first trip! No additional fare connections are
+                    needed at this station.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                class="mb-3 flex items-center justify-between rounded bg-slate-100 p-2 font-mono text-[10px] text-slate-500"
+              >
+                <span>Lat: {{ selectedStation?.latitude }}</span>
+                <span>Lng: {{ selectedStation?.longitude }}</span>
+              </div>
             </div>
-            <div>
-              <p class="font-black text-slate-400 uppercase">Franchise</p>
-              <p class="font-bold">{{ selectedStation?.franchise_name }}</p>
+          </div>
+
+          <DialogFooter
+            class="flex items-center justify-end border-t bg-slate-50/50 p-4"
+          >
+            <div class="flex gap-2">
+              <Button
+                v-if="selectedStation?.status_id !== 18"
+                variant="destructive"
+                size="sm"
+                @click="declineStation(selectedStation.id)"
+                >Deny</Button
+              >
+              <Button
+                v-if="selectedStation?.status_id !== 1"
+                class="bg-green-600 text-white hover:bg-green-700"
+                size="sm"
+                @click="approveStation(selectedStation.id)"
+                >Approve</Button
+              >
+              <Button
+                variant="outline"
+                size="sm"
+                @click="isDetailModalOpen = false"
+                >Close</Button
+              >
             </div>
-          </div>
-
-          <div
-            class="relative h-64 overflow-hidden rounded-xl border-2 border-slate-100"
-          >
-            <LocationBusStation
-              v-if="selectedStation"
-              :locations="detailMarkers"
-              :selectable="false"
-              :center="mapCenter"
-              :zoom="15"
-            />
-          </div>
-
-          <div
-            class="flex items-center justify-between rounded bg-slate-100 p-2 font-mono text-[10px] text-slate-500"
-          >
-            <span>Lat: {{ selectedStation?.latitude }}</span>
-            <span>Lng: {{ selectedStation?.longitude }}</span>
-          </div>
+          </DialogFooter>
         </div>
-
-        <DialogFooter
-          class="flex items-center justify-end border-t bg-slate-50/50 p-4"
-        >
-          <div class="flex gap-2">
-            <Button
-              v-if="selectedStation?.status_id !== 18"
-              variant="destructive"
-              size="sm"
-              @click="declineStation(selectedStation.id)"
-            >
-              Deny
-            </Button>
-            <Button
-              v-if="selectedStation?.status_id !== 1"
-              class="bg-green-600 text-white hover:bg-green-700"
-              size="sm"
-              @click="approveStation(selectedStation.id)"
-            >
-              Approve
-            </Button>
-            <Button
-              variant="outline"
-              class="border border-gray-300"
-              @click="isDetailModalOpen = false"
-              >Close</Button
-            >
-          </div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   </AppLayout>
