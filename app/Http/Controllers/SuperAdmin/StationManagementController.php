@@ -26,16 +26,16 @@ class StationManagementController extends Controller
 
         $query = DB::table('bus_stations')
             ->join('franchises', 'bus_stations.franchise_id', '=', 'franchises.id')
-            // Logic: Join station_amount where this station is EITHER the first or second point
-            ->leftJoin('station_amount', function($join) {
-                $join->on('bus_stations.id', '=', 'station_amount.first_bus_station_id')
-                     ->orOn('bus_stations.id', '=', 'station_amount.second_bus_station_id');
+            // Logic: Join station_amounts where this station is EITHER the first or second point
+            ->leftJoin('station_amounts', function($join) {
+                $join->on('bus_stations.id', '=', 'station_amounts.from_bus_station_id')
+                     ->orOn('bus_stations.id', '=', 'station_amounts.to_bus_station_id');
             })
             // Join the "Other" station to get the name of the connection
             ->leftJoin('bus_stations as related_station', function($join) {
                 $join->on(DB::raw('CASE
-                    WHEN bus_stations.id = station_amount.first_bus_station_id THEN station_amount.second_bus_station_id
-                    ELSE station_amount.first_bus_station_id
+                    WHEN bus_stations.id = station_amounts.from_bus_station_id THEN station_amounts.to_bus_station_id
+                    ELSE station_amounts.from_bus_station_id
                 END'), '=', 'related_station.id');
             })
             ->select(
@@ -51,8 +51,8 @@ class StationManagementController extends Controller
                     IF(related_station.name IS NULL, NULL,
                         JSON_OBJECT(
                             "station_name", related_station.name,
-                            "amount", IFNULL(station_amount.amount, 0),
-                            "type", IF(bus_stations.id = station_amount.first_bus_station_id, "outbound", "inbound")
+                            "amount", IFNULL(station_amounts.amount, 0),
+                            "type", IF(bus_stations.id = station_amounts.from_bus_station_id, "outbound", "inbound")
                         )
                     )
                 ) as routes_raw'),
