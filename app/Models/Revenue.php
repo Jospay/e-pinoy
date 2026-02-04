@@ -53,7 +53,12 @@ class Revenue extends Model
     // relationship to routes, one to many
     public function route(): HasOne
     {
-        // $this->hasOne(RelatedModel::class, 'foreign_key', 'local_key');
         return $this->hasOne(Route::class);
+    }
+
+    // relationship to vehicleType, one to many
+    public function vehicleType(): BelongsTo
+    {
+        return $this->belongsTo(VehicleType::class);
     }
 }

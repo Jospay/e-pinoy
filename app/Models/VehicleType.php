@@ -23,4 +23,28 @@ class VehicleType extends Model
         return $this->belongsToMany(Franchise::class)
                     ->withPivot('status_id');
     }
+
+    // relationship to routes, one to many
+    public function routes(): HasMany
+    {
+        return $this->hasMany(Route::class);
+    }
+
+    // relationship to revenues, one to many
+    public function revenues(): HasMany
+    {
+        return $this->hasMany(Vehicle::class);
+    }
+
+    // relationship to vehicles, one to many
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(Vehicle::class);
+    }
+
+    // relationship to user_drivers, many to many (pivot table)
+    public function userDrivers(): BelongsToMany
+    {
+        return $this->belongsToMany(UserDriver::class);
+    }
 }

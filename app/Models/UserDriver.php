@@ -100,4 +100,10 @@ class UserDriver extends Model
     {
         return $this->hasMany(Tip::class, 'driver_id');
     }
+
+    // relationship to vehhicle_types, many to many (pivot table)
+    public function vehicleTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(VehicleType::class);
+    }
 }

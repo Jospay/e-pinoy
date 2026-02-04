@@ -59,4 +59,10 @@ class Vehicle extends Model
     {
         return $this->hasMany(BoundaryContract::class);
     }
+
+    // relationship to vehicleType, one to many
+    public function vehicleType(): BelongsTo
+    {
+        return $this->belongsTo(VehicleType::class);
+    }
 }
