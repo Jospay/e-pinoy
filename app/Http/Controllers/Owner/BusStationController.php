@@ -28,7 +28,7 @@ class BusStationController extends Controller
         if ($hasAccess) {
             $stations = BusStation::where('franchise_id', $franchiseId)
                 ->with(['toAmounts' => function($query) {
-                    $query->select('second_bus_station_id', 'amount');
+                    $query->select('to_bus_station_id', 'amount');
                 }])
                 ->orderBy('id', 'asc')
                 ->get()
@@ -82,8 +82,8 @@ class BusStationController extends Controller
         // Only create fare amount if there is a sequence (Station B, C, etc.)
         if ($validated['previous_station_id']) {
             StationAmount::create([
-                'first_bus_station_id' => $validated['previous_station_id'],
-                'second_bus_station_id' => $station->id,
+                'from_bus_station_id' => $validated['previous_station_id'],
+                'to_bus_station_id' => $station->id,
                 'amount' => $validated['amount'],
             ]);
         }
@@ -111,7 +111,7 @@ class BusStationController extends Controller
             'status_id' => $newStatus, // Reset to Pending
         ]);
 
-        $hasPrevious = StationAmount::where('second_bus_station_id', $busStation->id)->first();
+        $hasPrevious = StationAmount::where('to_bus_station_id', $busStation->id)->first();
         if ($hasPrevious) {
             $hasPrevious->update(['amount' => $validated['amount']]);
         }
