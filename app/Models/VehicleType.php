@@ -47,4 +47,11 @@ class VehicleType extends Model
     {
         return $this->belongsToMany(UserDriver::class);
     }
+
+    public function boundaryContracts()
+    {
+        return $this->belongsToMany(BoundaryContract::class)
+                    ->withPivot('amount', 'status_id')
+                    ->withTimestamps();
+    }
 }

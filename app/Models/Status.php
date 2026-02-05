@@ -60,12 +60,6 @@ class Status extends Model
         return $this->hasMany(Revenue::class);
     }
 
-    // relationship to boundary contracts, one to many
-    public function boundaryContracts(): HasMany
-    {
-        return $this->hasMany(BoundaryContract::class);
-    }
-
     // relationship to vehicles, one to many
     public function vehicles(): HasMany
     {

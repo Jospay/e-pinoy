@@ -26,12 +26,6 @@ class BoundaryContract extends Model
         'currency',
     ];
 
-    // relationship to status, one to many
-    public function status(): BelongsTo
-    {
-        return $this->belongsTo(Status::class);
-    }
-
     // relationship to franchise, one to many
     public function franchise(): BelongsTo
     {
@@ -54,5 +48,12 @@ class BoundaryContract extends Model
     public function revenues(): HasMany
     {
         return $this->hasMany(Revenue::class);
+    }
+
+    public function vehicleTypes()
+    {
+        return $this->belongsToMany(VehicleType::class)
+                    ->withPivot('amount', 'status_id')
+                    ->withTimestamps();
     }
 }
