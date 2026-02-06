@@ -30,7 +30,6 @@ class UserDriver extends Model
         'id',
         'code_number',
         'status_id',
-        'shift',
         'is_verified',
         'license_number',
         'license_expiry',

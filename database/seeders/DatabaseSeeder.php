@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         $this->call(UserTypeSeeder::class);
         $this->call(StatusSeeder::class);
         $this->call(PaymentOptionSeeder::class);
+        $this->call(VehicleTypeSeeder::class);
 
         User::factory()->create([
             'user_type_id' => 1,
@@ -81,7 +82,9 @@ class DatabaseSeeder extends Seeder
             'phone' => '09101301920',
         ]);
 
-        User::factory(30)->create();
+        User::factory(5)->create([
+            'user_type_id' => 2,
+        ]);
 
         User::factory(20)->create([
             'user_type_id' => 4,
@@ -89,19 +92,13 @@ class DatabaseSeeder extends Seeder
 
         $this->call(DriverAssignmentSeeder::class);
         $this->call(VehicleSeeder::class);
-        Vehicle::factory(10)->create([
-            'driver_id' => null
-        ]);
 
-        User::factory(30)->create(['user_type_id' => 5]);
-        $this->call(TechnicianAssignmentSeeder::class);
         $this->call(BoundaryContractSeeder::class);
         $this->call(RevenueSeeder::class);
 
         $this->call(PercentageTypeSeeder::class);
-        $this->call(VehicleTypeSeeder::class);
-        $this->call(VehicleTypeFranchiseSeeder::class);
         $this->call(RevenueBreakdownSeeder::class);
+        
         // $this->call(BusStationSeeder::class);
         // $this->call(StationAmountSeeder::class);
 

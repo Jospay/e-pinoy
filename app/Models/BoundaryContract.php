@@ -12,7 +12,6 @@ class BoundaryContract extends Model
     use HasFactory;
 
     protected $fillable = [
-        'status_id',
         'franchise_id',
         'driver_id',
         'vehicle_id',
@@ -22,7 +21,6 @@ class BoundaryContract extends Model
         'start_date',
         'end_date',
         'renewal_terms',
-        'amount',
         'currency',
     ];
 

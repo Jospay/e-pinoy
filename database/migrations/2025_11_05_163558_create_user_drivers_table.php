@@ -25,7 +25,6 @@ return new class extends Migration
             $table->string('back_license_picture');
             $table->string('nbi_clearance');
             $table->string('selfie_picture');
-            $table->enum('shift', ['Morning', 'Evening', 'Night'])->default('Morning');
             $table->date('hire_date')->nullable();
             $table->timestamps();
         });

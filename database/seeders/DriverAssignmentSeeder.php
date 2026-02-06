@@ -16,16 +16,30 @@ class DriverAssignmentSeeder extends Seeder
      */
     public function run(): void
     {
-        $franchiseIds = Franchise::pluck('id')->toArray();
-
-        // Get only 'active' drivers who are not yet assigned
-        $drivers = UserDriver::where('status_id', 1) 
-            ->get();
+        // Get all active drivers with their assigned vehicle type
+        $drivers = UserDriver::where('status_id', 1)->with('vehicleTypes')->get();
 
         foreach ($drivers as $driver) {
-            if (!empty($franchiseIds)) {
+            // Get the driver's single vehicle type ID
+            $driverVehicleTypeId = $driver->vehicleTypes->first()?->id;
+
+            if (!$driverVehicleTypeId) continue;
+
+            /** * Find franchises that have the SAME vehicle type 
+             * and where the status in the pivot is 'active' (status_id 1)
+             */
+            $compatibleFranchiseIds = DB::table('franchise_vehicle_type')
+                ->where('vehicle_type_id', $driverVehicleTypeId)
+                ->where('status_id', 1) 
+                ->pluck('franchise_id')
+                ->toArray();
+
+            if (!empty($compatibleFranchiseIds)) {
+                // Assign to one random compatible franchise
+                $assignedFranchiseId = fake()->randomElement($compatibleFranchiseIds);
+
                 DB::table('franchise_user_driver')->insert([
-                    'franchise_id' => fake()->randomElement($franchiseIds),
+                    'franchise_id'   => $assignedFranchiseId,
                     'user_driver_id' => $driver->id,
                 ]);
             }

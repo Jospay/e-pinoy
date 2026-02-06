@@ -19,6 +19,7 @@ return new class extends Migration
             $table->foreignId('driver_id')->nullable()->constrained('user_drivers')->onDelete('restrict');
             $table->string('plate_number', 20)->unique();
             $table->string('vin', 50)->unique();
+            $table->unsignedTinyInteger('capacity');
             $table->string('brand', 100);
             $table->string('model', 100);
             $table->year('year');

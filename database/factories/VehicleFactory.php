@@ -19,42 +19,56 @@ class VehicleFactory extends Factory
      */
     public function definition(): array
     {
-        // 1. Determine Status (Active: 1, Maintenance: 5, Available: 15)
-        // We weight it so we have more active vehicles for testing
-        $statusId = $this->faker->randomElement([1, 1, 1, 5, 15]);
-        $franchiseId = Franchise::inRandomOrder()->value('id');
-        $driverId = null;
+        // 1. Get a random assignment from the pivot table
+        // This record contains a driver and franchise that ARE already compatible
+        $assignment = DB::table('franchise_user_driver')
+            ->inRandomOrder()
+            ->first();
 
-        // If status is NOT Available (15), we need a driver from this franchise
-        if ($statusId !== 15) {
-            $driverId = DB::table('franchise_user_driver')
-                ->where('franchise_id', $franchiseId)
-                // Ensure we pick a driver not already assigned to another vehicle (optional, but good for data integrity)
-                ->whereNotExists(function ($query) {
-                    $query->select(DB::raw(1))
-                        ->from('vehicles')
-                        ->whereColumn('vehicles.driver_id', 'franchise_user_driver.user_driver_id');
-                })
-                ->inRandomOrder()
-                ->value('user_driver_id');
-
-            // If no available driver found for this franchise, fallback to 'Available' status
-            if (!$driverId) {
-                $statusId = 15;
-            }
+        if (!$assignment) {
+            // Fallback: If no assignments exist yet, we can't create a valid vehicle 
+            // matching both. Make sure DriverAssignmentSeeder runs before this.
+            throw new \Exception("No driver-franchise assignments found.");
         }
 
+        // 2. Get the specific vehicle_type_id that the driver is registered for
+        // (Remember: Driver only has one vehicle type) for now
+        $vehicleTypeId = DB::table('user_driver_vehicle_type')
+            ->where('user_driver_id', $assignment->user_driver_id)
+            ->value('vehicle_type_id');
+
+        // 3. Determine Status (1: Active, 5: Maintenance, 15: Available)
+        $statusId = $this->faker->randomElement([1, 1, 1, 5, 15]);
+        
+        // If "Available", the vehicle belongs to a franchise but has no driver
+        $driverId = ($statusId === 15) ? null : $assignment->user_driver_id;
+
         return [
-            'status_id'    => $statusId,
-            'franchise_id' => $franchiseId,
-            'driver_id'    => $driverId, // Will be null if status is 15 (Available)
-            'plate_number' => strtoupper($this->faker->unique()->bothify('??###??')),
-            'vin'          => strtoupper(Str::random(17)),
-            'brand'        => $this->faker->randomElement(['Toyota', 'Honda', 'Ford', 'Nissan', 'Hyundai']),
-            'model'        => $this->faker->word(),
-            'year'         => $this->faker->year(),
-            'color'        => $this->faker->safeColorName(),
-            'or_cr' => fake()->imageUrl(640, 480, 'id', true),
+            'status_id'       => $statusId,
+            'franchise_id'    => $assignment->franchise_id,
+            'vehicle_type_id' => $vehicleTypeId,
+            'driver_id'       => $driverId,
+            'plate_number'    => strtoupper($this->faker->unique()->bothify('?? ###??')),
+            'vin'             => strtoupper(Str::random(17)),
+            'capacity'        => $this->getCapacity($vehicleTypeId), // Logic below
+            'brand'           => $this->faker->randomElement(['Toyota', 'Honda', 'Isuzu', 'Mitsubishi']),
+            'model'           => $this->faker->word(),
+            'year'            => $this->faker->year(),
+            'color'           => $this->faker->safeColorName(),
+            'or_cr'           => $this->faker->imageUrl(640, 480, 'document', true),
         ];
+    }
+
+    /**
+     * Helper to set capacity based on vehicle type name/id
+     */
+    private function getCapacity($typeId): int
+    {
+        return match ((int)$typeId) {
+            1 => 4,  // Taxi
+            2 => 50, // Bus
+            3 => 3,  // Tricycle
+            default => 4,
+        };
     }
 }

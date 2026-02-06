@@ -9,6 +9,8 @@ use App\Models\UserOwner;
 use App\Models\UserPassenger;
 use App\Models\UserTechnician;
 use App\Models\Franchise;
+use App\Models\VehicleType;
+use App\Models\Status;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -87,13 +89,27 @@ class UserFactory extends Factory
                     break;
                 case 2: // owner
                     UserOwner::factory()->create(['id' => $user->id]);
-                    Franchise::factory()->create(['owner_id' => $user->id, 'email' => $user->email, 'phone' => $user->phone]);
+                    $franchise = Franchise::factory()->create([
+                        'owner_id' => $user->id, 
+                        'email' => $user->email, 
+                        'phone' => $user->phone
+                    ]);
+                    // --- PIVOT TABLE LOGIC ---
+                    $vehicleTypeIds = VehicleType::inRandomOrder()->take(rand(1, 3))->pluck('id');
+                    foreach ($vehicleTypeIds as $id) {
+                        $franchise->vehicleTypes()->attach($id, [
+                            'status_id' => 1 // active
+                        ]);
+                    }
                     break;
                 case 3: // manager
                     UserManager::factory()->create(['id' => $user->id]);
                     break;
                 case 4: // driver
-                    UserDriver::factory()->create(['id' => $user->id]);
+                    $driver = UserDriver::factory()->create(['id' => $user->id]);
+                    // --- PIVOT TABLE LOGIC ---
+                    $randomVehicleTypeId = VehicleType::inRandomOrder()->first()->id;
+                    $driver->vehicleTypes()->attach($randomVehicleTypeId);
                     break;
                 case 5: // technician
                     UserTechnician::factory()->create(['id' => $user->id]);
