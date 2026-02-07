@@ -11,6 +11,7 @@ use App\Models\UserTechnician;
 use App\Models\Franchise;
 use App\Models\UserOwner;
 use App\Models\UserType;
+use App\Models\Status;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
@@ -84,7 +85,6 @@ class CreateNewUser implements CreatesNewUsers
             'postal_code' => ['required', 'string', 'max:20'],
             'license_number' => ['required', 'string', 'max:20'],
             'license_expiry' => ['required', 'date','after_or_equal:' . now()->toDateString()],
-            'shift' => ['required', new Enum(Shifts::class)],
             'front_license_picture' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
             'back_license_picture' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
             'nbi_clearance' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf,docx,doc', 'max:5120'],
@@ -101,8 +101,8 @@ class CreateNewUser implements CreatesNewUsers
         // 2. Create Records in a Transaction
         $user = DB::transaction(function () use ($input, $userTypeId) {
 
-            // 'In-Active' status ID is 2, default for drivers
-            $inActiveStatusId = 2;
+            // pending status
+            $pendingStatusId = Status::where('name', 'pending')->firstOrFail()->id;
 
             // 2a. Store all files
             $frontIdPath = $input['front_license_picture']->store('driver_ids', 'public');
@@ -129,8 +129,7 @@ class CreateNewUser implements CreatesNewUsers
 
             UserDriver::create([
                 'id' => $newUser->id,
-                'status_id' => $inActiveStatusId,
-                'shift' => $input['shift'],
+                'status_id' => $pendingStatusId,
                 'license_number' => $input['license_number'],
                 'license_expiry'=> $input['license_expiry'],
                 'front_license_picture' => $frontIdPath,
