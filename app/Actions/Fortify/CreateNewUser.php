@@ -101,8 +101,8 @@ class CreateNewUser implements CreatesNewUsers
         // 2. Create Records in a Transaction
         $user = DB::transaction(function () use ($input, $userTypeId) {
 
-            // pending status
-            $pendingStatusId = Status::where('name', 'pending')->firstOrFail()->id;
+            // inactive status
+            $inActiveStatus = Status::where('name', 'inactive')->firstOrFail()->id;
 
             // 2a. Store all files
             $frontIdPath = $input['front_license_picture']->store('driver_ids', 'public');
@@ -129,7 +129,7 @@ class CreateNewUser implements CreatesNewUsers
 
             UserDriver::create([
                 'id' => $newUser->id,
-                'status_id' => $pendingStatusId,
+                'status_id' => $inActiveStatus,
                 'license_number' => $input['license_number'],
                 'license_expiry'=> $input['license_expiry'],
                 'front_license_picture' => $frontIdPath,

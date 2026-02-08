@@ -18,30 +18,31 @@ import superAdmin from '@/routes/super-admin';
 import technician from '@/routes/technician';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
 import {
   Banknote,
   BanknoteArrowDown,
   Box,
-  CarTaxiFront,
+  Bus,
+  BusFront,
   Car,
+  CarTaxiFront,
   ChartNoAxesCombined,
   DollarSign,
   FileSpreadsheet,
   FileText,
-  Bus,
+  FileUser,
   HandCoins,
-  BusFront,
   HelpCircle,
   History,
   LayoutGrid,
   Map,
   ReceiptText,
   Ticket,
+  UserCheck,
   Users,
   Wrench,
-  FileUser,
 } from 'lucide-vue-next';
+import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 import NavMain from './NavMain.vue';
 
@@ -73,12 +74,12 @@ const navConfig: Record<string, NavItem[]> = {
       icon: LayoutGrid,
       group: 'Overview',
     },
-    // {
-    //   title: 'Driver Verification',
-    //   href: superAdmin.driver.verification(),
-    //   icon: UserCheck,
-    //   group: 'Fleet',
-    // },
+    {
+      title: 'Driver Verification',
+      href: superAdmin.driver.verification(),
+      icon: UserCheck,
+      group: 'Fleet',
+    },
     {
       title: 'Driver Management',
       href: superAdmin.driver.index(),
