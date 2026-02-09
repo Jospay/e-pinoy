@@ -34,7 +34,6 @@ class Branch extends Model
         'postal_code',
         'latitude',
         'longitude',
-        'contract_attachment',
         'dti_registration_attachment',
         'mayor_permit_attachment',
         'proof_agreement_attachment',

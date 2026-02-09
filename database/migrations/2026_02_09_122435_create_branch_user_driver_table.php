@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('branch_driver', function (Blueprint $table) {
+        Schema::create('branch_user_driver', function (Blueprint $table) {
             // composite primary key instead of auto-increment
             $table->foreignId('branch_id')->constrained('branches')->onDelete('cascade');
             $table->foreignId('user_driver_id')->constrained('user_drivers')->onDelete('cascade');
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('branch_driver');
+        Schema::dropIfExists('branch_user_driver');
     }
 };
