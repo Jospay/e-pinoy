@@ -51,7 +51,6 @@ class VehicleType extends Model
     public function boundaryContracts()
     {
         return $this->belongsToMany(BoundaryContract::class)
-                    ->withPivot('amount', 'status_id')
-                    ->withTimestamps();
+                    ->withPivot('amount', 'status_id');
     }
 }
