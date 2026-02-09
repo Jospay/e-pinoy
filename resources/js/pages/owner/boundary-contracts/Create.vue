@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { computed, watch } from 'vue';
+import { Head, useForm } from '@inertiajs/vue3';
+import { toast } from 'vue-sonner';
+
 import DatePicker from '@/components/DatePicker.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -10,70 +15,100 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
-import { toast } from 'vue-sonner';
 
-interface Vehicle {
+interface VehicleType {
   id: number;
-  plate_number: string;
-  brand: string;
-  model: string;
+  name: string;
 }
 
 interface Driver {
   id: number;
   username: string;
+  vehicle_types: VehicleType[];
+}
+
+interface VehicleRate {
+  vehicle_type_id: number | '';
+  amount: string;
+}
+
+interface BoundaryForm {
+  driver_id: number | '';
+  name: string;
+  coverage_area: string;
+  contract_terms: string;
+  renewal_terms: string;
+  start_date: string;
+  end_date: string;
+  vehicle_rates: VehicleRate[];
 }
 
 interface Props {
-  vehicles: Vehicle[];
   drivers: Driver[];
 }
 
-const { vehicles, drivers } = defineProps<Props>();
+const { drivers } = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
-  {
-    title: 'Boundary Contract',
-    href: owner.boundaryContracts.index().url,
-  },
+  { title: 'Boundary Contract', href: owner.boundaryContracts.index().url },
   {
     title: 'Create Boundary Contract',
     href: owner.boundaryContracts.create().url,
   },
 ];
 
-const form = useForm({
-  driver: '',
-  vehicle: '',
+const form = useForm<BoundaryForm>({
+  driver_id: '',
   name: '',
-  amount: '',
   coverage_area: '',
   contract_terms: '',
+  renewal_terms: '',
   start_date: '',
   end_date: '',
-  renewal_terms: '',
+  vehicle_rates: [
+    {
+      vehicle_type_id: '',
+      amount: '',
+    },
+  ],
 });
 
+// Watch driver selection and auto-assign first vehicle type
+watch(
+  () => form.driver_id,
+  (driverId) => {
+    const driver = drivers.find((d) => d.id === Number(driverId));
+    const rate = form.vehicle_rates[0];
+
+    if (!driver || !rate || driver.vehicle_types.length === 0) {
+      if (rate) rate.vehicle_type_id = '';
+      return;
+    }
+
+    rate.vehicle_type_id = driver.vehicle_types[0].id;
+  },
+);
+
+// Disable submit if required fields are missing
 const disableSubmit = computed(() => {
-  const areDetailsComplete =
-    !!form.driver &&
-    !!form.vehicle &&
-    !!form.name &&
-    !!form.amount &&
-    !!form.coverage_area &&
-    !!form.contract_terms &&
-    !!form.start_date &&
-    !!form.end_date &&
-    !!form.renewal_terms;
+  const rate = form.vehicle_rates[0];
+  if (!rate) return true;
 
-  return !areDetailsComplete;
+  return !(
+    form.driver_id &&
+    form.name &&
+    form.start_date &&
+    form.renewal_terms &&
+    rate.vehicle_type_id &&
+    rate.amount
+  );
 });
 
+// Submit form
 const submit = () => {
   form.post(owner.boundaryContracts.store().url, {
     onSuccess: () => {
@@ -89,10 +124,10 @@ const submit = () => {
 </script>
 
 <template>
-  <Head title="Dashboard" />
+  <Head title="Create Boundary Contract" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="m-6 max-w-3xl rounded-xl border p-6 shadow-sm">
+    <div class="m-6 max-w-4xl rounded-xl border bg-white p-6 shadow-sm">
       <h2 class="mb-6 font-mono text-2xl font-bold">
         Create New Boundary Contract
       </h2>
@@ -101,27 +136,14 @@ const submit = () => {
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label for="driver">Driver Username</Label>
-            <Select
-              v-model="form.driver"
-              @update:model-value="form.errors.driver = ''"
-            >
+            <Select v-model="form.driver_id">
               <SelectTrigger
-                :class="{
-                  'border-red-500': form.errors.driver,
-                }"
+                :class="{ 'border-red-500': form.errors.driver_id }"
               >
                 <SelectValue placeholder="Select Driver" />
               </SelectTrigger>
-
               <SelectContent>
-                <div
-                  v-if="drivers.length === 0"
-                  class="p-2 text-sm text-gray-500"
-                >
-                  <p>No available active drivers found</p>
-                </div>
                 <SelectItem
-                  v-else
                   v-for="driver in drivers"
                   :key="driver.id"
                   :value="driver.id"
@@ -130,97 +152,55 @@ const submit = () => {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <InputError :message="form.errors.driver" />
+            <InputError :message="form.errors.driver_id" />
           </div>
 
-          <div class="grid gap-2">
-            <Label for="vehicle">Vehicle</Label>
-            <Select
-              v-model="form.vehicle"
-              @update:model-value="form.errors.vehicle = ''"
-            >
-              <SelectTrigger
-                :class="{
-                  'border-red-500': form.errors.vehicle,
-                }"
-              >
-                <SelectValue placeholder="Select Vehicle" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <div
-                  v-if="vehicles.length === 0"
-                  class="p-2 text-sm text-gray-500"
-                >
-                  <p>No available vehicles found</p>
-                </div>
-                <SelectItem
-                  v-else
-                  v-for="vehicle in vehicles"
-                  :key="vehicle.id"
-                  :value="vehicle.id"
-                >
-                  {{ vehicle.plate_number }} - {{ vehicle.brand }}
-                  {{ vehicle.model }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <InputError :message="form.errors.vehicle" />
-          </div>
-        </div>
-
-        <div class="my-4 border-t" />
-
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Contract Name</Label>
             <Input
-              id="name"
-              name="name"
               v-model="form.name"
-              type="text"
-              required
-              placeholder="e.g. Standard Boundary Agreement 2024"
+              placeholder="e.g. Premium Sedan Agreement"
               :class="{ 'border-red-500': form.errors.name }"
-              @change="form.errors.name = ''"
             />
             <InputError :message="form.errors.name" />
+          </div>
+        </div>
+
+        <div class="my-2 border-t" />
+
+        <div
+          v-for="(rate, index) in form.vehicle_rates"
+          :key="index"
+          class="relative grid grid-cols-1 gap-6 md:grid-cols-2"
+        >
+          <div class="grid gap-2">
+            <Label>Vehicle Type</Label>
+            <Input
+              :value="
+                drivers.find((d) => d.id === Number(form.driver_id))
+                  ?.vehicle_types?.[0]?.name || ''
+              "
+              placeholder="Auto assigned"
+              disabled
+            />
           </div>
 
           <div class="grid gap-2">
             <Label>Amount</Label>
-            <Input
-              id="amount"
-              name="amount"
-              type="number"
-              required
-              v-model="form.amount"
-              :class="{ 'border-red-500': form.errors.amount }"
-              placeholder="e.g., 1.00"
-            />
-            <InputError :message="form.errors.amount" />
+            <Input v-model="rate.amount" type="number" placeholder="0.00" />
           </div>
+        </div>
+        <InputError :message="form.errors.vehicle_rates" />
 
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Start Date</Label>
-            <DatePicker
-              v-model="form.start_date"
-              placeholder="Pick start date"
-              :class="{ 'border-red-500': form.errors.start_date }"
-              @update:model-value="form.errors.start_date = ''"
-            />
+            <DatePicker v-model="form.start_date" />
             <InputError :message="form.errors.start_date" />
           </div>
-
           <div class="grid gap-2">
             <Label>End Date</Label>
-            <DatePicker
-              v-model="form.end_date"
-              :min-date="form.start_date"
-              placeholder="Pick end date"
-              :class="{ 'border-red-500': form.errors.end_date }"
-              @update:model-value="form.errors.end_date = ''"
-            />
+            <DatePicker v-model="form.end_date" :min-date="form.start_date" />
             <InputError :message="form.errors.end_date" />
           </div>
         </div>
@@ -230,8 +210,6 @@ const submit = () => {
           <Textarea
             v-model="form.coverage_area"
             placeholder="Define the operational area..."
-            :class="{ 'border-red-500': form.errors.coverage_area }"
-            @change="form.errors.coverage_area = ''"
           />
           <InputError :message="form.errors.coverage_area" />
         </div>
@@ -242,8 +220,6 @@ const submit = () => {
             v-model="form.contract_terms"
             class="h-24"
             placeholder="Terms and conditions..."
-            :class="{ 'border-red-500': form.errors.contract_terms }"
-            @change="form.errors.contract_terms = ''"
           />
           <InputError :message="form.errors.contract_terms" />
         </div>
@@ -253,8 +229,7 @@ const submit = () => {
           <Textarea
             v-model="form.renewal_terms"
             placeholder="Conditions for renewal..."
-            :class="{ 'border-red-500': form.errors.renewal_terms }"
-            @change="form.errors.renewal_terms = ''"
+            class="h-24"
           />
           <InputError :message="form.errors.renewal_terms" />
         </div>
