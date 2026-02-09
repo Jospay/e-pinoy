@@ -53,6 +53,38 @@ class DriverController extends Controller
     }
 
     /**
+     * Display a listing of the resource.
+     */
+    public function verification(Request $request): Response
+    {
+        // 1. Validate all filters
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', Rule::in(['inactive', 'available'])],
+        ]);
+
+        // 2. Set defaults
+        $filters = [
+            'status' => $validated['status'] ?? 'inactive',
+        ];
+
+        // 3. Build and execute query
+        $query = UserDriver::with([
+            'user:id,username,email,phone',
+            'status:id,name',
+        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
+        $drivers = $query->get();
+
+        // 4. Return all data to Inertia
+        return Inertia::render('super-admin/fleet/DriverVerification', [
+            'drivers' => DriverVerificationResource::collection($drivers),
+            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'filters' => [
+                'status' => $filters['status'],
+            ],
+        ]);
+    }
+
+    /**
      * Creates the base query with all "WHERE" conditions.
      */
     private function buildBaseQuery(array $filters): Builder
@@ -74,6 +106,27 @@ class DriverController extends Controller
         
 
         return $query;
+    }
+
+    public function verify(UserDriver $driver)
+    {
+        $availableStatus = Status::where('name', 'available')->firstOrFail();
+        $faker = Faker::create();
+
+        DB::transaction(function () use ($driver, $availableStatus, $faker) {
+            // update driver status and verified
+            $driver->status_id = $availableStatus->id;
+            $driver->is_verified = true;
+            // generate code number and check for uniqueness
+            do {
+                $code = $faker->unique()->bothify('??-####');
+            } while (UserDriver::where('code_number', $code)->exists());
+
+            $driver->code_number = $code;
+            $driver->save();
+        });
+
+        return back();
     }
 
     public function show(UserDriver $driver)

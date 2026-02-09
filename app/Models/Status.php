@@ -88,4 +88,9 @@ class Status extends Model
     {
         return $this->hasMany(SupportTicket::class);
     }
+
+    public function branches(): HasMany
+    {
+        return $this->hasMany(Branch::class);
+    }
 }

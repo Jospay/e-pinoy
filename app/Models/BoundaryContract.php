@@ -53,4 +53,10 @@ class BoundaryContract extends Model
         return $this->belongsToMany(VehicleType::class)
                     ->withPivot('amount', 'status_id');
     }
+
+    // relationship to branch, one to many
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 }

@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use PhpOffice\PhpSpreadsheet\Calculation\Statistical\Distributions\F;
 
-class Franchise extends Model
+class Branch extends Model
 {
     use HasFactory, SoftDeletes;
 
@@ -19,7 +20,7 @@ class Franchise extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'owner_id',
+        'franchise_id',
         'manager_id',
         'status_id',
         'email',
@@ -39,10 +40,10 @@ class Franchise extends Model
         'proof_agreement_attachment',
     ];
 
-    // relationship to owner, one to many
-    public function owner(): BelongsTo
+    // relationship to franchise, one to many
+    public function franchise(): BelongsTo
     {
-        return $this->belongsTo(UserOwner::class);
+        return $this->belongsTo(Franchise::class);
     }
 
     // relationship to manager, one to many
@@ -61,17 +62,6 @@ class Franchise extends Model
     public function drivers(): BelongsToMany
     {
         return $this->belongsToMany(UserDriver::class);
-    }
-
-    // relationship to technicians, many to many (pivot table)
-    public function technicians(): BelongsToMany
-    {
-        return $this->belongsToMany(UserTechnician::class);
-    }
-
-    public function vehicleTypes(): BelongsToMany
-    {
-        return $this->belongsToMany(VehicleType::class);
     }
 
     // relationship to expenses, one to many
@@ -102,28 +92,5 @@ class Franchise extends Model
     public function violations(): HasMany
     {
         return $this->hasMany(Violation::class);
-    }
-
-    // relationship to inventories, one to many
-    public function inventories(): HasMany
-    {
-        return $this->hasMany(Inventory::class);
-    }
-
-    public function supportTickets()
-    {
-        return $this->hasMany(SupportTicket::class);
-    }
-
-    public function vehicleType(): BelongsToMany
-    {
-        return $this->belongsToMany(VehicleType::class)
-                    ->withPivot('status_id') // Add this
-                    ->withTimestamps();
-    }
-
-    public function branches(): HasMany
-    {
-        return $this->hasMany(Branch::class);
     }
 }
