@@ -41,19 +41,7 @@ class DashboardController extends Controller
             'status:id,name'
         ])->get();
 
-        $pendingManagers = UserManager::with(['user:id,name'])
-        ->whereHas('status', function ($query) {
-            $query->where('name', 'pending');
-        })
-        ->get()
-        ->map(function ($manager) {
-            return [
-                'id' => $manager->id,
-                'name' => $manager->user->name,
-            ];
-        });
-
-        return Inertia::render('super-admin/dashboard/Index', [
+        return Inertia::render('super-admin/dashboard/DashboardIndex', [
             'franchises' => FranchiseDatatableResource::collection($franchises),
             'stats' => [
                 'total_revenue' => $totalRevenue,
@@ -61,7 +49,6 @@ class DashboardController extends Controller
                 'total_franchises' => $totalFranchises,
                 'total_drivers' => $totalDrivers
             ],
-            'pendingManagers' => $pendingManagers
         ]);
     }
 }
