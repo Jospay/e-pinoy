@@ -61,4 +61,10 @@ class Revenue extends Model
     {
         return $this->belongsTo(VehicleType::class);
     }
+
+    // relationship to branch, one to many
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 }

@@ -54,4 +54,10 @@ class BoundaryContract extends Model
                     ->withPivot('amount', 'status_id')
                     ->withTimestamps();
     }
+
+    // relationship to branch, one to many
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 }

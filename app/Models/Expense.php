@@ -37,4 +37,10 @@ class Expense extends Model
         return $this->belongsTo(PaymentOption::class);
     }
 
+    // relationship to branch, one to many
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
 }

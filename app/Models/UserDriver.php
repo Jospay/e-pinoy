@@ -105,4 +105,10 @@ class UserDriver extends Model
     {
         return $this->belongsToMany(VehicleType::class);
     }
+
+    // relationship to branches, many to many (pivot table)
+    public function branches(): BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class);
+    }
 }
