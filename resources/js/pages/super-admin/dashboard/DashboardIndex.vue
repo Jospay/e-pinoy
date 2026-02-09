@@ -20,6 +20,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -27,6 +34,7 @@ import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
+import { debounce } from 'lodash-es';
 import {
   AlertCircleIcon,
   BanknoteArrowDownIcon,
@@ -35,7 +43,7 @@ import {
   MoreHorizontal,
   UsersRoundIcon,
 } from 'lucide-vue-next';
-import { computed, h, ref } from 'vue';
+import { computed, h, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 interface FranchiseRow {
@@ -55,11 +63,14 @@ interface Stats {
   total_drivers: number;
 }
 
-defineProps<{
+const props = defineProps<{
   franchises: {
     data: FranchiseRow[];
   };
   stats: Stats;
+  filters: {
+    status: 'active' | 'inactive';
+  };
 }>();
 
 const formatCurrency = (amount: number): string => {
@@ -73,9 +84,10 @@ const formatCurrency = (amount: number): string => {
 const breadcrumbs: BreadcrumbItem[] = [
   {
     title: 'Dashboard',
-    href: superAdmin.dashboard().url,
+    href: superAdmin.dashboard.index().url,
   },
 ];
+const selectedStatus = ref(props.filters.status || 'active');
 
 interface FranchiseModal {
   id: number;
@@ -314,6 +326,28 @@ const franchiseColumns: ColumnDef<FranchiseRow>[] = [
     },
   },
 ];
+
+// --- Watchers to Update URL ---
+const updateFilters = () => {
+  router.get(
+    superAdmin.dashboard.index().url,
+    {
+      status: selectedStatus.value,
+    },
+    {
+      preserveScroll: true,
+      replace: true, // Doesn't pollute browser history
+    },
+  );
+};
+
+// Watch for select filter changes (debounced)
+watch(
+  [selectedStatus],
+  debounce(() => {
+    updateFilters();
+  }, 300), // Debounce to avoid firing on every keystroke/click
+);
 </script>
 
 <template>
@@ -390,9 +424,25 @@ const franchiseColumns: ColumnDef<FranchiseRow>[] = [
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
-        <h2 class="mb-4 font-mono text-xl font-semibold">
-          Franchise Management
-        </h2>
+        <div class="mb-4 flex items-center justify-between">
+          <h2 class="font-mono text-xl font-semibold">Franchise Management</h2>
+
+          <div class="flex gap-4">
+            <Select v-model="selectedStatus">
+              <SelectTrigger class="w-[150px] cursor-pointer">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active" class="cursor-pointer">
+                  Active
+                </SelectItem>
+                <SelectItem value="inactive" class="cursor-pointer">
+                  Inactive
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <DataTable
           :columns="franchiseColumns"
           :data="franchises.data"

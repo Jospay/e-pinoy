@@ -11,7 +11,6 @@ use App\Http\Controllers\SuperAdmin\EarningController;
 use App\Http\Controllers\SuperAdmin\ExpenseController;
 use App\Http\Controllers\SuperAdmin\FeedbackManagementController;
 use App\Http\Controllers\SuperAdmin\FranchiseController;
-use App\Http\Controllers\SuperAdmin\FranchiseOwnerController;
 use App\Http\Controllers\SuperAdmin\GpsTrackerController;
 use App\Http\Controllers\SuperAdmin\InventoryController;
 use App\Http\Controllers\SuperAdmin\OwnerController;
@@ -22,19 +21,7 @@ use App\Http\Controllers\SuperAdmin\VehicleTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-admin')->name('super-admin.')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-
-    Route::get('/franchise/create', [FranchiseController::class, 'create'])->name('franchise.create');
-    Route::post('/franchise', [FranchiseController::class, 'store'])->name('franchise.store');
-
-    Route::get('/franchise/{franchise}/edit', [FranchiseController::class, 'edit'])->name('franchise.edit');
-    Route::post('/franchise/{franchise}', [FranchiseController::class, 'update'])->name('franchise.update');
-
-    Route::get('/owner/{userOwner}/edit', [FranchiseOwnerController::class, 'edit'])->name('owner.edit');
-    Route::post('/owner/{userOwner}', [FranchiseOwnerController::class, 'update'])->name('owner.update');
-
-    Route::post('/franchises/send-action-code', [ActionVerificationController::class, 'sendActionCode'])->name('owner.sendCode');
-    Route::delete('/franchise/{franchise}', [FranchiseController::class, 'destroy'])->name('franchise.destroy');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
 
     Route::patch('/franchise/{franchise}', [FranchiseController::class, 'accept'])->name('franchise.accept');
     Route::get('/franchise/{franchise}', [FranchiseController::class, 'show'])->name('franchise.show');

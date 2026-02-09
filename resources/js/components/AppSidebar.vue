@@ -70,7 +70,7 @@ const navConfig: Record<string, NavItem[]> = {
   super_admin: [
     {
       title: 'Dashboard',
-      href: superAdmin.dashboard(),
+      href: superAdmin.dashboard.index(),
       icon: LayoutGrid,
       group: 'Overview',
     },

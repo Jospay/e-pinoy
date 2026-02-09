@@ -9,6 +9,8 @@ use App\Models\Expense;
 use App\Models\UserManager;
 use App\Models\UserDriver;
 use App\Http\Resources\SuperAdmin\FranchiseDatatableResource;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Carbon\Carbon;
@@ -18,8 +20,16 @@ class DashboardController extends Controller
     /**
      * Display the super admin dashboard.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', Rule::in(['active', 'inactive'])],
+        ]);
+
+        $filters = [
+            'status' => $validated['status'] ?? 'active',
+        ];
+
         $today = Carbon::today();
         // Get today's revenues total
         $totalRevenue = Revenue::whereDate('payment_date', $today)
@@ -39,7 +49,7 @@ class DashboardController extends Controller
         $franchises = Franchise::with([
             'owner.user:id,username',
             'status:id,name'
-        ])->get();
+        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']))->get();
 
         return Inertia::render('super-admin/dashboard/DashboardIndex', [
             'franchises' => FranchiseDatatableResource::collection($franchises),
@@ -49,6 +59,9 @@ class DashboardController extends Controller
                 'total_franchises' => $totalFranchises,
                 'total_drivers' => $totalDrivers
             ],
+            'filters' => [
+                'status' => $filters['status'],
+            ]
         ]);
     }
 }
