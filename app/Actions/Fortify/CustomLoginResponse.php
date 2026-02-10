@@ -18,7 +18,7 @@ class CustomLoginResponse implements LoginResponseContract
             'technician' => route('technician.dashboard'),
             'owner' => route('owner.dashboard'),
             'manager' => route('manager.dashboard'),
-            'super_admin' => route('super-admin.dashboard'),
+            'super_admin' => route('super-admin.dashboard.index'),
             default => route('home'),
         };
 
