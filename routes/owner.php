@@ -64,6 +64,6 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::get('/franchise/my-contract', [FranchiseController::class, 'myContract'])->name('franchise.my-contract');
 
         Route::get('/branch', [BranchController::class, 'index'])->name('branch.index');
-        
+        Route::get('/branch/{branch}', [BranchController::class, 'show'])->name('branch.show');
     });
 });

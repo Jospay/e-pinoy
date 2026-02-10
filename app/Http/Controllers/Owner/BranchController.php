@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Branch;
 use App\Http\Requests\Owner\StoreBranchRequest;
 use App\Http\Resources\SuperAdmin\BranchDatatableResource;
+use App\Http\Resources\SuperAdmin\BranchResource;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Support\Facades\DB;
@@ -34,5 +35,10 @@ class BranchController extends Controller
         ]);
     }
 
-    
+    public function show(Branch $branch)
+    {
+        $branch->loadMissing(['status:id,name']);
+
+        return new BranchResource($branch);
+    }
 }
