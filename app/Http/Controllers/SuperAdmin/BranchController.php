@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Franchise;
 use App\Http\Resources\SuperAdmin\BranchDatatableResource;
+use App\Http\Resources\SuperAdmin\BranchResource;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -38,5 +39,12 @@ class BranchController extends Controller
                 'owner_name' => $franchise->owner?->user?->name ?? 'N/A',
             ],
         ]);
+    }
+
+    public function show(Branch $branch)
+    {
+        $branch->loadMissing(['status:id,name']);
+
+        return new BranchResource($branch);
     }
 }
