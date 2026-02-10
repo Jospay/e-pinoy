@@ -20,6 +20,7 @@ use App\Http\Controllers\Owner\SupportCenterController;
 use App\Http\Controllers\Owner\VehicleController;
 use App\Http\Controllers\Owner\VehicleDriverController;
 use App\Http\Controllers\Owner\VehicleTypeController;
+use App\Http\Controllers\Owner\BranchController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->prefix('owner')->name('owner.')->group(function () {
@@ -61,5 +62,8 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::resource('maintenance-requests', MaintenanceRequestController::class);
         Route::put('/support-tickets/{ticket}/complete', [SupportCenterController::class, 'markAsCompleted'])->name('supportTickets.complete');
         Route::get('/franchise/my-contract', [FranchiseController::class, 'myContract'])->name('franchise.my-contract');
+
+        Route::get('/branch', [BranchController::class, 'index'])->name('branch.index');
+        
     });
 });

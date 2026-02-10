@@ -40,6 +40,7 @@ import {
   Ticket,
   UserCheck,
   Users,
+  Warehouse,
   Wrench,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
@@ -286,7 +287,13 @@ const navConfig: Record<string, NavItem[]> = {
       group: 'Payment',
       requiresActive: true,
     },
-
+    {
+      title: 'Branch Management',
+      href: owner.branch.index(),
+      icon: Warehouse,
+      group: 'Management',
+      requiresActive: true,
+    },
     {
       title: 'Driver Applications',
       href: owner.driversApplication.index(),
