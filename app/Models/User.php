@@ -123,6 +123,11 @@ class User extends Authenticatable
             ?? null;
     }
 
+    public function vehicleTypes()
+    {
+        return $this->driverDetails()->getRelated()->vehicleTypes();
+    }
+
     public function supportTickets()
     {
         return $this->hasMany(SupportTicket::class);

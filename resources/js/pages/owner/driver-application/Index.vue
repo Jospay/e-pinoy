@@ -33,6 +33,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
@@ -41,6 +42,7 @@ import { Head, router } from '@inertiajs/vue3';
 import { Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
+import { debounce } from 'lodash-es';
 
 interface DriverDetails {
   code_number: string | null;
@@ -55,6 +57,11 @@ interface DriverDetails {
   selfie_picture: string | null;
 }
 
+interface VehicleType {
+  id: number;
+  name: string;
+}
+
 interface Driver {
   id: number;
   username: string;
@@ -66,6 +73,7 @@ interface Driver {
   city: string;
   barangay: string;
   address: string;
+  vehicle_types: VehicleType[];
   details: DriverDetails;
 }
 
@@ -91,22 +99,75 @@ interface DriversPaginator {
 
 interface Props {
   drivers: DriversPaginator;
+  franchiseVehicleTypes: VehicleType[];
   filters?: {
     search?: string;
     status?: string;
+    vehicle_type?: string;
   };
 }
 
-const { drivers, filters } = defineProps<Props>();
-const paginator = ref(drivers);
+const props = defineProps<Props>();
 
 const confirmDialogOpen = ref(false);
 const driverToToggle = ref<Driver | null>(null);
+const updatingId = ref<number | null>(null);
 
+// Initialize filters from props or defaults
+const globalFilter = ref(props.filters?.search || '');
+const statusFilter = ref(props.filters?.status || 'available');
+
+// Initialize activeTab
+const activeTab = ref(props.filters?.vehicle_type || '');
+
+// Unified update function to fetch data from server
+const updateFilters = debounce(() => {
+  router.get(
+    window.location.pathname,
+    {
+      status: statusFilter.value,
+      search: globalFilter.value || undefined,
+      vehicle_type: activeTab.value,
+    },
+    {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true,
+    },
+  );
+}, 300);
+
+/**
+ * WATCHERS: This is what was missing!
+ * These watch the local refs and trigger the router.get() automatically.
+ */
+watch([statusFilter, activeTab], () => {
+  updateFilters();
+});
+
+watch(globalFilter, () => {
+  updateFilters();
+});
+
+// Sync local state if the user navigates (Back/Forward browser buttons)
 watch(
-  () => drivers,
-  (newDrivers) => {
-    paginator.value = newDrivers;
+  () => props.filters,
+  (newFilters) => {
+    if (
+      newFilters?.vehicle_type &&
+      newFilters.vehicle_type !== activeTab.value
+    ) {
+      activeTab.value = newFilters.vehicle_type;
+    }
+    if (newFilters?.status && newFilters.status !== statusFilter.value) {
+      statusFilter.value = newFilters.status;
+    }
+    if (
+      newFilters?.search !== undefined &&
+      newFilters.search !== globalFilter.value
+    ) {
+      globalFilter.value = newFilters.search;
+    }
   },
   { deep: true },
 );
@@ -115,26 +176,10 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Driver Applications', href: owner.drivers.index().url },
 ];
 
-const globalFilter = ref(filters?.search || '');
-const statusFilter = ref(filters?.status || 'available');
-
-watch([statusFilter, globalFilter], ([newStatus, newSearch]) => {
-  router.get(
-    window.location.pathname,
-    {
-      status: newStatus,
-      search: newSearch || undefined,
-    },
-    {
-      preserveState: true,
-      preserveScroll: true,
-      replace: true,
-    },
-  );
-});
-
 const paginationLinks = computed(() => {
-  return paginator.value.links || [];
+  return props.drivers.links.filter(
+    (link) => !link.label.includes('Previous') && !link.label.includes('Next'),
+  );
 });
 
 const goToPage = (url: string | null) => {
@@ -142,27 +187,21 @@ const goToPage = (url: string | null) => {
   router.get(
     url,
     {
-      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
+      status: statusFilter.value,
       search: globalFilter.value || undefined,
+      vehicle_type: activeTab.value,
     },
     { preserveState: true, preserveScroll: true },
   );
 };
 
 const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'available':
-      return 'default';
-    case 'for approval':
-      return 'secondary';
-    case 'retired':
-      return 'destructive';
-    default:
-      return 'secondary';
-  }
+  const s = status?.toLowerCase() || '';
+  if (s === 'available') return 'default';
+  if (s === 'for approval' || s === 'pending') return 'secondary';
+  if (s === 'retired') return 'destructive';
+  return 'outline';
 };
-
-const updatingId = ref<number | null>(null);
 
 const handleAction = (id: number, action: 'request' | 'cancel') => {
   updatingId.value = id;
@@ -189,10 +228,26 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
   <Head title="Driver Applications" />
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="space-y-6 p-6">
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList
+          class="w-full justify-start overflow-x-auto bg-muted/50 p-1.5"
+        >
+          <TabsTrigger
+            v-for="type in franchiseVehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="gap-2 px-4"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div>
         <h1 class="mb-1 text-3xl font-bold">Driver Applications</h1>
         <p class="text-gray-600">
-          Accept the applications of drivers to your franchise
+          Accept the applications of drivers for your
+          <span class="font-bold text-primary">{{ activeTab }}</span> fleet.
         </p>
       </div>
 
@@ -204,28 +259,29 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
           <input
             v-model="globalFilter"
             placeholder="Search drivers..."
-            class="w-full rounded-md border px-10 py-2"
+            class="w-full rounded-md border border-input bg-background px-10 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
         <Select v-model="statusFilter">
-          <SelectTrigger class="w-full md:w-48">
+          <SelectTrigger class="w-full md:w-56">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="available">Available Driver</SelectItem>
-            <SelectItem value="for approval">Request Driver</SelectItem>
+            <SelectItem value="for approval">Request Sent (Pending)</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div class="overflow-x-auto rounded-lg border">
+      <div class="overflow-x-auto rounded-lg border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Username</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
+              <TableHead>Vehicle Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead class="text-center">Actions</TableHead>
             </TableRow>
@@ -233,19 +289,39 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
 
           <TableBody>
             <TableRow
-              v-for="driver in paginator.data"
+              v-for="driver in drivers.data"
               :key="driver.id"
-              class="hover:bg-muted/50"
+              class="transition-colors hover:bg-muted/50"
             >
-              <TableCell>{{ driver.username }}</TableCell>
+              <TableCell class="font-medium">{{ driver.username }}</TableCell>
               <TableCell>{{ driver.email }}</TableCell>
               <TableCell>{{ driver.phone }}</TableCell>
               <TableCell>
-                <Badge :variant="getStatusVariant(driver.status)">
+                <div class="flex flex-wrap gap-1">
+                  <Badge
+                    v-for="vType in driver.vehicle_types"
+                    :key="vType.id"
+                    variant="outline"
+                    class="text-[10px] font-bold uppercase"
+                  >
+                    {{ vType.name }}
+                  </Badge>
+                  <span
+                    v-if="driver.vehicle_types.length === 0"
+                    class="text-xs text-gray-400"
+                    >None</span
+                  >
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  :variant="getStatusVariant(driver.status)"
+                  class="capitalize"
+                >
                   {{ driver.status }}
                 </Badge>
               </TableCell>
-              <TableCell class="flex justify-center gap-2">
+              <TableCell class="text-center">
                 <Button
                   size="sm"
                   variant="outline"
@@ -263,12 +339,15 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
                 </Button>
               </TableCell>
             </TableRow>
-            <TableRow v-if="paginator.data.length === 0">
+
+            <TableRow v-if="drivers.data.length === 0">
               <TableCell
-                colspan="5"
-                class="py-6 text-center text-muted-foreground"
+                colspan="6"
+                class="py-12 text-center text-muted-foreground"
               >
-                No results found.
+                No <span class="font-bold">{{ statusFilter }}</span> drivers
+                found for <span class="font-bold">{{ activeTab }}</span
+                >.
               </TableCell>
             </TableRow>
           </TableBody>
@@ -276,22 +355,26 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
       </div>
 
       <div class="flex items-center justify-between pt-4">
-        <span class="text-sm text-gray-600">
-          Showing {{ paginator.from || 0 }} to {{ paginator.to || 0 }} of
-          {{ paginator.total }} entries
+        <span class="text-sm text-muted-foreground">
+          Showing {{ drivers.from || 0 }} to {{ drivers.to || 0 }} of
+          {{ drivers.total }} entries
         </span>
 
         <Pagination
-          :items-per-page="paginator.per_page"
-          :total="paginator.total"
-          :default-page="paginator.current_page"
+          :items-per-page="drivers.per_page"
+          :total="drivers.total"
+          :default-page="drivers.current_page"
           class="w-auto"
         >
           <PaginationContent>
             <PaginationPrevious
-              :disabled="!paginator.prev_page_url"
-              @click="goToPage(paginator.prev_page_url)"
+              class="cursor-pointer"
+              :class="{
+                'pointer-events-none opacity-50': !drivers.prev_page_url,
+              }"
+              @click="goToPage(drivers.prev_page_url)"
             />
+
             <template v-for="(link, index) in paginationLinks" :key="index">
               <PaginationItem
                 v-if="!isNaN(Number(link.label))"
@@ -309,9 +392,13 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
               </PaginationItem>
               <PaginationEllipsis v-else-if="link.label.includes('...')" />
             </template>
+
             <PaginationNext
-              :disabled="!paginator.next_page_url"
-              @click="goToPage(paginator.next_page_url)"
+              class="cursor-pointer"
+              :class="{
+                'pointer-events-none opacity-50': !drivers.next_page_url,
+              }"
+              @click="goToPage(drivers.next_page_url)"
             />
           </PaginationContent>
         </Pagination>
@@ -319,7 +406,7 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
     </div>
 
     <Dialog v-model:open="confirmDialogOpen">
-      <DialogContent class="sm:max-w-lg">
+      <DialogContent class="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle class="text-xl font-semibold">
             Confirm Status Change
@@ -336,13 +423,22 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
         <div class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <p><strong>Email:</strong> {{ driverToToggle?.email }}</p>
           <p><strong>Phone:</strong> {{ driverToToggle?.phone }}</p>
+          <p>
+            <strong class="pe-1">Vehicle Type:</strong>
+            <span v-for="type in driverToToggle?.vehicle_types" :key="type.id">
+              {{ type.name }}
+            </span>
+          </p>
           <p><strong>Status:</strong> {{ driverToToggle?.status }}</p>
           <p><strong>Region:</strong> {{ driverToToggle?.region }}</p>
           <p><strong>Province:</strong> {{ driverToToggle?.province }}</p>
           <p><strong>City:</strong> {{ driverToToggle?.city }}</p>
           <p><strong>Barangay:</strong> {{ driverToToggle?.barangay }}</p>
-          <p><strong>Address:</strong> {{ driverToToggle?.address }}</p>
         </div>
+
+        <p class="text-sm">
+          <strong>Address:</strong> {{ driverToToggle?.address }}
+        </p>
 
         <div class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <p>

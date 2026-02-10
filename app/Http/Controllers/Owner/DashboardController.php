@@ -117,7 +117,15 @@ class DashboardController extends Controller
         if (!$franchiseId) return 0;
 
         return BoundaryContract::where('franchise_id', $franchiseId)
-            ->whereHas('status', fn($q) => $q->where('name', 'pending'))
+            ->whereHas('vehicleTypes', function($q) {
+                // We reference the pivot table specifically to find the status
+                $q->where('boundary_contract_vehicle_type.status_id', function($sub) {
+                    $sub->select('id')
+                        ->from('statuses')
+                        ->where('name', 'pending')
+                        ->limit(1);
+                });
+            })
             ->count();
     }
 
