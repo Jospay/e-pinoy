@@ -44,6 +44,17 @@ import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import { debounce } from 'lodash-es';
 
+// 🔵 ADDED
+interface Branch {
+  id: number;
+  name: string;
+}
+
+interface Assignment {
+  type: 'branch' | 'franchise';
+  name: string;
+}
+
 interface DriverDetails {
   code_number: string | null;
   license_number: string | null;
@@ -75,6 +86,7 @@ interface Driver {
   address: string;
   vehicle_types: VehicleType[];
   details: DriverDetails;
+  assignment?: Assignment | null;
 }
 
 interface DriversPaginator {
@@ -100,6 +112,8 @@ interface DriversPaginator {
 interface Props {
   drivers: DriversPaginator;
   franchiseVehicleTypes: VehicleType[];
+  // 🔵 ADDED
+  branches: Branch[];
   filters?: {
     search?: string;
     status?: string;
@@ -112,6 +126,14 @@ const props = defineProps<Props>();
 const confirmDialogOpen = ref(false);
 const driverToToggle = ref<Driver | null>(null);
 const updatingId = ref<number | null>(null);
+
+// 🔵 ADDED
+const selectedTarget = ref<'franchise' | number>('franchise');
+
+// 🔵 ADDED
+watch(confirmDialogOpen, (open) => {
+  if (open) selectedTarget.value = 'franchise';
+});
 
 // Initialize filters from props or defaults
 const globalFilter = ref(props.filters?.search || '');
@@ -211,7 +233,11 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
 
   router.put(
     `/owner/drivers-application/${id}`,
-    { action: action },
+    {
+      action: action,
+      // 🔵 ADDED
+      target: selectedTarget.value,
+    },
     {
       onSuccess: () => {
         toast.success(`Action successful!`, { id: toastId });
@@ -280,9 +306,11 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
             <TableRow>
               <TableHead>Username</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
               <TableHead>Vehicle Type</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead v-if="statusFilter === 'for approval'"
+                >Status</TableHead
+              >
+              <TableHead>Assigned To</TableHead>
               <TableHead class="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -295,7 +323,6 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
             >
               <TableCell class="font-medium">{{ driver.username }}</TableCell>
               <TableCell>{{ driver.email }}</TableCell>
-              <TableCell>{{ driver.phone }}</TableCell>
               <TableCell>
                 <div class="flex flex-wrap gap-1">
                   <Badge
@@ -321,6 +348,20 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
                   {{ driver.status }}
                 </Badge>
               </TableCell>
+
+              <TableCell v-if="statusFilter === 'for approval'">
+                <Badge variant="outline">
+                  {{ driver.assignment?.name || 'Franchise' }}
+                  <span class="text-xs text-gray-400">
+                    ({{
+                      driver.assignment?.type === 'branch'
+                        ? 'Branch'
+                        : 'Franchise'
+                    }})
+                  </span>
+                </Badge>
+              </TableCell>
+
               <TableCell class="text-center">
                 <Button
                   size="sm"
@@ -406,156 +447,207 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
     </div>
 
     <Dialog v-model:open="confirmDialogOpen">
-      <DialogContent class="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle class="text-xl font-semibold">
-            Confirm Status Change
-          </DialogTitle>
+      <DialogContent class="overflow-hidden sm:max-w-2xl">
+        <div class="flex max-h-[90vh] flex-col">
+          <DialogHeader class="pb-1">
+            <DialogTitle class="text-xl font-semibold">
+              Confirm Status Change
+            </DialogTitle>
 
-          <DialogDescription class="text-gray-600">
-            You are about to toggle the status of
-            <span class="font-semibold text-gray-900">
-              {{ driverToToggle?.username }} </span
-            >.
-          </DialogDescription>
-        </DialogHeader>
+            <DialogDescription class="text-gray-600">
+              You are about to toggle the status of
+              <span class="font-semibold text-gray-900">
+                {{ driverToToggle?.username }} </span
+              >.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <p><strong>Email:</strong> {{ driverToToggle?.email }}</p>
-          <p><strong>Phone:</strong> {{ driverToToggle?.phone }}</p>
-          <p>
-            <strong class="pe-1">Vehicle Type:</strong>
-            <span v-for="type in driverToToggle?.vehicle_types" :key="type.id">
-              {{ type.name }}
-            </span>
-          </p>
-          <p><strong>Status:</strong> {{ driverToToggle?.status }}</p>
-          <p><strong>Region:</strong> {{ driverToToggle?.region }}</p>
-          <p><strong>Province:</strong> {{ driverToToggle?.province }}</p>
-          <p><strong>City:</strong> {{ driverToToggle?.city }}</p>
-          <p><strong>Barangay:</strong> {{ driverToToggle?.barangay }}</p>
-        </div>
+          <div
+            class="flex-1 overflow-y-auto pe-1 pb-6"
+            style="scrollbar-gutter: stable both-edges"
+          >
+            <div class="mt-4 text-sm">
+              <div class="grid grid-cols-2 gap-x-6 gap-y-2">
+                <p><strong>Email:</strong> {{ driverToToggle?.email }}</p>
+                <p><strong>Phone:</strong> {{ driverToToggle?.phone }}</p>
+                <p>
+                  <strong class="pe-1">Vehicle Type:</strong>
+                  <span
+                    v-for="type in driverToToggle?.vehicle_types"
+                    :key="type.id"
+                  >
+                    {{ type.name }}
+                  </span>
+                </p>
+                <p><strong>Status:</strong> {{ driverToToggle?.status }}</p>
 
-        <p class="text-sm">
-          <strong>Address:</strong> {{ driverToToggle?.address }}
-        </p>
+                <p v-if="statusFilter === 'for approval'">
+                  <strong>Assigned To:</strong>
+                  {{ driverToToggle?.assignment?.name || 'Franchise' }}
+                  <span class="text-xs text-gray-400">
+                    ({{
+                      driverToToggle?.assignment?.type === 'branch'
+                        ? 'Branch'
+                        : 'Franchise'
+                    }})
+                  </span>
+                </p>
 
-        <div class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <p>
-            <strong>License Number:</strong>
-            {{ driverToToggle?.details?.license_number }}
-          </p>
-          <p>
-            <strong>License Expiry:</strong>
-            {{ driverToToggle?.details?.license_expiry }}
-          </p>
-        </div>
-
-        <div v-if="driverToToggle?.details" class="mt-4">
-          <h3 class="mb-2 text-sm font-semibold">Driver Documents</h3>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div v-if="driverToToggle.details.front_license_picture">
-              <div class="mb-1 flex justify-between">
-                <p class="text-xs text-gray-500">Front License</p>
-                <a
-                  :href="driverToToggle.details.front_license_picture"
-                  class="text-xs text-blue-500"
-                  target="_blank"
-                  >View</a
-                >
+                <p><strong>Region:</strong> {{ driverToToggle?.region }}</p>
+                <p><strong>Province:</strong> {{ driverToToggle?.province }}</p>
+                <p><strong>City:</strong> {{ driverToToggle?.city }}</p>
+                <p><strong>Barangay:</strong> {{ driverToToggle?.barangay }}</p>
               </div>
-              <img
-                :src="driverToToggle.details.front_license_picture"
-                class="h-28 w-full rounded border object-cover"
-              />
+              <p class="mt-2 text-sm">
+                <strong>Address:</strong> {{ driverToToggle?.address }}
+              </p>
             </div>
 
-            <div v-if="driverToToggle.details.back_license_picture">
-              <div class="mb-1 flex justify-between">
-                <p class="text-xs text-gray-500">Back License</p>
-                <a
-                  :href="driverToToggle.details.back_license_picture"
-                  class="text-xs text-blue-500"
-                  target="_blank"
-                  >View</a
-                >
-              </div>
-              <img
-                :src="driverToToggle.details.back_license_picture"
-                class="h-28 w-full rounded border object-cover"
-              />
+            <div class="grid grid-cols-2 gap-x-6 gap-y-2 pt-2 text-sm">
+              <p>
+                <strong>License Number:</strong>
+                {{ driverToToggle?.details?.license_number }}
+              </p>
+              <p>
+                <strong>License Expiry:</strong>
+                {{ driverToToggle?.details?.license_expiry }}
+              </p>
             </div>
 
-            <div v-if="driverToToggle.details.nbi_clearance">
-              <div class="mb-1 flex justify-between">
-                <p class="text-xs text-gray-500">NBI Clearance</p>
-                <a
-                  :href="driverToToggle.details.nbi_clearance"
-                  class="text-xs text-blue-500"
-                  target="_blank"
-                  >View</a
-                >
+            <div v-if="driverToToggle?.details" class="mt-4 pb-2">
+              <h3 class="mb-2 text-sm font-semibold">Driver Documents</h3>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div v-if="driverToToggle.details.front_license_picture">
+                  <div class="mb-1 flex justify-between">
+                    <p class="text-xs text-gray-500">Front License</p>
+                    <a
+                      :href="driverToToggle.details.front_license_picture"
+                      class="text-xs text-blue-500"
+                      target="_blank"
+                      >View</a
+                    >
+                  </div>
+                  <img
+                    :src="driverToToggle.details.front_license_picture"
+                    class="h-28 w-full rounded border object-cover"
+                  />
+                </div>
+
+                <div v-if="driverToToggle.details.back_license_picture">
+                  <div class="mb-1 flex justify-between">
+                    <p class="text-xs text-gray-500">Back License</p>
+                    <a
+                      :href="driverToToggle.details.back_license_picture"
+                      class="text-xs text-blue-500"
+                      target="_blank"
+                      >View</a
+                    >
+                  </div>
+                  <img
+                    :src="driverToToggle.details.back_license_picture"
+                    class="h-28 w-full rounded border object-cover"
+                  />
+                </div>
+
+                <div v-if="driverToToggle.details.nbi_clearance">
+                  <div class="mb-1 flex justify-between">
+                    <p class="text-xs text-gray-500">NBI Clearance</p>
+                    <a
+                      :href="driverToToggle.details.nbi_clearance"
+                      class="text-xs text-blue-500"
+                      target="_blank"
+                      >View</a
+                    >
+                  </div>
+                  <img
+                    :src="driverToToggle.details.nbi_clearance"
+                    class="h-28 w-full rounded border object-cover"
+                  />
+                </div>
+
+                <div v-if="driverToToggle.details.selfie_picture">
+                  <div class="mb-1 flex justify-between">
+                    <p class="text-xs text-gray-500">Selfie</p>
+                    <a
+                      :href="driverToToggle.details.selfie_picture"
+                      class="text-xs text-blue-500"
+                      target="_blank"
+                      >View</a
+                    >
+                  </div>
+                  <img
+                    :src="driverToToggle.details.selfie_picture"
+                    class="h-28 w-full rounded border object-cover"
+                  />
+                </div>
               </div>
-              <img
-                :src="driverToToggle.details.nbi_clearance"
-                class="h-28 w-full rounded border object-cover"
-              />
             </div>
 
-            <div v-if="driverToToggle.details.selfie_picture">
-              <div class="mb-1 flex justify-between">
-                <p class="text-xs text-gray-500">Selfie</p>
-                <a
-                  :href="driverToToggle.details.selfie_picture"
-                  class="text-xs text-blue-500"
-                  target="_blank"
-                  >View</a
-                >
-              </div>
-              <img
-                :src="driverToToggle.details.selfie_picture"
-                class="h-28 w-full rounded border object-cover"
-              />
+            <!-- ✅ ADDED: Branch selector -->
+            <div
+              v-if="
+                driverToToggle?.status === 'available' &&
+                props.branches.length > 0
+              "
+            >
+              <p class="p-1 text-sm font-medium">Assign Driver To:</p>
+
+              <Select v-model="selectedTarget">
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose destination" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="franchise">Franchise</SelectItem>
+
+                  <SelectItem
+                    v-for="branch in props.branches"
+                    :key="branch.id"
+                    :value="branch.id"
+                  >
+                    {{ branch.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+          <DialogFooter class="border-t pt-4">
+            <div class="flex w-full justify-end gap-2">
+              <Button variant="outline" @click="confirmDialogOpen = false">
+                Cancel
+              </Button>
+
+              <Button
+                v-if="driverToToggle?.status === 'available'"
+                size="sm"
+                variant="default"
+                :disabled="updatingId === driverToToggle?.id"
+                @click="handleAction(driverToToggle!.id, 'request')"
+              >
+                <Spinner
+                  v-if="updatingId === driverToToggle?.id"
+                  class="mr-2 h-4 w-4"
+                />
+                Request
+              </Button>
+
+              <Button
+                v-else-if="driverToToggle?.status === 'for approval'"
+                size="sm"
+                variant="destructive"
+                :disabled="updatingId === driverToToggle?.id"
+                @click="handleAction(driverToToggle!.id, 'cancel')"
+              >
+                <Spinner
+                  v-if="updatingId === driverToToggle?.id"
+                  class="mr-2 h-4 w-4"
+                />
+                Cancel Request
+              </Button>
+            </div>
+          </DialogFooter>
         </div>
-
-        <DialogFooter class="mt-6">
-          <div class="flex w-full justify-end gap-2">
-            <Button variant="outline" @click="confirmDialogOpen = false">
-              Cancel
-            </Button>
-
-            <Button
-              v-if="driverToToggle?.status === 'available'"
-              size="sm"
-              variant="default"
-              :disabled="updatingId === driverToToggle?.id"
-              @click="handleAction(driverToToggle!.id, 'request')"
-            >
-              <Spinner
-                v-if="updatingId === driverToToggle?.id"
-                class="mr-2 h-4 w-4"
-              />
-              Request
-            </Button>
-
-            <Button
-              v-else-if="driverToToggle?.status === 'for approval'"
-              size="sm"
-              variant="destructive"
-              :disabled="updatingId === driverToToggle?.id"
-              @click="handleAction(driverToToggle!.id, 'cancel')"
-            >
-              <Spinner
-                v-if="updatingId === driverToToggle?.id"
-                class="mr-2 h-4 w-4"
-              />
-              Cancel Request
-            </Button>
-          </div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   </AppLayout>

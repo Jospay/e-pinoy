@@ -60,7 +60,7 @@ class Branch extends Model
     // relationship to drivers, many to many (pivot table)
     public function drivers(): BelongsToMany
     {
-        return $this->belongsToMany(UserDriver::class);
+        return $this->belongsToMany(UserDriver::class, 'branch_user_driver');
     }
 
     // relationship to expenses, one to many
