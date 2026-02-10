@@ -276,7 +276,7 @@ const franchiseColumns: ColumnDef<FranchiseRow>[] = [
     id: 'actions',
     header: () => h('div', { class: 'text-center' }, 'Actions'),
     cell: ({ row }) => {
-      const franchise = row.original;
+      const franchise = row.original as any;
 
       return h('div', { class: 'relative text-center' }, [
         h(DropdownMenu, null, () => [
@@ -306,6 +306,23 @@ const franchiseColumns: ColumnDef<FranchiseRow>[] = [
                 onClick: () => ownerModal.open(franchise.owner_id),
               },
               () => 'View Owner Details',
+            ),
+            h(
+              DropdownMenuItem,
+              {
+                class: 'cursor-pointer',
+                onClick: () => {
+                  const queryParams: Record<string, string> = {
+                    franchise: franchise.id,
+                  };
+
+                  router.get(superAdmin.branch.index().url, queryParams, {
+                    preserveScroll: true,
+                    replace: false,
+                  });
+                },
+              },
+              () => 'View Branches',
             ),
             franchise.status_name === 'pending'
               ? [
