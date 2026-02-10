@@ -11,7 +11,6 @@ use App\Http\Controllers\SuperAdmin\EarningController;
 use App\Http\Controllers\SuperAdmin\ExpenseController;
 use App\Http\Controllers\SuperAdmin\FeedbackManagementController;
 use App\Http\Controllers\SuperAdmin\FranchiseController;
-use App\Http\Controllers\SuperAdmin\FranchiseOwnerController;
 use App\Http\Controllers\SuperAdmin\GpsTrackerController;
 use App\Http\Controllers\SuperAdmin\InventoryController;
 use App\Http\Controllers\SuperAdmin\OwnerController;
@@ -29,9 +28,6 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
 
     Route::get('/franchise/{franchise}/edit', [FranchiseController::class, 'edit'])->name('franchise.edit');
     Route::post('/franchise/{franchise}', [FranchiseController::class, 'update'])->name('franchise.update');
-
-    Route::get('/owner/{userOwner}/edit', [FranchiseOwnerController::class, 'edit'])->name('owner.edit');
-    Route::post('/owner/{userOwner}', [FranchiseOwnerController::class, 'update'])->name('owner.update');
 
     Route::post('/franchises/send-action-code', [ActionVerificationController::class, 'sendActionCode'])->name('owner.sendCode');
     Route::delete('/franchise/{franchise}', [FranchiseController::class, 'destroy'])->name('franchise.destroy');

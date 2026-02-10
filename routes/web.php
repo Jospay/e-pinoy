@@ -1,10 +1,10 @@
 <?php
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\SuperAdmin\FranchiseContractController;
+// use App\Http\Controllers\SuperAdmin\FranchiseContractController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\FeedbackController;
-use App\Http\Controllers\LandingPage\ContactUsController; 
+use App\Http\Controllers\LandingPage\ContactUsController;
 use Inertia\Inertia;
 
 
@@ -35,9 +35,9 @@ Route::get('dashboard', function (Request $request) {
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 
-Route::middleware(['auth', 'verified', 'check.active'])->group(function () {
-    Route::get('/franchise/contract', [FranchiseContractController::class, 'index'])->name('contract');
-});
+// Route::middleware(['auth', 'verified', 'check.active'])->group(function () {
+//     Route::get('/franchise/contract', [FranchiseContractController::class, 'index'])->name('contract');
+// });
 
 require __DIR__ . '/settings.php';
 require __DIR__ . '/driver.php';
