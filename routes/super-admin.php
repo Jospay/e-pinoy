@@ -21,7 +21,20 @@ use App\Http\Controllers\SuperAdmin\VehicleTypeController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-admin')->name('super-admin.')->group(function () {
+<<<<<<< HEAD
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard.index');
+=======
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('/franchise/create', [FranchiseController::class, 'create'])->name('franchise.create');
+    Route::post('/franchise', [FranchiseController::class, 'store'])->name('franchise.store');
+
+    Route::get('/franchise/{franchise}/edit', [FranchiseController::class, 'edit'])->name('franchise.edit');
+    Route::post('/franchise/{franchise}', [FranchiseController::class, 'update'])->name('franchise.update');
+
+    Route::post('/franchises/send-action-code', [ActionVerificationController::class, 'sendActionCode'])->name('owner.sendCode');
+    Route::delete('/franchise/{franchise}', [FranchiseController::class, 'destroy'])->name('franchise.destroy');
+>>>>>>> ad6787f1b810e1dd2af5cd6d176bc9f42069ca66
 
     Route::patch('/franchise/{franchise}', [FranchiseController::class, 'accept'])->name('franchise.accept');
     Route::get('/franchise/{franchise}', [FranchiseController::class, 'show'])->name('franchise.show');

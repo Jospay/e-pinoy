@@ -58,9 +58,10 @@ class Franchise extends Model
     }
 
     // relationship to drivers, many to many (pivot table)
-    public function drivers(): BelongsToMany
+    public function drivers()
     {
-        return $this->belongsToMany(UserDriver::class);
+        // Note: user_driver_id is the FK in your migration
+        return $this->belongsToMany(UserDriver::class, 'franchise_user_driver', 'franchise_id', 'user_driver_id');
     }
 
     // relationship to technicians, many to many (pivot table)

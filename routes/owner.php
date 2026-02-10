@@ -17,7 +17,6 @@ use App\Http\Controllers\Owner\PayOutController;
 use App\Http\Controllers\Owner\ReportAndAnalyticController;
 use App\Http\Controllers\Owner\RevenueManagementController;
 use App\Http\Controllers\Owner\SupportCenterController;
-use App\Http\Controllers\Owner\SuspendDriverController;
 use App\Http\Controllers\Owner\VehicleController;
 use App\Http\Controllers\Owner\VehicleDriverController;
 use App\Http\Controllers\Owner\VehicleTypeController;
