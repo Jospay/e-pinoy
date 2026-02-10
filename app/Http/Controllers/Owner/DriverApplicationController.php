@@ -11,121 +11,127 @@ use Inertia\Inertia;
 
 class DriverApplicationController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
-    {
-        // 1. Get the Franchise context
-        $franchise = auth()->user()->ownerDetails?->franchises()->first();
-        if (!$franchise) abort(404, 'Franchise not found');
+{
+    $franchise = auth()->user()->ownerDetails?->franchises()->first();
+    if (!$franchise) abort(404, 'Franchise not found');
 
-        // 2. Fetch the ID for 'active' status dynamically
-        $activeStatusId = Status::where('name', 'active')->value('id');
+    $activeStatusId = Status::where('name', 'active')->value('id');
 
-        // 3. Prepare Filters and Reference Data
-        $franchiseVehicleTypes = $franchise->vehicleTypes()
-            ->wherePivot('status_id', $activeStatusId)
-            ->get(['vehicle_types.id', 'name']);
+    $franchiseVehicleTypes = $franchise->vehicleTypes()
+        ->wherePivot('status_id', $activeStatusId)
+        ->get(['vehicle_types.id', 'name']);
 
-        // --- SECURITY FIX: URL Injection Protection ---
-        $allowedTypeNames = $franchiseVehicleTypes->pluck('name')->toArray();
-        $requestedType = $request->input('vehicle_type');
+    $allowedTypeNames = $franchiseVehicleTypes->pluck('name')->toArray();
+    $requestedType = $request->input('vehicle_type');
 
-        // If the requested type isn't in the franchise's active types, force the default
-        if (!$requestedType || !in_array($requestedType, $allowedTypeNames)) {
-            $activeVehicleType = $franchiseVehicleTypes->first()?->name;
-        } else {
-            $activeVehicleType = $requestedType;
-        }
-        // ----------------------------------------------
+    $activeVehicleType = in_array($requestedType, $allowedTypeNames)
+        ? $requestedType
+        : $franchiseVehicleTypes->first()?->name;
 
-        $statusFilter = $request->input('status', 'available');
-        $search = $request->input('search');
+    $statusFilter = $request->input('status', 'available');
+    $search = $request->input('search');
 
-        // 4. Build the Driver Query
-        $driversQuery = User::with(['driverDetails.status', 'driverDetails.vehicleTypes'])
-            ->whereHas('userType', fn($q) => $q->where('name', 'driver'));
+    // Load branches once
+    $branches = $franchise->branches()->select('id', 'name')->get();
+    $branchIds = $branches->pluck('id');
 
-        $driversQuery->whereHas('driverDetails', function ($q) use ($statusFilter, $franchise, $activeVehicleType) {
+    $driversQuery = User::with(['driverDetails.status', 'driverDetails.vehicleTypes'])
+        ->whereHas('userType', fn($q) => $q->where('name', 'driver'))
+        ->whereHas('driverDetails', function ($q) use (
+            $statusFilter,
+            $franchise,
+            $activeVehicleType,
+            $branchIds
+        ) {
             $q->where('is_verified', 1)
-            ->whereHas('status', fn($s) => $s->where('name', $statusFilter));
+              ->whereHas('status', fn($s) => $s->where('name', $statusFilter));
 
-            // Filter drivers specifically by the validated vehicle type name
             if ($activeVehicleType) {
-                $q->whereHas('vehicleTypes', function($vt) use ($activeVehicleType) {
-                    $vt->where('name', $activeVehicleType);
-                });
+                $q->whereHas('vehicleTypes', fn($vt) =>
+                    $vt->where('name', $activeVehicleType)
+                );
             }
 
-            // Logic for franchise-specific approval
             if ($statusFilter === 'for approval') {
-                $q->whereHas('franchises', function ($f) use ($franchise) {
-                    $f->where('franchises.id', $franchise->id);
+                $q->where(function ($sub) use ($franchise, $branchIds) {
+                    $sub->whereHas('franchises', fn($f) =>
+                        $f->where('franchises.id', $franchise->id)
+                    )->orWhereHas('branches', fn($b) =>
+                        $b->whereIn('branches.id', $branchIds)
+                    );
                 });
             }
         });
 
-        // 5. Handle Search
-        if ($search) {
-            $driversQuery->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                ->orWhere('username', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        return Inertia::render('owner/driver-application/Index', [
-            'drivers' => $driversQuery->orderBy('created_at', 'desc')
-                ->paginate(10)
-                ->withQueryString()
-                ->through(fn($user) => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'phone' => $user->phone,
-                    'region' => $user->region,
-                    'province' => $user->province,
-                    'city' => $user->city,
-                    'barangay' => $user->barangay,
-                    'address' => $user->address,
-                    'status' => $user->driverDetails?->status?->name,
-                    'vehicle_types' => $user->driverDetails?->vehicleTypes->map(fn($type) => [
-                        'id' => $type->id,
-                        'name' => $type->name
-                    ]) ?? [],
-                    'details' => [
-                        'license_number' => $user->driverDetails?->license_number,
-                        'code_number' => $user->driverDetails?->code_number,
-                        'license_expiry' => $user->driverDetails?->license_expiry,
-                        'is_verified' => $user->driverDetails?->is_verified,
-                        'shift' => $user->driverDetails?->shift,
-                        'hire_date' => $user->driverDetails?->hire_date,
-                        'front_license_picture' => $user->driverDetails?->front_license_picture
-                            ? asset('storage/driver_documents/' . $user->driverDetails->front_license_picture) : null,
-                        'back_license_picture' => $user->driverDetails?->back_license_picture
-                            ? asset('storage/driver_documents/' . $user->driverDetails->back_license_picture) : null,
-                        'nbi_clearance' => $user->driverDetails?->nbi_clearance
-                            ? asset('storage/driver_documents/' . $user->driverDetails->nbi_clearance) : null,
-                        'selfie_picture' => $user->driverDetails?->selfie_picture
-                            ? asset('storage/driver_documents/' . $user->driverDetails->selfie_picture) : null,
-                    ],
-                ]),
-            'franchiseVehicleTypes' => $franchiseVehicleTypes,
-            'filters' => [
-                'search' => $search,
-                'status' => $statusFilter,
-                'vehicle_type' => $activeVehicleType // Returns the validated type to the frontend
-            ]
-        ]);
+    if ($search) {
+        $driversQuery->where(function ($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+              ->orWhere('username', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%");
+        });
     }
-    /**
-     * Update the specified resource in storage.
-     */
+
+    return Inertia::render('owner/driver-application/Index', [
+        'drivers' => $driversQuery->orderBy('created_at', 'desc')
+            ->paginate(10)
+            ->withQueryString()
+            ->through(fn($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'region' => $user->region,
+                'province' => $user->province,
+                'city' => $user->city,
+                'barangay' => $user->barangay,
+                'address' => $user->address,
+                'status' => $user->driverDetails?->status?->name,
+                'assignment' => [
+                    'type' => $user->driverDetails?->branches->first()?->name ? 'branch' : 'franchise',
+                    'name' => $user->driverDetails?->branches->first()?->name
+                        ?? $user->driverDetails?->franchises->first()?->name
+                        ?? 'Franchise',
+                ],
+                'vehicle_types' => $user->driverDetails?->vehicleTypes->map(fn($type) => [
+                    'id' => $type->id,
+                    'name' => $type->name
+                ]) ?? [],
+                'details' => [
+                    'license_number' => $user->driverDetails?->license_number,
+                    'code_number' => $user->driverDetails?->code_number,
+                    'license_expiry' => $user->driverDetails?->license_expiry,
+                    'is_verified' => $user->driverDetails?->is_verified,
+                    'shift' => $user->driverDetails?->shift,
+                    'hire_date' => $user->driverDetails?->hire_date,
+                    'front_license_picture' => $user->driverDetails?->front_license_picture
+                        ? asset('storage/driver_documents/' . $user->driverDetails->front_license_picture)
+                        : null,
+                    'back_license_picture' => $user->driverDetails?->back_license_picture
+                        ? asset('storage/driver_documents/' . $user->driverDetails->back_license_picture)
+                        : null,
+                    'nbi_clearance' => $user->driverDetails?->nbi_clearance
+                        ? asset('storage/driver_documents/' . $user->driverDetails->nbi_clearance)
+                        : null,
+                    'selfie_picture' => $user->driverDetails?->selfie_picture
+                        ? asset('storage/driver_documents/' . $user->driverDetails->selfie_picture)
+                        : null,
+                ],
+            ]),
+        'franchiseVehicleTypes' => $franchiseVehicleTypes,
+        'branches' => $branches,
+        'filters' => [
+            'search' => $search,
+            'status' => $statusFilter,
+            'vehicle_type' => $activeVehicleType
+        ]
+    ]);
+}
+
+
     public function update(Request $request, string $id)
     {
-        // Use id to find the driver profile
         $driverProfile = UserDriver::where('id', $id)->firstOrFail();
         $franchise = auth()->user()->ownerDetails?->franchises()->first();
 
@@ -135,8 +141,23 @@ class DriverApplicationController extends Controller
 
         $action = $request->input('action');
 
+        // ADDED
+        $target = $request->input('target', 'franchise');
+
         if ($action === 'request') {
-            $franchise->drivers()->syncWithoutDetaching($driverProfile->id);
+
+            // ADDED: assign to franchise or branch
+            if ($target === 'franchise') {
+                $franchise->drivers()->syncWithoutDetaching($driverProfile->id);
+            } else {
+                $branch = $franchise->branches()
+                    ->where('id', $target)
+                    ->first();
+
+                if ($branch) {
+                    $branch->drivers()->syncWithoutDetaching($driverProfile->id);
+                }
+            }
 
             $status = Status::where('name', 'for approval')->first();
             if ($status) {
@@ -156,9 +177,13 @@ class DriverApplicationController extends Controller
             return back()->with('success', 'Request sent to driver successfully.');
         }
 
-        // NEW: Handle Cancel Action
         if ($action === 'cancel') {
             $franchise->drivers()->detach($driverProfile->id);
+
+            // 🔵 ADDED: also detach from all branches
+            foreach ($franchise->branches as $branch) {
+                $branch->drivers()->detach($driverProfile->id);
+            }
 
             $status = Status::where('name', 'available')->first();
             if ($status) {
