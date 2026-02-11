@@ -255,12 +255,12 @@ watch(
       </div>
 
       <!-- Step 5: Uploads -->
-      <div v-show="currentStep === 5" class="space-y-4" data-step="6">
+      <div v-show="currentStep === 5" class="space-y-4" data-step="5">
         <Step5Uploads :errors="errors" :show-fields="documentsStep5Show" />
       </div>
 
       <!-- Step 6: Security -->
-      <div v-show="currentStep === 6" class="space-y-4" data-step="7">
+      <div v-show="currentStep === 6" class="space-y-4" data-step="6">
         <Step6Security
           :errors="errors"
           :labels="securityStep6Labels"

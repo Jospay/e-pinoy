@@ -23,9 +23,9 @@ import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { AlertCircleIcon, MoreHorizontal } from 'lucide-vue-next';
+import { AlertCircleIcon, MoreHorizontal, PlusIcon } from 'lucide-vue-next';
 import { computed, h } from 'vue';
 
 interface BranchRow {
@@ -104,6 +104,10 @@ const branchDetails = computed(() => {
 const branchModal = useDetailsModal<BranchModal>({
   baseUrl: '/owner/branch',
 });
+
+const createBranch = () => {
+  router.get(owner.branch.create().url);
+};
 
 const branchColumns: ColumnDef<BranchRow>[] = [
   {
@@ -189,7 +193,13 @@ const branchColumns: ColumnDef<BranchRow>[] = [
           :columns="branchColumns"
           :data="branches.data"
           search-placeholder="Search branches..."
-        />
+        >
+          <template #custom-actions>
+            <Button class="me-5" @click="createBranch"
+              ><PlusIcon />Request Branch</Button
+            >
+          </template>
+        </DataTable>
       </div>
     </div>
 
