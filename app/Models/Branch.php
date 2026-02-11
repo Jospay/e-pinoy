@@ -32,8 +32,6 @@ class Branch extends Model
         'city',
         'barangay',
         'postal_code',
-        'latitude',
-        'longitude',
         'dti_registration_attachment',
         'mayor_permit_attachment',
         'proof_agreement_attachment',

@@ -25,8 +25,6 @@ return new class extends Migration
             $table->string('city');
             $table->string('barangay');
             $table->string('postal_code', 20);
-            $table->decimal('latitude', 10, 8)->nullable();
-            $table->decimal('longitude', 11, 8)->nullable();
             $table->string('contract_attachment')->nullable();
             $table->string('dti_registration_attachment');
             $table->string('mayor_permit_attachment');

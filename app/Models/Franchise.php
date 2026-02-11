@@ -31,8 +31,6 @@ class Franchise extends Model
         'city',
         'barangay',
         'postal_code',
-        'latitude',
-        'longitude',
         'contract_attachment',
         'dti_registration_attachment',
         'mayor_permit_attachment',
