@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use App\Http\Resources\SuperAdmin\DriverResource;
 use App\Models\Franchise;
 use App\Models\Branch;
+use App\Models\VehicleType;
 use App\Models\UserDriver;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -28,6 +29,7 @@ class DriverController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
+            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
             'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
             'franchise' => ['sometimes', 'nullable', 'array'],
             'branches' => ['sometimes', 'nullable', 'array'],
@@ -36,6 +38,7 @@ class DriverController extends Controller
 
         // 2. Set defaults
         $filters = [
+            'tab' => $validated['tab'] ?? 'taxi',
             'type' => $validated['type'] ?? 'franchise',
             'franchise' => $validated['franchise'] ?? [],
             'branches' => $validated['branches'] ?? [],
@@ -57,6 +60,7 @@ class DriverController extends Controller
             'drivers' => DriverDatatableResource::collection($drivers),
             'franchises' => fn () => Franchise::select('id', 'name')->get(),
             'branches' => $branchesList,
+            'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
     }
@@ -101,7 +105,8 @@ class DriverController extends Controller
         $query = UserDriver::with([
             'user:id,username,email,phone',
             'status:id,name',
-        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
+        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']
+        ))->whereHas('vehicleTypes', fn ($q) => $q->where('name', $filters['tab']));
 
         if ($filters['type'] === 'branch') {
             // Filter by specific branches

@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
@@ -44,7 +45,9 @@ const props = defineProps<{
   };
   franchises: { id: number; name: string }[];
   branches: { id: number; name: string }[];
+  vehicleTypes: { id: number; name: string }[];
   filters: {
+    tab: string;
     type: 'franchise' | 'branch';
     franchise: string[];
     branches: string[];
@@ -71,6 +74,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
+const activeTab = ref(props.filters.tab);
 const selectedType = ref(props.filters.type || 'franchise');
 const selectedFranchise = ref<string[]>(props.filters.franchise || []);
 const selectedBranches = ref<string[]>(props.filters.branches || []);
@@ -236,6 +240,7 @@ const updateFilters = () => {
   router.get(
     superAdmin.driver.index().url,
     {
+      tab: activeTab.value,
       type: selectedType.value,
       status: selectedStatus.value,
       franchise: selectedFranchise.value || [],
@@ -248,7 +253,7 @@ const updateFilters = () => {
   );
 };
 
-watch(selectedType, () => {
+watch([activeTab, selectedType], () => {
   selectedFranchise.value = [];
   selectedBranches.value = [];
   updateFilters();
@@ -275,11 +280,26 @@ watch(
     <div
       class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
     >
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
+          <TabsTrigger
+            v-for="type in vehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="cursor-pointer px-8 py-2 font-semibold capitalize"
+            :class="{ 'pointer-events-none': activeTab === type.name }"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Franchise Drivers</h2>
+          <h2 class="font-mono text-xl font-semibold capitalize">
+            {{ selectedType }} Drivers
+          </h2>
 
           <div class="flex gap-4">
             <Select v-model="selectedType">
