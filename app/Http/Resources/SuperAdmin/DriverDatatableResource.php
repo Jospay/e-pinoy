@@ -28,6 +28,10 @@ class DriverDatatableResource extends JsonResource
             $data['franchise_name'] = $this->franchises->first()->name;
         }
 
+        if ($this->relationLoaded('branches') && $this->branches->isNotEmpty()) {
+            $data['branch_name'] = $this->branches->first()->name;
+        }
+
         return $data;
     }
 }

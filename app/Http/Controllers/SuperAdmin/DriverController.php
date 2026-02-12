@@ -9,6 +9,7 @@ use App\Models\Status;
 use Illuminate\Support\Facades\DB;
 use App\Http\Resources\SuperAdmin\DriverResource;
 use App\Models\Franchise;
+use App\Models\Branch;
 use App\Models\UserDriver;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,13 +28,17 @@ class DriverController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
-            'franchise' => ['sometimes', 'nullable', 'array'], 
+            'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
+            'franchise' => ['sometimes', 'nullable', 'array'],
+            'branches' => ['sometimes', 'nullable', 'array'],
             'status' => ['sometimes', 'string', Rule::in(['active', 'retired', 'suspended'])],
         ]);
 
         // 2. Set defaults
         $filters = [
+            'type' => $validated['type'] ?? 'franchise',
             'franchise' => $validated['franchise'] ?? [],
+            'branches' => $validated['branches'] ?? [],
             'status' => $validated['status'] ?? 'active',
         ];
 
@@ -41,14 +46,18 @@ class DriverController extends Controller
         $query = $this->buildBaseQuery($filters);
         $drivers = $query->get();
 
+        $branchesList = Branch::select('id', 'name')
+            ->when(!empty($filters['franchise']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchise']);
+            })
+            ->get();
+
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/DriverIndex', [
             'drivers' => DriverDatatableResource::collection($drivers),
             'franchises' => fn () => Franchise::select('id', 'name')->get(),
-            'filters' => [
-                'franchise' => $filters['franchise'],
-                'status' => $filters['status'],
-            ],
+            'branches' => $branchesList,
+            'filters' => $filters,
         ]);
     }
 
@@ -94,18 +103,28 @@ class DriverController extends Controller
             'status:id,name',
         ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
 
-        $query->whereHas('franchises', function ($q) use ($filters) {
-            $q->when(!empty($filters['franchise']), fn ($subQ) =>
-                $subQ->whereIn('franchises.id', $filters['franchise'])
-            );
-        });
+        if ($filters['type'] === 'branch') {
+            // Filter by specific branches
+            $query->whereHas('branches', function ($q) use ($filters) {
+                $q->when(!empty($filters['branches']), fn ($subQ) => 
+                    $subQ->whereIn('branches.id', $filters['branches'])
+                );
+                // If no branches selected, but franchises are, ensure branches belong to those franchises
+                $q->when(empty($filters['branches']) && !empty($filters['franchise']), fn ($subQ) =>
+                    $subQ->whereIn('franchise_id', $filters['franchise'])
+                );
+            })->with('branches:id,name');
+        } else {
+            // Filter by Franchises
+            $query->whereHas('franchises', function ($q) use ($filters) {
+                $q->when(!empty($filters['franchise']), fn ($subQ) =>
+                    $subQ->whereIn('franchises.id', $filters['franchise'])
+                );
+            });
+        }
 
         // Eager load franchises to make name available in the resource
-        $query->with('franchises:id,name');
-
-        
-
-        return $query;
+        return $query->with('franchises:id,name');
     }
 
     public function verify(UserDriver $driver)

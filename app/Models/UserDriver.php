@@ -56,7 +56,7 @@ class UserDriver extends Model
     // relationship to franchises, many to many (pivot table)
     public function franchises(): BelongsToMany
     {
-        return $this->belongsToMany(Franchise::class, 'franchise_user_driver', 'user_driver_id', 'franchise_id');
+        return $this->belongsToMany(Franchise::class);
     }
 
     // relationship to vehicles, one to many
