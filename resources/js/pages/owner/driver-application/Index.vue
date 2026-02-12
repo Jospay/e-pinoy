@@ -308,9 +308,9 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
               <TableHead>Email</TableHead>
               <TableHead>Vehicle Type</TableHead>
               <TableHead v-if="statusFilter === 'for approval'"
-                >Status</TableHead
+                >Assigned To</TableHead
               >
-              <TableHead>Assigned To</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead class="text-center">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -340,14 +340,6 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
                   >
                 </div>
               </TableCell>
-              <TableCell>
-                <Badge
-                  :variant="getStatusVariant(driver.status)"
-                  class="capitalize"
-                >
-                  {{ driver.status }}
-                </Badge>
-              </TableCell>
 
               <TableCell v-if="statusFilter === 'for approval'">
                 <Badge variant="outline">
@@ -359,6 +351,15 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
                         : 'Franchise'
                     }})
                   </span>
+                </Badge>
+              </TableCell>
+
+              <TableCell>
+                <Badge
+                  :variant="getStatusVariant(driver.status)"
+                  class="capitalize"
+                >
+                  {{ driver.status }}
                 </Badge>
               </TableCell>
 
