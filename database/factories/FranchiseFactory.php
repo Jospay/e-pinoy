@@ -27,8 +27,6 @@ class FranchiseFactory extends Factory
             'city' => fake()->city(),
             'barangay' => fake()->streetName(),
             'postal_code' => fake()->postcode(),
-            'latitude' => fake()->latitude(15.1, 15.2), // Roughly Angeles, Pampanga
-            'longitude' => fake()->longitude(120.55, 120.65),
             'contract_attachment' => fake()->imageUrl(640, 480, 'business', true),
             'dti_registration_attachment' => fake()->imageUrl(640, 480, 'business', true),
             'mayor_permit_attachment' => fake()->imageUrl(640, 480, 'permit', true),

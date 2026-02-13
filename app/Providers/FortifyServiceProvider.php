@@ -69,7 +69,7 @@ class FortifyServiceProvider extends ServiceProvider
             'canResetPassword' => Features::enabled(Features::resetPasswords()),
             'canRegister' => Features::enabled(Features::registration()),
             'status' => $request->session()->get('status'),
-            'franchises' => Franchise::select(['id', 'name', 'region', 'province', 'city', 'latitude', 'longitude'])->get(),
+            'franchises' => Franchise::select(['id', 'name', 'region', 'province', 'city'])->get(),
             'userTypes'  => [] // Ensure this matches your Vue props
         ]));
 

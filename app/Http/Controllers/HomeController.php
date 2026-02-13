@@ -40,7 +40,7 @@ class HomeController extends Controller
             ]);
 
         // Franchises
-        $franchises = Franchise::select(['id', 'name', 'region', 'province', 'city', 'latitude', 'longitude'])
+        $franchises = Franchise::select(['id', 'name', 'region', 'province', 'city'])
             ->get();
 
         return Inertia::render('Home', [
