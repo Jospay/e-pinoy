@@ -13,9 +13,9 @@ class VehicleTypeSeeder extends Seeder
     public function run(): void
     {
         $vehicleTypes = [
-            ['name' => 'Taxi Car'],
-            ['name' => 'Bus'],
-            ['name' => 'Tricycle'],
+            ['name' => 'taxi'],
+            ['name' => 'bus'],
+            ['name' => 'tricycle'],
         ];
 
         foreach ($vehicleTypes as $type) {
