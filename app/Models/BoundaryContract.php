@@ -36,12 +36,6 @@ class BoundaryContract extends Model
         return $this->belongsTo(UserDriver::class);
     }
 
-    // relationship to vehicle, one to many
-    public function vehicle(): BelongsTo
-    {
-        return $this->belongsTo(Vehicle::class);
-    }
-
     // relationship to revenue, one to many
     public function revenues(): HasMany
     {

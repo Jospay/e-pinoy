@@ -69,7 +69,8 @@ class Franchise extends Model
 
     public function vehicleTypes(): BelongsToMany
     {
-        return $this->belongsToMany(VehicleType::class);
+        return $this->belongsToMany(VehicleType::class)
+            ->withPivot('status_id');
     }
 
     // relationship to expenses, one to many
@@ -111,13 +112,6 @@ class Franchise extends Model
     public function supportTickets()
     {
         return $this->hasMany(SupportTicket::class);
-    }
-
-    public function vehicleType(): BelongsToMany
-    {
-        return $this->belongsToMany(VehicleType::class)
-                    ->withPivot('status_id') // Add this
-                    ->withTimestamps();
     }
 
     public function branches(): HasMany

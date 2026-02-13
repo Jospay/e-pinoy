@@ -48,11 +48,6 @@ class VehicleType extends Model
         return $this->belongsToMany(UserDriver::class);
     }
 
-    public function status()
-    {
-        return $this->belongsTo(Status::class, 'status_id');
-    }
-
     public function boundaryContracts()
     {
         return $this->belongsToMany(BoundaryContract::class)
