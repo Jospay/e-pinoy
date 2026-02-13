@@ -14,7 +14,7 @@ class VehicleResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $data = [
             'id' => $this->id,
             'franchise_id' => $this->franchise_id,
             'plate_number' => $this->plate_number,
@@ -27,6 +27,16 @@ class VehicleResource extends JsonResource
             'or_cr' => $this->or_cr
             ? asset('storage/vehicle_documents/' . $this->or_cr)
             : null,
+            'capacity' => $this->capacity,
+            'vehicle_type' => ucfirst($this->vehicleType->name)
         ];
+
+        if ($this->franchise) {
+            $data['franchise_name'] = $this->franchise->name;
+        } elseif ($this->branch) {
+            $data['branch_name'] = $this->branch->name;
+        }
+
+        return $data;
     }
 }

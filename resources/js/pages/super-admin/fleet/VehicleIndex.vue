@@ -96,12 +96,19 @@ interface VehicleModal {
   model: string;
   year: string;
   color: string;
+  or_cr: string;
+  capacity: string;
+  vehicle_type: string;
+  franchise_name?: string;
+  branch_name?: string;
 }
 const vehicleDetails = computed(() => {
   const data = vehicleModal.data.value;
   if (!data) return [];
 
   return [
+    { label: 'Franchise', value: data.franchise_name, type: 'text' },
+    { label: 'Branch', value: data.branch_name, type: 'text' },
     { label: 'Status', value: data.status, type: 'text' },
     { label: 'Plate Number', value: data.plate_number, type: 'text' },
     { label: 'Vehicle Identification Number', value: data.vin, type: 'text' },
@@ -109,6 +116,13 @@ const vehicleDetails = computed(() => {
     { label: 'Model', value: data.model, type: 'text' },
     { label: 'Year', value: data.year, type: 'text' },
     { label: 'Color', value: data.color, type: 'text' },
+    { label: 'Vehicle Type', value: data.vehicle_type, type: 'text' },
+    { label: 'Capacity', value: data.capacity, type: 'text' },
+    {
+      label: 'OR CR Document',
+      value: data.or_cr,
+      type: 'link',
+    },
   ].filter((item) => item.value);
 });
 // --- Modal State ---
@@ -396,7 +410,7 @@ watch(
   <Dialog v-model:open="isChangeModalOpen">
     <DialogContent class="max-w-md font-mono">
       <DialogHeader>
-        <DialogTitle class="text-xl">Change Driver Status</DialogTitle>
+        <DialogTitle class="text-xl">Change Vehicle Status</DialogTitle>
         <DialogDescription>
           Change the status of this vehicle plate number
           <strong class="text-blue-500">{{

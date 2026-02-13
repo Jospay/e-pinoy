@@ -69,7 +69,7 @@ class VehicleController extends Controller
     public function show(Vehicle $vehicle)
     {
         // Load relationships and return as JSON
-        $vehicle->loadMissing(['status:id,name']);
+        $vehicle->loadMissing(['status:id,name', 'vehicleType:id,name', 'franchise:id,name', 'branch:id,name']);
 
         return new VehicleResource($vehicle);
     }
