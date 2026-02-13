@@ -8,6 +8,7 @@ use App\Http\Resources\SuperAdmin\MaintenanceHistoryResource;
 use App\Http\Resources\SuperAdmin\VehicleDatatableResource;
 use App\Http\Resources\SuperAdmin\VehicleResource;
 use App\Models\Franchise;
+use App\Models\Branch;
 use App\Models\Status;
 use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
-use Storage;
+use Illuminate\Support\Facades\Storage;
 
 class VehicleController extends Controller
 {
@@ -75,8 +76,24 @@ class VehicleController extends Controller
 
     public function create(): Response
     {
+        // Fetch franchises with their "Active" vehicle types only
+        $franchises = Franchise::select('id', 'name')
+            ->with(['vehicleTypes' => function ($query) {
+                $query->select('vehicle_types.id', 'vehicle_types.name')
+                    ->wherePivot('status_id', function ($q) {
+                        $q->select('id')->from('statuses')->where('name', 'active');
+                    });
+            }])
+            ->get();
+
+        // Fetch branches with their franchise relationship
+        $branches = Branch::select('id', 'franchise_id', 'name')
+            ->with('franchise:id,name')
+            ->get();
+
         return Inertia::render('super-admin/fleet/VehicleCreate', [
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => $franchises,
+            'branches' => $branches,
         ]);
     }
 
@@ -140,9 +157,12 @@ class VehicleController extends Controller
         // 1. Create the vehicle instance first
         $vehicle = new Vehicle([
             'status_id' => $availableStatusId,
+            'vehicle_type_id' => $request->vehicle_type_id,
             'franchise_id' => $request->franchise_id,
+            'branch_id' => $request->branch_id,
             'plate_number' => $request->plate_number,
             'vin' => $request->vin,
+            'capacity' => $request->capacity,
             'brand' => $request->brand,
             'model' => $request->model,
             'color' => $request->color,
