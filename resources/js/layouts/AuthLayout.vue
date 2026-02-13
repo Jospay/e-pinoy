@@ -10,8 +10,6 @@ interface FranchiseData {
   region: string;
   province: string;
   city: string;
-  latitude: string;
-  longitude: string;
 }
 
 // --- CONSOLIDATED PROPS ---
