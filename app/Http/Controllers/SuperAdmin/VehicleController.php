@@ -110,46 +110,6 @@ class VehicleController extends Controller
         return back();
     }
 
-    public function update(Request $request, Vehicle $vehicle)
-    {
-        $validated = $request->validate([
-            'franchise_id' => ['required', 'exists:franchises,id'],
-            'plate_number' => ['required', 'string', 'max:20', Rule::unique('vehicles')->ignore($vehicle->id)],
-            'vin' => ['required', 'string', 'max:50', Rule::unique('vehicles')->ignore($vehicle->id)],
-            'brand' => ['required', 'string', 'max:100'],
-            'model' => ['required', 'string', 'max:100'],
-            'year' => ['required', 'integer'],
-            'color' => ['required', 'string', 'max:50'],
-            'or_cr' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:2048'],
-        ]);
-
-        // Update text fields (this excludes the file from the array automatically if not provided)
-        $vehicle->fill($request->except('or_cr'));
-
-        if ($request->hasFile('or_cr')) {
-            // 1. Delete old file from storage if it exists
-            if ($vehicle->or_cr) {
-                Storage::disk('public')->delete('vehicle_documents/'.$vehicle->or_cr);
-            }
-
-            // 2. Handle New File Upload
-            $file = $request->file('or_cr');
-
-            // Consistent naming: timestamp + cleaned plate number
-            $filename = time().'_or_cr_'.str_replace(' ', '_', $request->plate_number).'.'.$file->getClientOriginalExtension();
-
-            $file->storeAs('vehicle_documents', $filename, 'public');
-
-            // 3. Update the database column
-            $vehicle->or_cr = $filename;
-        }
-
-        $vehicle->save();
-
-        // Use 'back' so the Inertia modal refreshes its data automatically
-        return back()->with('success', 'Vehicle updated successfully');
-    }
-
     public function store(StoreVehicleRequest $request)
     {
         $availableStatusId = Status::where('name', 'available')->firstOrFail()->id;
@@ -187,34 +147,6 @@ class VehicleController extends Controller
         $vehicle->save();
 
         return redirect(route('super-admin.vehicle.index'));
-    }
-
-    public function destroy(string $id)
-    {
-        DB::transaction(function () use ($id) {
-
-            $vehicle = Vehicle::findOrFail($id);
-
-            $vehicle->maintenances()->each(function ($maintenance) {
-                $maintenance->expenses()->delete();
-            });
-
-            $vehicle->maintenances()->delete();
-
-            $vehicle->load('boundaryContracts.revenues');
-
-            foreach ($vehicle->boundaryContracts as $contract) {
-                $contract->revenues()->delete();
-            }
-
-            $vehicle->boundaryContracts()->delete();
-
-            $vehicle->routes()->delete();
-
-            $vehicle->delete();
-        });
-
-        return back()->with('success', 'Vehicle deleted successfully.');
     }
 
     public function maintenanceHistory(Vehicle $vehicle)

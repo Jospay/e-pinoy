@@ -20,7 +20,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -97,10 +96,7 @@ interface VehicleModal {
   model: string;
   year: string;
   color: string;
-  or_cr: string;
-  franchise_id: number;
 }
-
 const vehicleDetails = computed(() => {
   const data = vehicleModal.data.value;
   if (!data) return [];
@@ -113,79 +109,11 @@ const vehicleDetails = computed(() => {
     { label: 'Model', value: data.model, type: 'text' },
     { label: 'Year', value: data.year, type: 'text' },
     { label: 'Color', value: data.color, type: 'text' },
-    { label: 'OR-CR Document', value: data.or_cr, type: 'link' },
   ].filter((item) => item.value);
 });
-
 // --- Modal State ---
 const vehicleModal = useDetailsModal<VehicleModal>({
   baseUrl: '/super-admin/vehicle',
-});
-
-// --- Edit Mode Logic ---
-const isEditMode = ref(false);
-const editForm = useForm({
-  franchise_id: null as number | null,
-  plate_number: '',
-  vin: '',
-  brand: '',
-  model: '',
-  year: '',
-  color: '',
-  or_cr: null as File | null,
-});
-
-const startEditing = () => {
-  const data = vehicleModal.data.value;
-  if (!data) return;
-
-  editForm.franchise_id = data.franchise_id;
-  editForm.plate_number = data.plate_number;
-  editForm.vin = data.vin;
-  editForm.brand = data.brand;
-  editForm.model = data.model;
-  editForm.year = data.year;
-  editForm.color = data.color;
-  editForm.or_cr = null; // Reset file input
-  isEditMode.value = true;
-};
-
-const handleUpdateVehicle = () => {
-  if (!vehicleModal.data.value?.id) return;
-
-  // 1. Transform the data to include the method spoofing key
-  editForm
-    .transform((data) => ({
-      ...data,
-      _method: 'patch', // This tells Laravel to treat the POST as a PATCH
-    }))
-    .post(superAdmin.vehicle.update(vehicleModal.data.value.id).url, {
-      forceFormData: true,
-      preserveScroll: true,
-      onSuccess: () => {
-        isEditMode.value = false;
-        toast.success('Vehicle updated successfully!');
-
-        // 2. Refresh the modal data to show the newly saved information
-        if (vehicleModal.data.value?.id) {
-          vehicleModal.open(vehicleModal.data.value.id);
-        }
-      },
-      onError: (errors) => {
-        // Logic for handling validation errors is already handled by
-        // the :class bindings in your template, but we can add a toast here.
-        toast.error('Please check the form for errors.');
-      },
-    });
-};
-
-// Reset Edit Mode when modal closes
-watch(vehicleModal.isOpen, (isOpen) => {
-  if (!isOpen) {
-    isEditMode.value = false;
-    editForm.reset();
-    editForm.clearErrors();
-  }
 });
 
 // for maintenance history
@@ -226,34 +154,6 @@ const handleChangeVehicle = () => {
     },
   });
 };
-
-// --- Delete Vehicle Modal State ---
-const isDeleteModalOpen = ref(false);
-const isDeletingVehicle = ref(false);
-
-const openDeleteModal = (vehicle: VehicleRow) => {
-  selectedVehicle.value = vehicle;
-  isDeleteModalOpen.value = true;
-};
-
-const confirmDelete = () => {
-  if (!selectedVehicle.value) return
-  isDeletingVehicle.value = true;
-
-  router.delete(superAdmin.vehicle.destroy(selectedVehicle.value.id).url, {
-    preserveScroll: true,
-
-    onSuccess: () => {
-      isDeleteModalOpen.value = false;
-      selectedVehicle.value = {};
-      toast.success('Vehicle deleted successfully!');
-    },
-
-    onFinish: () => {
-      isDeletingVehicle.value = false;
-    },
-  });
-}
 
 const statuses = [
   { value: 'active', label: 'Active' },
@@ -346,17 +246,6 @@ const vehicleColumns = computed<ColumnDef<VehicleRow>[]>(() => {
                   () => 'Change Status',
                 ),
               ],
-              h(DropdownMenuSeparator),
-              [
-                h(
-                  DropdownMenuItem,
-                  {
-                    class: 'cursor-pointer text-red-500 focus:text-red-600',
-                    onClick: () => openDeleteModal(vehicle),
-                  },
-                  () => 'Delete Vehicle',
-                ),
-              ],
             ]),
           ]),
         ]);
@@ -386,7 +275,7 @@ watch(
   [selectedStatus],
   debounce(() => {
     updateFilters();
-  }, 300),
+  }, 300), // Debounce to avoid firing on every keystroke/click
 );
 </script>
 
@@ -418,8 +307,12 @@ watch(
             <MultiSelect
               v-model="selectedContext"
               :options="contextOptions"
-              placeholder="Select Franchises"
-              all-label="All Franchises"
+              placeholder="
+                Select Franchises
+              "
+              all-label="
+                All Franchises
+              "
               @change="
                 (val) => {
                   selectedFranchise = val;
@@ -446,14 +339,11 @@ watch(
   </AppLayout>
 
   <Dialog v-model:open="vehicleModal.isOpen.value">
-    <DialogContent class="max-h-[90vh] max-w-3xl overflow-y-auto">
+    <DialogContent class="max-w-3xl overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{{
-          isEditMode ? 'Edit Vehicle' : 'Vehicle Details'
-        }}</DialogTitle>
+        <DialogTitle>Vehicle Details</DialogTitle>
       </DialogHeader>
-
-      <div class="py-4">
+      <DialogDescription>
         <div v-if="vehicleModal.isLoading.value" class="grid grid-cols-2 gap-4">
           <template v-for="item in 10" :key="item">
             <Skeleton class="h-5 w-24" />
@@ -461,120 +351,19 @@ watch(
           </template>
         </div>
 
-        <div v-else-if="isEditMode" class="grid grid-cols-2 gap-x-6 gap-y-4">
-          <div class="flex flex-col gap-1.5">
-            <Label>Franchise</Label>
-            <Select v-model="editForm.franchise_id">
-              <SelectTrigger
-                :class="{ 'border-destructive': editForm.errors.franchise_id }"
-              >
-                <SelectValue placeholder="Select Franchise" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="f in franchises" :key="f.id" :value="f.id">
-                  {{ f.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <span
-              v-if="editForm.errors.franchise_id"
-              class="text-xs text-destructive"
-              >{{ editForm.errors.franchise_id }}</span
-            >
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label>Plate Number</Label>
-            <Input
-              v-model="editForm.plate_number"
-              :class="{ 'border-destructive': editForm.errors.plate_number }"
-            />
-            <span
-              v-if="editForm.errors.plate_number"
-              class="text-xs text-destructive"
-              >{{ editForm.errors.plate_number }}</span
-            >
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label>VIN</Label>
-            <Input
-              v-model="editForm.vin"
-              :class="{ 'border-destructive': editForm.errors.vin }"
-            />
-            <span v-if="editForm.errors.vin" class="text-xs text-destructive">{{
-              editForm.errors.vin
-            }}</span>
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label>Brand</Label>
-            <Input
-              v-model="editForm.brand"
-              :class="{ 'border-destructive': editForm.errors.brand }"
-            />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label>Model</Label>
-            <Input
-              v-model="editForm.model"
-              :class="{ 'border-destructive': editForm.errors.model }"
-            />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label>Year</Label>
-            <Input
-              v-model="editForm.year"
-              type="number"
-              :class="{ 'border-destructive': editForm.errors.year }"
-            />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label>Color</Label>
-            <Input
-              v-model="editForm.color"
-              :class="{ 'border-destructive': editForm.errors.color }"
-            />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <Label
-              >OR-CR
-              <span class="text-[11px]"
-                >(Leave empty to keep current)</span
-              ></Label
-            >
-            <Input
-              type="file"
-              @input="editForm.or_cr = $event.target.files[0]"
-              class="cursor-pointer"
-            />
-            <span
-              v-if="editForm.errors.or_cr"
-              class="text-xs text-destructive"
-              >{{ editForm.errors.or_cr }}</span
-            >
-          </div>
-        </div>
-
         <div
           v-else-if="vehicleDetails.length > 0"
           class="grid grid-cols-2 gap-4"
         >
           <template v-for="item in vehicleDetails" :key="item.label">
-            <div class="font-medium text-muted-foreground">
-              {{ item.label }}:
-            </div>
+            <div class="font-medium">{{ item.label }}:</div>
 
             <div v-if="item.type === 'link'">
               <a
                 :href="item.value"
                 target="_blank"
-                class="flex items-center gap-1 text-blue-500 hover:underline"
-                >View Document</a
+                class="text-blue-500 hover:underline"
+                >View</a
               >
             </div>
 
@@ -596,36 +385,10 @@ watch(
             </AlertDescription>
           </Alert>
         </div>
-      </div>
+      </DialogDescription>
 
-      <DialogFooter class="mt-5 border-t pt-4">
-        <div class="flex w-full justify-between gap-2">
-          <div>
-            <Button
-              v-if="!isEditMode && vehicleModal.data.value"
-              @click="startEditing"
-              variant="default"
-            >
-              Edit
-            </Button>
-            <Button
-              v-if="isEditMode"
-              @click="handleUpdateVehicle"
-              :disabled="editForm.processing"
-            >
-              {{ editForm.processing ? 'Saving Changes...' : 'Save Changes' }}
-            </Button>
-          </div>
-          <div class="flex gap-2">
-            <Button
-              v-if="isEditMode"
-              variant="ghost"
-              @click="isEditMode = false"
-              >Cancel</Button
-            >
-            <Button variant="outline" @click="vehicleModal.close">Close</Button>
-          </div>
-        </div>
+      <DialogFooter class="mt-5">
+        <Button variant="outline" @click="vehicleModal.close">Close</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
@@ -674,36 +437,6 @@ watch(
           :disabled="changeForm.processing || !changeForm.status"
         >
           {{ changeForm.processing ? 'Changing...' : 'Confirm Change' }}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
-
-  <Dialog v-model:open="isDeleteModalOpen">
-    <DialogContent class="sm:max-w-md">
-      <DialogHeader>
-        <DialogTitle>Delete Vehicle</DialogTitle>
-        <DialogDescription>
-          Are you sure you want to delete vehicle with plate no.
-          <span class="font-semibold">
-            {{ selectedVehicle?.plate_number }}
-          </span>?
-          <br />
-          This action cannot be undone.
-        </DialogDescription>
-      </DialogHeader>
-
-      <DialogFooter class="gap-2">
-        <Button variant="outline" @click="isDeleteModalOpen = false"
-          >Cancel</Button
-        >
-
-        <Button
-          variant="destructive"
-          @click="confirmDelete"
-          :disabled="isDeletingVehicle"
-        >
-          {{ isDeletingVehicle ? 'Deleting...' : 'Yes, Delete' }}
         </Button>
       </DialogFooter>
     </DialogContent>
