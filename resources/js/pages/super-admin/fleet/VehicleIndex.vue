@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
@@ -47,7 +48,9 @@ const props = defineProps<{
   };
   franchises: { id: number; name: string }[];
   branches: { id: number; name: string }[];
+  vehicleTypes: { id: number; name: string }[];
   filters: {
+    tab: string;
     type: 'franchise' | 'branch';
     franchises: string[];
     branches: string[];
@@ -73,6 +76,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
+const activeTab = ref(props.filters.tab);
 const selectedType = ref(props.filters.type || 'franchise');
 const selectedFranchise = ref<string[]>(props.filters.franchises || []);
 const selectedBranches = ref<string[]>(props.filters.branches || []);
@@ -186,6 +190,13 @@ const vehicleColumns = computed<ColumnDef<VehicleRow>[]>(() => {
       accessorKey: 'franchise_name',
       header: 'Franchise',
     },
+  ];
+
+  if (selectedType.value === 'branch') {
+    baseColumns.push({ accessorKey: 'branch_name', header: 'Branch' });
+  }
+
+  baseColumns.push(
     {
       accessorKey: 'vin',
       header: 'Vehicle Identification Number',
@@ -265,7 +276,7 @@ const vehicleColumns = computed<ColumnDef<VehicleRow>[]>(() => {
         ]);
       },
     },
-  ];
+  );
   return baseColumns;
 });
 
@@ -274,6 +285,7 @@ const updateFilters = () => {
   router.get(
     superAdmin.vehicle.index().url,
     {
+      tab: activeTab.value,
       type: selectedType.value,
       status: selectedStatus.value,
       franchises: selectedFranchise.value || [],
@@ -286,7 +298,7 @@ const updateFilters = () => {
   );
 };
 
-watch([selectedType], () => {
+watch([activeTab, selectedType], () => {
   selectedFranchise.value = [];
   selectedBranches.value = [];
   updateFilters();
@@ -313,6 +325,20 @@ watch(
     <div
       class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
     >
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
+          <TabsTrigger
+            v-for="type in vehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="cursor-pointer px-8 py-2 font-semibold capitalize"
+            :class="{ 'pointer-events-none': activeTab === type.name }"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >

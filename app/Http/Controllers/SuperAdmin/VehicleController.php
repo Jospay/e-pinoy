@@ -9,6 +9,7 @@ use App\Http\Resources\SuperAdmin\VehicleDatatableResource;
 use App\Http\Resources\SuperAdmin\VehicleResource;
 use App\Models\Franchise;
 use App\Models\Branch;
+use App\Models\VehicleType;
 use App\Models\Status;
 use App\Models\Vehicle;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,6 +26,7 @@ class VehicleController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
+            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
             'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
             'franchises' => ['sometimes', 'nullable', 'array'],
             'branches' => ['sometimes', 'nullable', 'array'],
@@ -33,6 +35,7 @@ class VehicleController extends Controller
 
         // 2. Set defaults
         $filters = [
+            'tab' => $validated['tab'] ?? 'taxi',
             'type' => $validated['type'] ?? 'franchise',
             'franchises' => $validated['franchises'] ?? [],
             'branches' => $validated['branches'] ?? [],
@@ -54,6 +57,7 @@ class VehicleController extends Controller
             'vehicles' => VehicleDatatableResource::collection($vehicles),
             'franchises' => fn () => Franchise::select('id', 'name')->get(),
             'branches' => $branchesList,
+            'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
     }
@@ -65,7 +69,8 @@ class VehicleController extends Controller
     {
         $query = Vehicle::with([
             'status:id,name',
-        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
+        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']
+        ))->whereHas('vehicleType', fn ($q) => $q->where('name', $filters['tab']));
 
         if ($filters['type'] === 'branch') {
             // Filter by specific branches
