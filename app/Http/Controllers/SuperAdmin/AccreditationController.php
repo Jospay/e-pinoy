@@ -55,7 +55,7 @@ class AccreditationController extends Controller
 
         $results = $query->get();
 
-        return Inertia::render('super-admin/fleet/Accreditation', [
+        return Inertia::render('super-admin/fleet/AccreditationIndex', [
             'vehicles' => [
                 'data' => $results->map(fn ($item) => [
                     'id' => $item->id,

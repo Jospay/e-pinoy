@@ -62,6 +62,7 @@ const props = defineProps<{
 interface VehicleRow {
   id: number;
   franchise_name?: string;
+  branch_name?: string;
   plate_number: string;
   vin: string;
   status_name: string;

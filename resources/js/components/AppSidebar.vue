@@ -24,7 +24,6 @@ import {
   Box,
   Bus,
   BusFront,
-  Car,
   CarTaxiFront,
   ChartNoAxesCombined,
   DollarSign,
@@ -37,6 +36,7 @@ import {
   LayoutGrid,
   Map,
   ReceiptText,
+  ShieldCheck,
   Ticket,
   UserCheck,
   Users,
@@ -93,11 +93,10 @@ const navConfig: Record<string, NavItem[]> = {
       icon: CarTaxiFront,
       group: 'Fleet',
     },
-
     {
       title: 'Franchise Accreditation',
       href: superAdmin.accreditation.index(),
-      icon: Car,
+      icon: ShieldCheck,
       group: 'Fleet',
     },
     {
