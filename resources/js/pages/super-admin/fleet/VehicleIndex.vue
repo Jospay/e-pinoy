@@ -46,8 +46,11 @@ const props = defineProps<{
     data: VehicleRow[];
   };
   franchises: { id: number; name: string }[];
+  branches: { id: number; name: string }[];
   filters: {
-    franchise: string[];
+    type: 'franchise' | 'branch';
+    franchises: string[];
+    branches: string[];
     status: 'active' | 'available' | 'maintenance';
   };
 }>();
@@ -70,21 +73,18 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
-const selectedFranchise = ref<string[]>(props.filters.franchise || []);
+const selectedType = ref(props.filters.type || 'franchise');
+const selectedFranchise = ref<string[]>(props.filters.franchises || []);
+const selectedBranches = ref<string[]>(props.filters.branches || []);
 const selectedStatus = ref(props.filters.status || 'active');
 
-const selectedContext = computed({
-  get: () => selectedFranchise.value,
-  set: (val: string[]) => {
-    selectedFranchise.value = val;
-  },
-});
-
-// Mapping options for the MultiSelect
-const contextOptions = computed(() => {
-  const data = props.franchises;
-  return data.map((item) => ({ id: item.id, label: item.name }));
-});
+// Options for MultiSelect
+const franchiseOptions = computed(() =>
+  props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
+);
 
 // for vehicle details
 interface VehicleModal {
@@ -274,8 +274,10 @@ const updateFilters = () => {
   router.get(
     superAdmin.vehicle.index().url,
     {
+      type: selectedType.value,
       status: selectedStatus.value,
-      franchise: selectedFranchise.value || [],
+      franchises: selectedFranchise.value || [],
+      branches: selectedBranches.value || [],
     },
     {
       preserveScroll: true,
@@ -283,6 +285,17 @@ const updateFilters = () => {
     },
   );
 };
+
+watch([selectedType], () => {
+  selectedFranchise.value = [];
+  selectedBranches.value = [];
+  updateFilters();
+});
+
+watch(selectedFranchise, () => {
+  selectedBranches.value = [];
+  updateFilters();
+});
 
 // Watch for select filter changes (debounced)
 watch(
@@ -307,6 +320,20 @@ watch(
           <h2 class="font-mono text-xl font-semibold">Franchise Vehicles</h2>
 
           <div class="flex gap-4">
+            <Select v-model="selectedType">
+              <SelectTrigger class="w-[150px] cursor-pointer">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="franchise" class="cursor-pointer">
+                  Franchise
+                </SelectItem>
+                <SelectItem value="branch" class="cursor-pointer">
+                  Branch
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select v-model="selectedStatus">
               <SelectTrigger class="w-[150px]">
                 <SelectValue placeholder="Filter by..." />
@@ -319,17 +346,29 @@ watch(
             </Select>
 
             <MultiSelect
-              v-model="selectedContext"
-              :options="contextOptions"
-              placeholder="
-                Select Franchises
-              "
-              all-label="
-                All Franchises
-              "
+              v-model="selectedFranchise"
+              :options="franchiseOptions"
+              placeholder="Select Franchises"
+              all-label="All Franchises"
               @change="
                 (val) => {
                   selectedFranchise = val;
+
+                  updateFilters();
+                }
+              "
+            />
+
+            <MultiSelect
+              v-if="selectedType === 'branch'"
+              v-model="selectedBranches"
+              :options="branchOptions"
+              placeholder="Select Branches"
+              all-label="All Branches"
+              @change="
+                (val) => {
+                  selectedBranches = val;
+
                   updateFilters();
                 }
               "

@@ -20,6 +20,7 @@ class VehicleDatatableResource extends JsonResource
             'plate_number' => $this->plate_number,
             'status_name' => $this->whenLoaded('status', $this->status->name),
             'franchise_name' => $this->whenLoaded('franchise', fn () => $this->franchise?->name),
+            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
         ];
 
         return $data;

@@ -25,13 +25,17 @@ class VehicleController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
-            'franchise' => ['sometimes', 'nullable', 'array'],
+            'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
+            'franchises' => ['sometimes', 'nullable', 'array'],
+            'branches' => ['sometimes', 'nullable', 'array'],
             'status' => ['sometimes', 'string', Rule::in(['active', 'available', 'maintenance'])],
         ]);
 
         // 2. Set defaults
         $filters = [
-            'franchise' => $validated['franchise'] ?? [],
+            'type' => $validated['type'] ?? 'franchise',
+            'franchises' => $validated['franchises'] ?? [],
+            'branches' => $validated['branches'] ?? [],
             'status' => $validated['status'] ?? 'active',
         ];
 
@@ -39,14 +43,18 @@ class VehicleController extends Controller
         $query = $this->buildBaseQuery($filters);
         $vehicles = $query->get();
 
+        $branchesList = Branch::select('id', 'name')
+            ->when(!empty($filters['franchises']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchises']);
+            })
+            ->get();
+
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/VehicleIndex', [
             'vehicles' => VehicleDatatableResource::collection($vehicles),
             'franchises' => fn () => Franchise::select('id', 'name')->get(),
-            'filters' => [
-                'franchise' => $filters['franchise'],
-                'status' => $filters['status'],
-            ],
+            'branches' => $branchesList,
+            'filters' => $filters,
         ]);
     }
 
@@ -59,11 +67,20 @@ class VehicleController extends Controller
             'status:id,name',
         ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
 
-        $query->whereNotNull('franchise_id')
-            ->when(! empty($filters['franchise']), fn ($q) => $q->whereIn('franchise_id', $filters['franchise']))
-            ->with('franchise:id,name');
-
-        return $query;
+        if ($filters['type'] === 'branch') {
+            // Filter by specific branches
+            $query->whereHas('branch', function ($q) use ($filters) {
+                $q->when(!empty($filters['branches']), fn ($subQ) =>
+                    $subQ->whereIn('branch_id', $filters['branches'])
+                );
+            })->with('branch:id,name');
+        } else {
+            // Filter by Franchises
+            $query->whereNotNull('franchise_id')
+                ->when(!empty($filters['franchises']), fn ($q) => $q->whereIn('franchise_id', $filters['franchises']));
+        }
+        
+        return $query->with('franchise:id,name');
     }
 
     public function show(Vehicle $vehicle)
