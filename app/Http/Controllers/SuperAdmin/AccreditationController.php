@@ -3,110 +3,78 @@
 namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\SuperAdmin\AccreditationDatatableResource;
 use App\Models\Franchise;
+use App\Models\Branch;
+use App\Models\VehicleType;
+use App\Models\Status;
+use App\Models\Vehicle;
 use Illuminate\Http\Request;
+use Illuminate\Database\Eloquent\Builder;
 use Inertia\Inertia;
+use Inertia\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class AccreditationController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
-        $statusInput = $request->input('status', 'active');
-        $franchiseFilter = $request->input('franchise', []);
-        $vehicleType = $request->input('vehicle_type');
+        // 1. Validate all filters
+        $validated = $request->validate([
+            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
+            'franchises' => ['sometimes', 'nullable', 'array'],
+            'status' => ['sometimes', 'string', Rule::in(['active', 'pending'])],
+        ]);
 
-        if (is_string($franchiseFilter)) {
-            $franchiseFilter = explode(',', $franchiseFilter);
-        }
+        // 2. Set defaults
+        $filters = [
+            'tab' => $validated['tab'] ?? 'taxi',
+            'franchises' => $validated['franchises'] ?? [],
+            'status' => $validated['status'] ?? 'active',
+        ];
 
-        $franchiseFilter = array_map(
-            'intval',
-            array_filter((array) $franchiseFilter)
+        // 3. Build and execute query
+        $accreditations = $this->buildBaseQuery($filters)->get();
+        // Pass status map to the resource class statically — 1 query, no N+1
+        AccreditationDatatableResource::withStatusMap(
+            Status::all()->keyBy('id')
         );
 
-        $statusId = match ($statusInput) {
-            'active' => 1,
-            'pending' => 6,
-            'deny' => 18,
-            default => 1,
-        };
-
-        $query = DB::table('franchise_vehicle_type')
-            ->join('franchises', 'franchise_vehicle_type.franchise_id', '=', 'franchises.id')
-            ->join('vehicle_types', 'franchise_vehicle_type.vehicle_type_id', '=', 'vehicle_types.id')
-            ->select(
-                'franchise_vehicle_type.franchise_id',
-                'franchise_vehicle_type.vehicle_type_id',
-                'franchises.name as franchise_name',
-                'vehicle_types.name as vehicle_type_name',
-                'franchise_vehicle_type.status_id',
-                DB::raw("CONCAT(franchise_vehicle_type.franchise_id, '-', franchise_vehicle_type.vehicle_type_id) as id")
-            )
-            ->where('franchise_vehicle_type.status_id', $statusId);
-
-        if (!empty($franchiseFilter)) {
-            $query->whereIn('franchise_vehicle_type.franchise_id', $franchiseFilter);
-        }
-
-        if (!empty($vehicleType)) {
-            $query->where('vehicle_types.name', $vehicleType);
-        }
-
-        $results = $query->get();
-
+        // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/AccreditationIndex', [
-            'vehicles' => [
-                'data' => $results->map(fn ($item) => [
-                    'id' => $item->id,
-                    'franchise_id' => (int) $item->franchise_id,
-                    'vehicle_type_id' => (int) $item->vehicle_type_id,
-                    'franchise_name' => $item->franchise_name,
-                    'vehicle_type' => $item->vehicle_type_name,
-                    'status_id' => (int) $item->status_id,
-                    'status_label' => match ($item->status_id) {
-                        1 => 'Active',
-                        6 => 'Pending',
-                        default => 'Deny',
-                    },
-                ]),
-            ],
-            'franchises' => Franchise::select('id', 'name')->get(),
-            'filters' => [
-                'franchise' => $franchiseFilter,
-                'status' => $statusInput,
-                'vehicle_type' => $vehicleType,
-            ],
+            'accreditations' => AccreditationDatatableResource::collection($accreditations),
+            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
+            'filters' => $filters,
         ]);
     }
 
-    public function approve(Request $request)
+    /**
+     * Creates the base query with all "WHERE" conditions.
+     */
+    private function buildBaseQuery(array $filters): Builder
     {
-        $request->validate([
-            'franchise_id' => 'required|exists:franchises,id',
-            'vehicle_type_id' => 'required|exists:vehicle_types,id',
-        ]);
+        $activeFranchiseStatusId = Status::where('name', 'active')->value('id');
+        $pivotStatusId = Status::where('name', $filters['status'])->value('id');
 
-        DB::table('franchise_vehicle_type')
-            ->where('franchise_id', $request->franchise_id)
-            ->where('vehicle_type_id', $request->vehicle_type_id)
-            ->update(['status_id' => 1]);
+        $query = Franchise::with([
+                'vehicleTypes' => function ($q) use ($filters, $pivotStatusId) {
+                    $q->where('vehicle_types.name', $filters['tab'])
+                    ->where('franchise_vehicle_type.status_id', $pivotStatusId)
+                    ->withPivot('status_id');
+                },
+            ])
+            ->where('status_id', $activeFranchiseStatusId)
+            ->whereHas('vehicleTypes', function ($q) use ($filters, $pivotStatusId) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $pivotStatusId);
+            });
 
-        return back()->with('success', 'Accreditation approved successfully');
-    }
+        if (!empty($filters['franchises'])) {
+            $query->whereIn('franchises.id', $filters['franchises']);
+        }
 
-    public function decline(Request $request)
-    {
-        $request->validate([
-            'franchise_id' => 'required|exists:franchises,id',
-            'vehicle_type_id' => 'required|exists:vehicle_types,id',
-        ]);
-
-        DB::table('franchise_vehicle_type')
-            ->where('franchise_id', $request->franchise_id)
-            ->where('vehicle_type_id', $request->vehicle_type_id)
-            ->update(['status_id' => 18]);
-
-        return back()->with('success', 'Accreditation declined successfully');
+        return $query;
     }
 }

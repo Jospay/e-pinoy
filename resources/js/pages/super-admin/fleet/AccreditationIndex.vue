@@ -83,7 +83,7 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
         const status = row.getValue('status_name') as string;
         const badgeClass = {
           'bg-blue-500 hover:bg-blue-600': status === 'active',
-          'bg-rose-500 hover:bg-rose-600': status === 'pending',
+          'bg-amber-500 hover:bg-amber-600': status === 'pending',
         };
         return h('div', { class: 'text-center' }, [
           h(
@@ -136,7 +136,7 @@ const openChangeModal = () => {};
 // --- Watchers to Update URL ---
 const updateFilters = () => {
   router.get(
-    superAdmin.vehicle.index().url,
+    superAdmin.accreditation.index().url,
     {
       tab: activeTab.value,
       status: selectedStatus.value,
@@ -200,7 +200,6 @@ watch(
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="deny">Deny</SelectItem>
               </SelectContent>
             </Select>
 

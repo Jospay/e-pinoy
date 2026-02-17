@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\ActionVerificationController;
 use App\Http\Controllers\SuperAdmin\StationManagementController;
 use App\Http\Controllers\SuperAdmin\AccreditationController;
 use App\Http\Controllers\SuperAdmin\AllocationController;
@@ -60,8 +59,6 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/vehicle/{vehicle}/maintenances', [VehicleController::class, 'maintenanceHistory'])->name('vehicle.maintenances');
 
     Route::get('/accreditation', [AccreditationController::class, 'index'])->name('accreditation.index');
-    Route::post('/accreditation/approve', [AccreditationController::class, 'approve'])->name('accreditation.approve');
-    Route::post('/accreditation/decline', [AccreditationController::class, 'decline'])->name('accreditation.decline');
 
     Route::get('/station-management', [StationManagementController::class, 'index'])->name('stationManagement.index');
     Route::post('/station-management/approve', [StationManagementController::class, 'approve'])->name('stationManagement.approve');
