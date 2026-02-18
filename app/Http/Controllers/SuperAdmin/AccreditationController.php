@@ -24,7 +24,7 @@ class AccreditationController extends Controller
         $validated = $request->validate([
             'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
             'franchises' => ['sometimes', 'nullable', 'array'],
-            'status' => ['sometimes', 'string', Rule::in(['active', 'pending'])],
+            'status' => ['sometimes', 'string', Rule::in(['active', 'pending', 'inactive'])],
         ]);
 
         // 2. Set defaults
@@ -76,5 +76,23 @@ class AccreditationController extends Controller
         }
 
         return $query;
+    }
+
+    public function changeStatus(Request $request, Franchise $franchise)
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', Rule::in(['active', 'inactive'])],
+            'vehicle_type' => ['required', 'string', 'exists:vehicle_types,name'],
+        ]);
+
+        $vehicleType = VehicleType::where('name', $validated['vehicle_type'])->firstOrFail();
+        $statusId = Status::where('name', $validated['status'])->value('id');
+
+        // Update using the relationship
+        $franchise->vehicleTypes()->updateExistingPivot($vehicleType->id, [
+            'status_id' => $statusId,
+        ]);
+
+        return back();
     }
 }

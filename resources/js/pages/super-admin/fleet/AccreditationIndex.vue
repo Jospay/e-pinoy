@@ -4,12 +4,21 @@ import MultiSelect from '@/components/MultiSelect.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -21,11 +30,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
 import { debounce } from 'lodash-es';
 import { MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
 // --- Define Props ---
 const props = defineProps<{
@@ -37,7 +47,7 @@ const props = defineProps<{
   filters: {
     tab: string;
     franchises: string[];
-    status: 'active' | 'pending';
+    status: 'active' | 'pending' | 'inactive';
   };
 }>();
 
@@ -63,6 +73,41 @@ const franchiseOptions = computed(() =>
   props.franchises.map((f) => ({ id: f.id, label: f.name })),
 );
 
+// --- Change Status Modal State ---
+const isChangeModalOpen = ref(false);
+const selectedAccreditation = ref<Partial<accreditationRow>>({});
+
+const changeForm = useForm({
+  vehicle_type: '' as string,
+  status: '' as string,
+});
+
+const openChangeModal = (franchise: accreditationRow) => {
+  selectedAccreditation.value = franchise;
+  isChangeModalOpen.value = true;
+};
+
+const handleChangeAccreditation = () => {
+  if (!selectedAccreditation.value?.id) return;
+  changeForm.vehicle_type = selectedAccreditation.value.vehicle_type as string;
+
+  changeForm.patch(
+    superAdmin.accreditation.change(selectedAccreditation.value.id).url,
+    {
+      onSuccess: () => {
+        changeForm.reset();
+        isChangeModalOpen.value = false;
+        toast.success('Accreditation change status successfully!');
+      },
+    },
+  );
+};
+
+const statuses = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
+
 // Computed columns for the data table
 const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
   const baseColumns: ColumnDef<accreditationRow>[] = [
@@ -84,6 +129,7 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
         const badgeClass = {
           'bg-blue-500 hover:bg-blue-600': status === 'active',
           'bg-amber-500 hover:bg-amber-600': status === 'pending',
+          'bg-rose-500 hover:bg-rose-600': status === 'inactive',
         };
         return h('div', { class: 'text-center' }, [
           h(
@@ -118,7 +164,7 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
                 DropdownMenuItem,
                 {
                   class: 'cursor-pointer text-blue-500 focus:text-blue-600',
-                  onClick: () => openChangeModal(),
+                  onClick: () => openChangeModal(franchise),
                 },
                 () => 'Change Status',
               ),
@@ -130,8 +176,6 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
   ];
   return baseColumns;
 });
-
-const openChangeModal = () => {};
 
 // --- Watchers to Update URL ---
 const updateFilters = () => {
@@ -200,6 +244,7 @@ watch(
               <SelectContent>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
 
@@ -226,5 +271,54 @@ watch(
         />
       </div>
     </div>
+
+    <Dialog v-model:open="isChangeModalOpen">
+      <DialogContent class="max-w-md font-mono">
+        <DialogHeader>
+          <DialogTitle class="text-xl">Change Accreditation Status</DialogTitle>
+          <DialogDescription>
+            Change the status of this accreditation for
+            <strong class="text-blue-500">{{
+              selectedAccreditation?.franchise_name
+            }}</strong
+            >. From {{ selectedAccreditation?.status_name }} to
+            <em>"{{ changeForm.status }}"</em>.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div class="grid gap-4 py-4">
+          <div class="grid gap-2">
+            <Label>Status</Label>
+            <Select v-model="changeForm.status">
+              <SelectTrigger>
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <template v-for="s in statuses" :key="s.value">
+                  <SelectItem
+                    v-if="selectedAccreditation?.status_name !== s.value"
+                    :value="s.value"
+                  >
+                    {{ s.label }}
+                  </SelectItem>
+                </template>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="isChangeModalOpen = false"
+            >Cancel</Button
+          >
+          <Button
+            @click="handleChangeAccreditation"
+            :disabled="changeForm.processing || !changeForm.status"
+          >
+            {{ changeForm.processing ? 'Changing...' : 'Confirm Change' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </AppLayout>
 </template>

@@ -59,6 +59,7 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/vehicle/{vehicle}/maintenances', [VehicleController::class, 'maintenanceHistory'])->name('vehicle.maintenances');
 
     Route::get('/accreditation', [AccreditationController::class, 'index'])->name('accreditation.index');
+    Route::patch('/accreditation/{franchise}/change', [AccreditationController::class, 'changeStatus'])->name('accreditation.change');
 
     Route::get('/station-management', [StationManagementController::class, 'index'])->name('stationManagement.index');
     Route::post('/station-management/approve', [StationManagementController::class, 'approve'])->name('stationManagement.approve');
