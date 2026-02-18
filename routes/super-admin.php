@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\SuperAdmin\StationManagementController;
+use App\Http\Controllers\SuperAdmin\StationController;
 use App\Http\Controllers\SuperAdmin\AccreditationController;
 use App\Http\Controllers\SuperAdmin\AllocationController;
 use App\Http\Controllers\SuperAdmin\BoundaryContractController;
@@ -61,9 +61,7 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/accreditation', [AccreditationController::class, 'index'])->name('accreditation.index');
     Route::patch('/accreditation/{franchise}/change', [AccreditationController::class, 'changeStatus'])->name('accreditation.change');
 
-    Route::get('/station-management', [StationManagementController::class, 'index'])->name('stationManagement.index');
-    Route::post('/station-management/approve', [StationManagementController::class, 'approve'])->name('stationManagement.approve');
-    Route::post('/station-management/decline', [StationManagementController::class, 'decline'])->name('stationManagement.decline');
+    Route::get('/station', [StationController::class, 'index'])->name('station.index');
 
     Route::get('/earning', [EarningController::class, 'index'])->name('earning.index');
     Route::get('/earning/show', [EarningController::class, 'show'])->name('earning.show');

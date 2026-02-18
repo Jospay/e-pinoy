@@ -266,6 +266,7 @@ const franchiseColumns: ColumnDef<FranchiseRow>[] = [
       const badgeClass = {
         'bg-blue-500 hover:bg-blue-600': status === 'active',
         'bg-amber-500 hover:bg-amber-600': status === 'pending',
+        'bg-rose-500 hover:bg-rose-600': status === 'inactive',
       };
       return h('div', { class: 'text-center' }, [
         h(Badge, { class: [badgeClass, 'text-white'] }, () => status || 'N/A'),

@@ -101,7 +101,7 @@ const navConfig: Record<string, NavItem[]> = {
     },
     {
       title: 'Station Management',
-      href: superAdmin.stationManagement.index(),
+      href: superAdmin.station.index(),
       icon: Bus,
       group: 'Fleet',
     },

@@ -118,4 +118,9 @@ class Franchise extends Model
     {
         return $this->hasMany(Branch::class);
     }
+
+    public function busStations(): HasMany
+    {
+        return $this->hasMany(BusStation::class);
+    }
 }

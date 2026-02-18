@@ -25,6 +25,11 @@ class BusStation extends Model
         return $this->belongsTo(Franchise::class);
     }
 
+    public function status(): BelongsTo
+    {
+        return $this->belongsTo(Status::class);
+    }
+
     public function fromAmounts(): HasMany
     {
         return $this->hasMany(StationAmount::class, 'from_bus_station_id');
