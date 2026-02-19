@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Database\Eloquent\Builder;
 use App\Http\Resources\SuperAdmin\StationDatatableResource;
+use App\Http\Resources\SuperAdmin\StationShowResource;
 use Inertia\Response;
 use Illuminate\Validation\Rule;
 
@@ -69,5 +70,16 @@ class StationController extends Controller
         }
 
         return $query;
+    }
+
+    public function show(Franchise $franchise)
+    {
+        $franchise->loadMissing(['busStations' => function ($q) {
+            $q->select('id', 'franchise_id', 'name', 'code_no', 'latitude', 'longitude', 'status_id')
+            ->with('status:id,name')
+            ->orderBy('id');
+        }]);
+
+        return new StationShowResource($franchise);
     }
 }

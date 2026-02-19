@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
+import LocationBusStation from '@/components/LocationBusStation.vue';
 import MultiSelect from '@/components/MultiSelect.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -17,13 +27,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
 import { debounce } from 'lodash-es';
-import { MoreHorizontal } from 'lucide-vue-next';
+import { MapPin, MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
 
 // --- Define Props ---
@@ -63,6 +74,37 @@ const franchiseOptions = computed(() =>
   props.franchises.map((f) => ({ id: f.id, label: f.name })),
 );
 
+interface StationModalData {
+  franchise_name: string;
+  stations: {
+    id: number;
+    name: string;
+    code_no: string;
+    status: string;
+    latitude: number | null;
+    longitude: number | null;
+  }[];
+}
+// Convenient computed refs for the template
+const modalData = computed(() => stationModal.data.value);
+const mapMarkers = computed(() =>
+  (modalData.value?.stations ?? [])
+    .filter((s) => s.latitude && s.longitude)
+    .map((s) => ({
+      id: s.id,
+      latitude: s.latitude!,
+      longitude: s.longitude!,
+      name: s.name,
+      code_no: s.code_no,
+      status: s.status,
+    })),
+);
+
+// --- Modal State ---
+const stationModal = useDetailsModal<StationModalData>({
+  baseUrl: '/super-admin/station',
+});
+
 // Computed columns for the data table
 const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
   const baseColumns: ColumnDef<stationRow>[] = [
@@ -75,6 +117,9 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
       header: 'Station Codes',
       cell: ({ row }) => {
         const stations = row.original.stations;
+        if (!stations || stations.length === 0) {
+          return h('span', { class: 'text-muted-foreground' }, 'N/A');
+        }
         return h(
           'div',
           { class: 'flex flex-wrap gap-1' },
@@ -86,12 +131,15 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
     },
     {
       id: 'statuses',
-      header: () => h('div', { class: 'text-center' }, 'Statuses'),
+      header: 'Statuses',
       cell: ({ row }) => {
         const stations = row.original.stations;
+        if (!stations || stations.length === 0) {
+          return h('div', { class: 'text-muted-foreground' }, 'N/A');
+        }
         return h(
           'div',
-          { class: 'flex flex-wrap justify-center gap-1' },
+          { class: 'flex flex-wrap gap-1' },
           stations.map((s) => {
             const badgeClass = {
               'bg-blue-500 hover:bg-blue-600': s.status === 'active',
@@ -126,7 +174,15 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
             ),
             h(DropdownMenuContent, { align: 'end', class: 'border-2' }, () => [
               h(DropdownMenuLabel, null, () => 'Actions'),
-
+              h(
+                DropdownMenuItem,
+                {
+                  class: 'cursor-pointer',
+                  onclick: () => stationModal.open(franchise.id),
+                },
+                () => 'View Station Details',
+              ),
+              h(DropdownMenuSeparator),
               h(
                 DropdownMenuItem,
                 {
@@ -215,5 +271,114 @@ watch(
         />
       </div>
     </div>
+
+    <Dialog v-model:open="stationModal.isOpen.value">
+      <DialogContent class="overflow-hidden p-0 sm:max-w-3xl">
+        <div class="flex max-h-[90vh] flex-col">
+          <DialogHeader class="p-6 pb-2">
+            <DialogTitle class="flex items-center gap-2">
+              <MapPin class="h-5 w-5 text-blue-600" />
+              Station Locations
+            </DialogTitle>
+            <DialogDescription>
+              Franchise:
+              <span class="font-bold text-blue-500">
+                {{ modalData?.franchise_name ?? '...' }}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <!-- Loading -->
+          <div
+            v-if="stationModal.isLoading.value"
+            class="flex items-center justify-center py-16"
+          >
+            <span class="text-sm text-slate-500">Loading...</span>
+          </div>
+
+          <!-- Error -->
+          <div
+            v-else-if="stationModal.isError.value"
+            class="p-6 text-center text-sm text-rose-500"
+          >
+            Failed to load station details.
+          </div>
+
+          <!-- Content -->
+          <div
+            v-else-if="modalData"
+            class="flex-1 overflow-y-auto"
+            style="scrollbar-gutter: stable both-edges"
+          >
+            <div class="space-y-4 p-4">
+              <!-- Station list -->
+              <div class="grid grid-cols-2 gap-2">
+                <div
+                  v-for="s in modalData.stations"
+                  :key="s.id"
+                  class="rounded-lg border bg-slate-50 p-3 text-xs"
+                >
+                  <p class="font-black text-slate-400 uppercase">
+                    {{ s.code_no }}
+                  </p>
+                  <p class="font-bold text-slate-700">{{ s.name }}</p>
+                  <span
+                    class="mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    :class="{
+                      'bg-blue-500': s.status === 'active',
+                      'bg-amber-500': s.status === 'pending',
+                      'bg-rose-500': s.status === 'inactive',
+                    }"
+                    >{{ s.status }}</span
+                  >
+                </div>
+              </div>
+
+              <!-- Map -->
+              <div
+                class="relative h-72 overflow-hidden rounded-xl border-2 border-slate-100"
+              >
+                <LocationBusStation
+                  v-if="mapMarkers.length"
+                  :locations="mapMarkers"
+                />
+                <div
+                  v-else
+                  class="flex h-full items-center justify-center text-sm text-slate-400"
+                >
+                  No location data available.
+                </div>
+              </div>
+
+              <!-- Legend -->
+              <div class="flex gap-3 text-[10px] text-slate-500">
+                <span class="flex items-center gap-1">
+                  <span
+                    class="inline-block h-2.5 w-2.5 rounded-full bg-blue-500"
+                  ></span>
+                  Active
+                </span>
+                <span class="flex items-center gap-1">
+                  <span
+                    class="inline-block h-2.5 w-2.5 rounded-full bg-amber-500"
+                  ></span>
+                  Pending
+                </span>
+                <span class="flex items-center gap-1">
+                  <span
+                    class="inline-block h-2.5 w-2.5 rounded-full bg-rose-500"
+                  ></span>
+                  Inactive
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter class="flex items-center justify-end border-t p-4">
+            <Button variant="outline" @click="stationModal.close">Close</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   </AppLayout>
 </template>
