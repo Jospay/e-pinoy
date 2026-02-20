@@ -38,6 +38,7 @@ console.log('VehicleTypes Component - Received:', props.vehicleTypes);
 const getStatusColor = (statusName: string) => {
   switch (statusName) {
     case 'active':
+    case 'success':
       return 'bg-green-100 text-green-800 border-green-300';
     case 'pending':
       return 'bg-yellow-100 text-yellow-800 border-yellow-300';
@@ -51,6 +52,7 @@ const getStatusColor = (statusName: string) => {
 const getStatusIcon = (statusName: string) => {
   switch (statusName) {
     case 'active':
+    case 'success':
       return CheckCircle;
     case 'pending':
       return Clock;
@@ -103,6 +105,7 @@ const cancelRequest = () => {
 
 <template>
   <div class="space-y-4 px-2">
+
     <div
       v-if="vehicleTypes.length === 0"
       class="py-8 text-center text-gray-500"
@@ -161,7 +164,10 @@ const cancelRequest = () => {
         </div>
 
         <!-- Info text for active -->
-        <div v-else-if="type.status.name === 'active'" class="mt-4 text-center">
+        <div
+          v-else-if="type.status.name === 'active' || type.status.name === 'success'"
+          class="mt-4 text-center"
+        >
           <p class="text-xs text-green-600">
             You have access to this vehicle type
           </p>

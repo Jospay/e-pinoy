@@ -66,8 +66,8 @@ class DashboardController extends Controller
     {
         return $franchiseId
             ? UserDriver::whereHas('franchises', fn($q) => $q->where('franchise_id', $franchiseId))
-                ->where('status_id', $statusId)
-                ->count()
+            ->where('status_id', $statusId)
+            ->count()
             : 0;
     }
 
@@ -75,8 +75,8 @@ class DashboardController extends Controller
     {
         return $franchiseId
             ? UserTechnician::whereHas('franchises', fn($q) => $q->where('franchise_id', $franchiseId))
-                ->where('status_id', $statusId)
-                ->count()
+            ->where('status_id', $statusId)
+            ->count()
             : 0;
     }
 
@@ -117,9 +117,9 @@ class DashboardController extends Controller
         if (!$franchiseId) return 0;
 
         return BoundaryContract::where('franchise_id', $franchiseId)
-            ->whereHas('vehicleTypes', function($q) {
+            ->whereHas('vehicleTypes', function ($q) {
                 // We reference the pivot table specifically to find the status
-                $q->where('boundary_contract_vehicle_type.status_id', function($sub) {
+                $q->where('boundary_contract_vehicle_type.status_id', function ($sub) {
                     $sub->select('id')
                         ->from('statuses')
                         ->where('name', 'pending')
@@ -183,50 +183,50 @@ class DashboardController extends Controller
     }
 
     protected function getVehicleTypesData($franchise): array
-{
-    if (!$franchise) return [];
+    {
+        if (!$franchise) return [];
 
-    // Get all vehicle types from the database
-    $allVehicleTypes = \App\Models\VehicleType::all();
+        // Get all vehicle types from the database
+        $allVehicleTypes = \App\Models\VehicleType::all();
 
-    // Get vehicle types that ARE in franchise_vehicle_type for this franchise
-    $assignedVehicleTypes = $franchise->vehicleTypes()
-        ->withPivot('status_id')
-        ->get();
+        // Get vehicle types that ARE in franchise_vehicle_type for this franchise
+        $assignedVehicleTypes = $franchise->vehicleTypes()
+            ->withPivot('status_id')
+            ->get();
 
-    // Create a map for quick lookup
-    $assignedMap = $assignedVehicleTypes->keyBy('id');
+        // Create a map for quick lookup
+        $assignedMap = $assignedVehicleTypes->keyBy('id');
 
-    return $allVehicleTypes->map(function ($vehicleType) use ($assignedMap) {
-        // Check if this vehicle type has a record in franchise_vehicle_type
-        $hasRecord = $assignedMap->has($vehicleType->id);
+        return $allVehicleTypes->map(function ($vehicleType) use ($assignedMap) {
+            // Check if this vehicle type has a record in franchise_vehicle_type
+            $hasRecord = $assignedMap->has($vehicleType->id);
 
-        if ($hasRecord) {
-            // HAS RECORD in franchise_vehicle_type - get the actual status
-            $assigned = $assignedMap[$vehicleType->id];
-            $status = \App\Models\Status::find($assigned->pivot->status_id);
+            if ($hasRecord) {
+                // HAS RECORD in franchise_vehicle_type - get the actual status
+                $assigned = $assignedMap[$vehicleType->id];
+                $status = \App\Models\Status::find($assigned->pivot->status_id);
 
-            return [
-                'id' => $vehicleType->id,
-                'name' => $vehicleType->name,
-                'is_assigned' => true,
-                'status' => [
-                    'id' => $status->id,
-                    'name' => $status->name, // Could be 'active' or 'pending'
-                ],
-            ];
-        } else {
-            // NO RECORD in franchise_vehicle_type - show as "locked"
-            return [
-                'id' => $vehicleType->id,
-                'name' => $vehicleType->name,
-                'is_assigned' => false,
-                'status' => [
-                    'id' => null,
-                    'name' => 'locked', // Virtual status (not in DB)
-                ],
-            ];
-        }
-    })->toArray();
-}
+                return [
+                    'id' => $vehicleType->id,
+                    'name' => $vehicleType->name,
+                    'is_assigned' => true,
+                    'status' => [
+                        'id' => $status->id,
+                        'name' => strtolower($status->name), // Could be 'active' or 'pending'
+                    ],
+                ];
+            } else {
+                // NO RECORD in franchise_vehicle_type - show as "locked"
+                return [
+                    'id' => $vehicleType->id,
+                    'name' => $vehicleType->name,
+                    'is_assigned' => false,
+                    'status' => [
+                        'id' => null,
+                        'name' => 'locked', // Virtual status (not in DB)
+                    ],
+                ];
+            }
+        })->toArray();
+    }
 }
