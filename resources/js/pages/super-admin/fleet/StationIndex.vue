@@ -2,6 +2,7 @@
 import DataTable from '@/components/DataTable.vue';
 import LocationBusStation from '@/components/LocationBusStation.vue';
 import MultiSelect from '@/components/MultiSelect.vue';
+import StationFareMatrix from '@/components/StationFareMatrix.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -83,6 +84,13 @@ interface StationModalData {
     status: string;
     latitude: number | null;
     longitude: number | null;
+  }[];
+  fares: {
+    from_id: number;
+    from_code: string;
+    to_id: number;
+    to_code: string;
+    amount: string;
   }[];
 }
 // Convenient computed refs for the template
@@ -370,6 +378,12 @@ watch(
                   ></span>
                   Inactive
                 </span>
+              </div>
+              <div class="space-y-2">
+                <p class="text-[10px] font-black text-slate-400 uppercase">
+                  Point-to-Point Fare Rates
+                </p>
+                <StationFareMatrix :fares="modalData.fares" />
               </div>
             </div>
           </div>

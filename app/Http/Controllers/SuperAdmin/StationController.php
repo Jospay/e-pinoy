@@ -76,7 +76,10 @@ class StationController extends Controller
     {
         $franchise->loadMissing(['busStations' => function ($q) {
             $q->select('id', 'franchise_id', 'name', 'code_no', 'latitude', 'longitude', 'status_id')
-            ->with('status:id,name')
+            ->with([
+                  'status:id,name',
+                  'fromAmounts.toStation:id,code_no',
+            ])
             ->orderBy('id');
         }]);
 
