@@ -21,22 +21,27 @@ class StationController extends Controller
         // 1. Validate all filters
         $validated = $request->validate([
             'franchises' => ['sometimes', 'nullable', 'array'],
-            'status' => ['sometimes', 'string', Rule::in(['active', 'pending', 'inactive'])],
         ]);
 
         // 2. Set defaults
         $filters = [
             'franchises' => $validated['franchises'] ?? [],
-            'status' => $validated['status'] ?? 'active',
         ];
 
         // 3. Build and execute query
         $stations = $this->buildBaseQuery($filters)->get();
 
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) {
+                $q->where('vehicle_types.name', 'bus')
+                ->where('franchise_vehicle_type.status_id', Status::where('name', 'active')->value('id'));
+            })
+            ->get();
+
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/StationIndex', [
             'stations' => StationDatatableResource::collection($stations),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => fn () => $franchiseList,
             'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
@@ -47,29 +52,23 @@ class StationController extends Controller
      */
     private function buildBaseQuery(array $filters): Builder
     {
-        $activeFranchiseStatusId = Status::where('name', 'active')->value('id');
-        $pivotStatusId = Status::where('name', $filters['status'])->value('id');
+        $activeStatusId = Status::where('name', 'active')->value('id');
         $busVehicleTypeId = VehicleType::where('name', 'bus')->value('id');
 
-        $query = Franchise::with([
-                'vehicleTypes' => function ($q) use ($busVehicleTypeId, $pivotStatusId) {
-                    $q->where('vehicle_types.id', $busVehicleTypeId)
-                    ->where('franchise_vehicle_type.status_id', $pivotStatusId)
-                    ->withPivot('status_id');
-                },
+        return Franchise::where('status_id', $activeStatusId)
+            ->whereHas('vehicleTypes', function ($q) use ($busVehicleTypeId, $activeStatusId) {
+                $q->where('vehicle_types.id', $busVehicleTypeId)
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->with([
                 'busStations' => function ($q) {
                     $q->select('id', 'franchise_id', 'code_no', 'status_id')
-                    ->with('status:id,name')
-                    ->orderBy('id');
-                },
+                    ->with('status:id,name');
+                }
             ])
-            ->where('status_id', $activeFranchiseStatusId);
-
-        if (!empty($filters['franchises'])) {
-            $query->whereIn('franchises.id', $filters['franchises']);
-        }
-
-        return $query;
+            ->when(!empty($filters['franchises']), function ($query) use ($filters) {
+                $query->whereIn('id', $filters['franchises']);
+            });
     }
 
     public function show(Franchise $franchise)

@@ -21,20 +21,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { debounce } from 'lodash-es';
 import { MapPin, MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
 
@@ -47,7 +39,6 @@ const props = defineProps<{
   vehicleTypes: { id: number; name: string }[];
   filters: {
     franchises: string[];
-    status: 'active' | 'pending' | 'inactive';
   };
 }>();
 
@@ -68,7 +59,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // --- 4. Setup Reactive State for Filters ---
 const selectedFranchise = ref<string[]>(props.filters.franchises || []);
-const selectedStatus = ref(props.filters.status || 'active');
 
 // Options for MultiSelect
 const franchiseOptions = computed(() =>
@@ -212,7 +202,6 @@ const updateFilters = () => {
   router.get(
     superAdmin.station.index().url,
     {
-      status: selectedStatus.value,
       franchises: selectedFranchise.value || [],
     },
     {
@@ -225,14 +214,6 @@ const updateFilters = () => {
 watch(selectedFranchise, () => {
   updateFilters();
 });
-
-// Watch for select filter changes (debounced)
-watch(
-  [selectedStatus],
-  debounce(() => {
-    updateFilters();
-  }, 300), // Debounce to avoid firing on every keystroke/click
-);
 </script>
 
 <template>
@@ -245,17 +226,6 @@ watch(
           <h2 class="font-mono text-xl font-semibold">Franchise Bus Station</h2>
 
           <div class="flex gap-4">
-            <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-
             <MultiSelect
               v-model="selectedFranchise"
               :options="franchiseOptions"
