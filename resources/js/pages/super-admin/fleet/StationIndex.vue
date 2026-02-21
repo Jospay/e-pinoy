@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
+import InputError from '@/components/InputError.vue';
 import LocationBusStation from '@/components/LocationBusStation.vue';
 import MultiSelect from '@/components/MultiSelect.vue';
 import StationFareMatrix from '@/components/StationFareMatrix.vue';
@@ -58,6 +59,8 @@ interface StationRow {
 }
 
 interface StationEntry {
+  id: number;
+  name: string;
   code: string;
   status: string;
 }
@@ -122,45 +125,33 @@ const statusForm = useForm({
   station_id: null as number | null,
   status: null as 'active' | 'inactive' | null,
 });
-
-interface StatusModalState {
+const statusModal = ref<{
   isOpen: boolean;
   parentId: number | null;
   parentName: string;
-  stations: StationDetail[];
-  fares: StationModalData['fares'];
-  pendingStatus: Record<number, 'active' | 'inactive' | null>;
-}
-
-const statusModal = ref<StatusModalState>({
+  row: StationRow | null;
+  pendingStatus: Record<string, 'active' | 'inactive' | null>;
+}>({
   isOpen: false,
   parentId: null,
   parentName: '',
-  stations: [],
-  fares: [],
+  row: null,
   pendingStatus: {},
 });
 
-const openStatusModal = async (row: StationRow) => {
-  const response = await stationModal.open(row.id, {
-    params: { type: selectedType.value },
-  });
-  const d = stationModal.data.value;
-  if (!d) return;
-
+const openStatusModal = (row: StationRow) => {
   statusModal.value = {
     isOpen: true,
     parentId: row.id,
-    parentName: d.franchise_name,
-    stations: d.stations,
-    fares: d.fares,
-    pendingStatus: Object.fromEntries(d.stations.map((s) => [s.id, null])),
+    parentName: row.franchise_name,
+    row,
+    pendingStatus: Object.fromEntries(row.stations.map((s) => [s.code, null])),
   };
 };
 
 const closeStatusModal = () => {
   statusModal.value.isOpen = false;
-  statusForm.reset();
+  statusForm.clearErrors('status');
 };
 
 const statusOptions = (current: string): ('active' | 'inactive')[] => {
@@ -169,12 +160,16 @@ const statusOptions = (current: string): ('active' | 'inactive')[] => {
   return ['active', 'inactive'];
 };
 
-const applyStatusChange = (station: StationDetail) => {
-  const newStatus = statusModal.value.pendingStatus[station.id];
+const submittingCode = ref<string | null>(null);
+
+const applyStatusChange = (station: StationEntry) => {
+  const newStatus = statusModal.value.pendingStatus[station.code];
   if (!newStatus) return;
 
+  statusForm.clearErrors('status');
   statusForm.station_id = station.id;
   statusForm.status = newStatus;
+  submittingCode.value = station.code;
 
   statusForm.patch(
     `${superAdmin.station.updateStatus(statusModal.value.parentId!).url}?type=${selectedType.value}`,
@@ -182,8 +177,10 @@ const applyStatusChange = (station: StationDetail) => {
       preserveScroll: true,
       onSuccess: () => {
         station.status = newStatus;
-        statusModal.value.pendingStatus[station.id] = null;
+        statusModal.value.pendingStatus[station.code] = null;
+        submittingCode.value = null;
         statusForm.reset();
+        statusModal.value.isOpen = false;
         toast.success('Station status updated successfully!');
       },
     },
@@ -510,82 +507,78 @@ watch(selectedFranchise, () => {
             style="scrollbar-gutter: stable both-edges"
           >
             <div class="space-y-2">
-              <div
-                v-for="s in statusModal.stations"
-                :key="s.id"
-                class="flex items-center justify-between rounded-lg border bg-slate-50 px-4 py-3"
-              >
-                <!-- Station info -->
-                <div class="flex items-center gap-3">
-                  <div>
-                    <p class="text-xs font-black text-slate-400 uppercase">
-                      {{ s.code_no }}
-                    </p>
-                    <p class="text-sm font-semibold text-slate-700">
-                      {{ s.name }}
-                    </p>
+              <div v-for="s in statusModal.row?.stations" :key="s.code">
+                <div
+                  class="flex flex-wrap items-center justify-between rounded-lg border bg-slate-50 px-4 py-3"
+                >
+                  <!-- Station info -->
+                  <div class="flex items-center gap-3">
+                    <div>
+                      <p class="text-xs font-black text-slate-400 uppercase">
+                        {{ s.code }}
+                      </p>
+                      <p class="text-sm font-semibold text-slate-700">
+                        {{ s.name }}
+                      </p>
+                    </div>
+                    <span
+                      class="inline-block rounded px-2 py-0.5 text-[10px] font-bold text-white"
+                      :class="{
+                        'bg-blue-500': s.status === 'active',
+                        'bg-amber-500': s.status === 'pending',
+                        'bg-rose-500': s.status === 'inactive',
+                      }"
+                      >{{ s.status }}</span
+                    >
                   </div>
-                  <span
-                    class="inline-block rounded px-2 py-0.5 text-[10px] font-bold text-white"
-                    :class="{
-                      'bg-blue-500': s.status === 'active',
-                      'bg-amber-500': s.status === 'pending',
-                      'bg-rose-500': s.status === 'inactive',
-                    }"
-                    >{{ s.status }}</span
-                  >
-                </div>
 
-                <!-- Status selector + apply -->
-                <div class="flex items-center gap-2">
-                  <Select
-                    :model-value="statusModal.pendingStatus[s.id] ?? ''"
-                    @update:model-value="
-                      (val) =>
-                        (statusModal.pendingStatus[s.id] = val as
-                          | 'active'
-                          | 'inactive')
-                    "
-                  >
-                    <SelectTrigger class="w-[120px] cursor-pointer text-xs">
-                      <SelectValue placeholder="Change to..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="opt in statusOptions(s.status)"
-                        :key="opt"
-                        :value="opt"
-                        class="cursor-pointer text-xs"
-                      >
-                        {{ opt.charAt(0).toUpperCase() + opt.slice(1) }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <!-- Status selector + apply -->
+                  <div class="flex items-center gap-2">
+                    <Select
+                      :model-value="statusModal.pendingStatus[s.code] ?? ''"
+                      @update:model-value="
+                        (val) =>
+                          (statusModal.pendingStatus[s.code] = val as
+                            | 'active'
+                            | 'inactive')
+                      "
+                    >
+                      <SelectTrigger class="w-[120px] cursor-pointer text-xs">
+                        <SelectValue placeholder="Change to..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="opt in statusOptions(s.status)"
+                          :key="opt"
+                          :value="opt"
+                          class="cursor-pointer text-xs"
+                        >
+                          {{ opt.charAt(0).toUpperCase() + opt.slice(1) }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                  <Button
-                    size="sm"
-                    :disabled="
-                      !statusModal.pendingStatus[s.id] || statusForm.processing
-                    "
-                    class="text-xs"
-                    @click="applyStatusChange(s)"
-                  >
-                    {{
-                      statusForm.processing && statusForm.station_id === s.id
-                        ? 'Saving...'
-                        : 'Apply'
-                    }}
-                  </Button>
+                    <Button
+                      :disabled="
+                        !statusModal.pendingStatus[s.code] ||
+                        statusForm.processing
+                      "
+                      @click="applyStatusChange(s)"
+                    >
+                      {{
+                        statusForm.processing && statusForm.station_id === s.id
+                          ? 'Saving...'
+                          : 'Apply'
+                      }}
+                    </Button>
+                  </div>
                 </div>
+                <InputError
+                  v-if="submittingCode === s.code"
+                  :message="statusForm.errors.status"
+                  class="mt-.5 ms-1 w-full"
+                />
               </div>
-            </div>
-
-            <!-- Fares (collapsed summary, optional) -->
-            <div v-if="statusModal.fares.length" class="mt-4 space-y-2">
-              <p class="text-[10px] font-black text-slate-400 uppercase">
-                Point-to-Point Fare Rates
-              </p>
-              <StationFareMatrix :fares="statusModal.fares" />
             </div>
           </div>
 

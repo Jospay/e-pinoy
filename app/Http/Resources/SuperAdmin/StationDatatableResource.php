@@ -20,6 +20,8 @@ class StationDatatableResource extends JsonResource
                 'branch_name'    => $this->name,
                 'franchise_name' => $this->franchise?->name,
                 'stations'       => $this->busStations->map(fn ($s) => [
+                    'id'     => $s->id,
+                    'name'   => $s->name,
                     'code'   => $s->code_no,
                     'status' => $s->status?->name ?? 'N/A',
                 ])->values(),
@@ -30,6 +32,8 @@ class StationDatatableResource extends JsonResource
             'id'             => $this->id,
             'franchise_name' => $this->name,
             'stations'       => $this->busStations->map(fn ($s) => [
+                'id'     => $s->id,
+                'name'   => $s->name,
                 'code'   => $s->code_no,
                 'status' => $s->status?->name ?? 'N/A',
             ])->values(),
