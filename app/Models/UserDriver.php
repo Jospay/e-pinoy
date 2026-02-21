@@ -53,12 +53,6 @@ class UserDriver extends Model
         return $this->belongsTo(Status::class);
     }
 
-    // relationship to franchises, many to many (pivot table)
-    public function franchises(): BelongsToMany
-    {
-        return $this->belongsToMany(Franchise::class);
-    }
-
     // relationship to vehicles, one to many
     public function vehicles(): HasMany
     {
@@ -106,9 +100,25 @@ class UserDriver extends Model
         return $this->belongsToMany(VehicleType::class);
     }
 
-    // relationship to branches, many to many (pivot table)
-    public function branches(): BelongsToMany
-    {
-        return $this->belongsToMany(Branch::class);
-    }
+    // Find this function at the bottom of UserDriver.php and replace it:
+public function branches(): BelongsToMany
+{
+    return $this->belongsToMany(
+        Branch::class,
+        'branch_user_driver', // Your actual table name
+        'user_driver_id',     // The FK for this model
+        'branch_id'           // The FK for the Branch model
+    );
+}
+
+// Do the same for franchises just to be safe
+public function franchises(): BelongsToMany
+{
+    return $this->belongsToMany(
+        Franchise::class,
+        'franchise_user_driver',
+        'user_driver_id',
+        'franchise_id'
+    );
+}
 }

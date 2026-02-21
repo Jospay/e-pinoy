@@ -26,6 +26,13 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -33,10 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Tabs from '@/components/ui/tabs/Tabs.vue';
 import { useAddress } from '@/composables/useAddress';
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
-import type { BreadcrumbItem } from '@/types';
+import type { Branch, BreadcrumbItem, VehicleType } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Check, Edit, Eye, Loader2, Search, Trash, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
@@ -67,7 +76,13 @@ interface Driver {
   city: string;
   barangay: string;
   address: string;
+  vehicle_types: VehicleType[];
   details: DriverDetails;
+  assignment: {
+    type: 'branch' | 'franchise';
+    name: string;
+    id: number | null;
+  };
 }
 
 interface Status {
@@ -97,13 +112,28 @@ interface DriversPaginator {
 
 interface Props {
   drivers: DriversPaginator;
+  franchiseVehicleTypes: VehicleType[];
+  branches: Branch[];
   statuses: Status[];
+  filters?: {
+    search?: string;
+    status?: string;
+    vehicle_type?: string;
+    branch_id?: string | number;
+  };
 }
 
-const { drivers, statuses } = defineProps<Props>();
-const paginator = ref(drivers);
+const props = defineProps<Props>();
+const paginator = ref(props.drivers);
 
-// --- Address Composable ---
+function debounce(fn: Function, delay: number) {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return (...args: any[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  };
+}
+
 const {
   regions,
   provinces,
@@ -119,7 +149,6 @@ const {
   isNcr,
 } = useAddress();
 
-// Dialog & Edit States
 const selectedDriver = ref<Driver | null>(null);
 const dialogOpen = ref(false);
 const isEditing = ref(false);
@@ -134,23 +163,26 @@ const editForm = useForm({
   province: '',
   city: '',
   barangay: '',
+  branch_id: '' as string | number,
 });
 
 const viewDriver = (driver: Driver) => {
   selectedDriver.value = driver;
   isEditing.value = false;
 
-  // Prep form values
   editForm.email = driver.email || '';
   editForm.phone = driver.phone || '';
   editForm.code_number = driver.details.code_number || '';
   editForm.license_number = driver.details.license_number || '';
   editForm.license_expiry = driver.details.license_expiry || '';
 
-  // Set address defaults in composable to trigger chained fetching
+  if (driver.assignment.type === 'branch' && driver.assignment.id) {
+    editForm.branch_id = driver.assignment.id.toString();
+  } else {
+    editForm.branch_id = 'franchise';
+  }
+
   selectedRegion.value = driver.region || '';
-  // Note: Provinces/Cities/Barangays will load via the composable's watchers
-  // based on the name matching logic in your useAddress.ts
   setTimeout(() => {
     if (driver.province) selectedProvince.value = driver.province;
   }, 500);
@@ -167,7 +199,6 @@ const viewDriver = (driver: Driver) => {
 const saveDriverDetails = () => {
   if (!selectedDriver.value) return;
 
-  // Sync address selections to form
   editForm.region = selectedRegion.value;
   editForm.province = selectedProvince.value;
   editForm.city = selectedCity.value;
@@ -180,12 +211,8 @@ const saveDriverDetails = () => {
       isEditing.value = false;
     },
     onError: (errors) => {
-      // Handle uniqueness errors from Laravel validation
       const firstErr = Object.values(errors)[0] as string;
-      toast.error(
-        firstErr ||
-          'Failed to update. Check if Email/Phone/ID is already taken.',
-      );
+      toast.error(firstErr || 'Failed to update.');
     },
   });
 };
@@ -198,9 +225,6 @@ const confirmRemoveDriver = (driver: Driver) => {
   removeDialogOpen.value = true;
 };
 
-// -------------------------
-// File Upload Logic
-// -------------------------
 const fileInput = ref<HTMLInputElement | null>(null);
 const currentFieldToEdit = ref<string | null>(null);
 
@@ -219,16 +243,11 @@ const handleFileUpload = (event: Event) => {
     return;
 
   const file = target.files[0];
-  const toastId = toast.loading(
-    `Uploading new ${currentFieldToEdit.value.replace(/_/g, ' ')}...`,
-  );
+  const toastId = toast.loading(`Uploading document...`);
 
   router.post(
     `/owner/drivers/${selectedDriver.value.id}`,
-    {
-      _method: 'PUT',
-      [currentFieldToEdit.value]: file,
-    },
+    { _method: 'PUT', [currentFieldToEdit.value]: file },
     {
       forceFormData: true,
       onSuccess: () => toast.success('Document updated!', { id: toastId }),
@@ -241,11 +260,32 @@ const handleFileUpload = (event: Event) => {
   );
 };
 
-// -------------------------
-// Watchers & Breadcrumbs
-// -------------------------
+const globalFilter = ref(props.filters?.search || '');
+const statusFilter = ref(props.filters?.status || 'active');
+const branchFilter = ref(props.filters?.branch_id?.toString() || 'all');
+const activeTab = ref(
+  props.filters?.vehicle_type || props.franchiseVehicleTypes[0]?.name || '',
+);
+
+const updateFilters = debounce(() => {
+  router.get(
+    window.location.pathname,
+    {
+      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
+      search: globalFilter.value || undefined,
+      vehicle_type: activeTab.value || undefined,
+      branch_id: branchFilter.value !== 'all' ? branchFilter.value : undefined,
+    },
+    { preserveState: true, preserveScroll: true, replace: true },
+  );
+}, 300);
+
+watch([statusFilter, activeTab, globalFilter, branchFilter], () =>
+  updateFilters(),
+);
+
 watch(
-  () => drivers,
+  () => props.drivers,
   (newDrivers) => {
     paginator.value = newDrivers;
     if (selectedDriver.value) {
@@ -261,22 +301,11 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Driver Management', href: owner.drivers.index().url },
 ];
 
-const globalFilter = ref('');
-const statusFilter = ref('all');
-
-watch([statusFilter, globalFilter], () => {
-  router.get(
-    paginator.value.path,
-    {
-      status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
-      search: globalFilter.value || undefined,
-      per_page: paginator.value.per_page,
-    },
-    { preserveState: true, preserveScroll: true },
+const paginationLinks = computed(() => {
+  return props.drivers.links.filter(
+    (link) => !link.label.includes('Previous') && !link.label.includes('Next'),
   );
 });
-
-const paginationLinks = computed(() => paginator.value.links || []);
 
 const goToPage = (url: string | null) => {
   if (!url) return;
@@ -285,13 +314,15 @@ const goToPage = (url: string | null) => {
     {
       status: statusFilter.value !== 'all' ? statusFilter.value : undefined,
       search: globalFilter.value || undefined,
+      vehicle_type: activeTab.value || undefined,
+      branch_id: branchFilter.value !== 'all' ? branchFilter.value : undefined,
     },
     { preserveState: true, preserveScroll: true },
   );
 };
 
 const getStatusVariant = (status: string) => {
-  switch (status) {
+  switch (status.toLowerCase()) {
     case 'active':
       return 'default';
     case 'pending':
@@ -344,9 +375,31 @@ const removeDriverFromFranchise = () => {
     />
 
     <div class="space-y-6 p-6">
+      <Tabs
+        v-if="franchiseVehicleTypes.length > 1"
+        v-model="activeTab"
+        class="w-full"
+      >
+        <TabsList
+          class="w-full justify-start overflow-x-auto bg-muted/50 p-1.5"
+        >
+          <TabsTrigger
+            v-for="type in franchiseVehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="gap-2 px-4"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div>
         <h1 class="mb-1 text-3xl font-bold">Driver Management</h1>
-        <p class="text-gray-600">Driver Management on your franchise</p>
+        <p class="text-gray-600">
+          Managing your
+          <span class="font-bold text-primary">{{ activeTab }}</span> fleet.
+        </p>
       </div>
 
       <div class="flex flex-col gap-4 md:flex-row md:items-center">
@@ -357,9 +410,63 @@ const removeDriverFromFranchise = () => {
           <input
             v-model="globalFilter"
             placeholder="Search drivers..."
-            class="w-full rounded-md border px-10 py-2"
+            class="w-full rounded-md border border-input bg-background px-10 py-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           />
         </div>
+
+        <div v-if="branches.length > 0">
+          <Select v-model="branchFilter">
+            <SelectTrigger class="w-full md:w-48">
+              <SelectValue placeholder="Select Branch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignments</SelectItem>
+
+              <SelectGroup>
+                <SelectLabel
+                  class="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase"
+                >
+                  Franchise
+                </SelectLabel>
+                <SelectItem value="franchise"
+                  >Main Franchise (Unassigned)</SelectItem
+                >
+              </SelectGroup>
+
+              <SelectGroup>
+                <SelectLabel
+                  class="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase"
+                >
+                  Branches
+                </SelectLabel>
+                <SelectItem v-if="branches.length > 1" value="only_branches"
+                  >All Branches</SelectItem
+                >
+                <SelectItem
+                  v-for="branch in branches"
+                  :key="branch.id"
+                  :value="branch.id.toString()"
+                >
+                  {{ branch.name }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+        <Select v-model="statusFilter">
+          <SelectTrigger class="w-full md:w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="status in statuses"
+              :key="status.id"
+              :value="status.name"
+            >
+              {{ status.name.charAt(0).toUpperCase() + status.name.slice(1) }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div class="overflow-x-auto rounded-lg border">
@@ -368,16 +475,12 @@ const removeDriverFromFranchise = () => {
             <TableRow>
               <TableHead>Username</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Region</TableHead>
-              <TableHead>Province</TableHead>
-              <TableHead>City</TableHead>
-              <TableHead>Barangay</TableHead>
+              <TableHead>Assignment</TableHead>
+              <TableHead>Vehicle Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
-
           <TableBody>
             <TableRow
               v-for="driver in paginator.data"
@@ -386,11 +489,30 @@ const removeDriverFromFranchise = () => {
             >
               <TableCell>{{ driver.username }}</TableCell>
               <TableCell>{{ driver.email }}</TableCell>
-              <TableCell>{{ driver.phone }}</TableCell>
-              <TableCell>{{ driver.region }}</TableCell>
-              <TableCell>{{ driver.province }}</TableCell>
-              <TableCell>{{ driver.city }}</TableCell>
-              <TableCell>{{ driver.barangay }}</TableCell>
+              <TableCell>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium">{{
+                    driver.assignment.name || 'Main Franchise'
+                  }}</span>
+                  <span class="text-[10px] text-muted-foreground uppercase">{{
+                    driver.assignment.type
+                  }}</span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div class="flex flex-col">
+                  <span class="text-sm font-medium">
+                    {{
+                      driver.assignment?.name?.trim()
+                        ? driver.assignment.name
+                        : 'Main Franchise'
+                    }}
+                  </span>
+                  <span class="text-[10px] text-muted-foreground uppercase">
+                    {{ driver.assignment?.type || 'franchise' }}
+                  </span>
+                </div>
+              </TableCell>
               <TableCell>
                 <Badge :variant="getStatusVariant(driver.status)">{{
                   driver.status
@@ -402,13 +524,14 @@ const removeDriverFromFranchise = () => {
                   variant="outline"
                   @click="viewDriver(driver)"
                   class="cursor-pointer"
-                  ><Eye
-                /></Button>
+                >
+                  <Eye class="h-4 w-4" />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger as-child>
-                    <Button size="sm" variant="outline" class="cursor-pointer"
-                      ><Edit
-                    /></Button>
+                    <Button size="sm" variant="outline" class="cursor-pointer">
+                      <Edit class="h-4 w-4" />
+                    </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
                     <DropdownMenuLabel>Change Status</DropdownMenuLabel>
@@ -430,8 +553,20 @@ const removeDriverFromFranchise = () => {
                   size="sm"
                   variant="destructive"
                   @click="confirmRemoveDriver(driver)"
-                  ><Trash
-                /></Button>
+                >
+                  <Trash class="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+
+            <TableRow v-if="drivers.data.length === 0">
+              <TableCell
+                colspan="6"
+                class="py-12 text-center text-muted-foreground"
+              >
+                No <span class="font-bold">{{ statusFilter }}</span> drivers
+                found for <span class="font-bold">{{ activeTab }}</span
+                >.
               </TableCell>
             </TableRow>
           </TableBody>
@@ -462,7 +597,7 @@ const removeDriverFromFranchise = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  :class="{ 'bg-gray-100': link.active }"
+                  :class="{ 'bg-primary/10 text-primary': link.active }"
                   :disabled="!link.url"
                   @click="goToPage(link.url)"
                   >{{ link.label }}</Button
@@ -482,19 +617,41 @@ const removeDriverFromFranchise = () => {
     <Dialog v-model:open="dialogOpen">
       <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <div class="flex items-center justify-between pr-6">
-            <div>
-              <DialogTitle>Driver's Information</DialogTitle>
-              <DialogDescription
-                >Detailed information for driver
-                <strong>{{ selectedDriver?.username }}</strong
-                >.</DialogDescription
-              >
-            </div>
-          </div>
+          <DialogTitle>Driver's Information</DialogTitle>
+          <DialogDescription>
+            Detailed information for driver
+            <strong>{{ selectedDriver?.username }}</strong
+            >.
+          </DialogDescription>
         </DialogHeader>
 
         <div class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div class="col-span-2 mb-2">
+            <p class="text-xs font-bold text-gray-500 uppercase">
+              Assigned Branch:
+            </p>
+            <Select v-if="isEditing" v-model="editForm.branch_id">
+              <SelectTrigger class="w-full">
+                <SelectValue placeholder="Choose branch" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="franchise"
+                  >Main Franchise (Unassigned)</SelectItem
+                >
+                <SelectItem
+                  v-for="branch in branches"
+                  :key="branch.id"
+                  :value="branch.id.toString()"
+                >
+                  {{ branch.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p v-else class="font-medium text-primary">
+              {{ selectedDriver?.assignment?.name || 'Main Franchise' }}
+            </p>
+          </div>
+
           <div>
             <p class="text-xs font-bold text-gray-500 uppercase">ID / Code:</p>
             <input
@@ -547,7 +704,6 @@ const removeDriverFromFranchise = () => {
                 </select>
                 <p v-else class="text-xs">{{ selectedDriver?.region }}</p>
               </div>
-
               <div class="space-y-1">
                 <label class="text-[10px] font-bold text-gray-400 uppercase"
                   >Province</label
@@ -564,10 +720,9 @@ const removeDriverFromFranchise = () => {
                 </select>
                 <p v-else class="text-xs">{{ selectedDriver?.province }}</p>
               </div>
-
               <div class="space-y-1">
                 <label class="text-[10px] font-bold text-gray-400 uppercase"
-                  >City / Municipality</label
+                  >City</label
                 >
                 <select
                   v-if="isEditing"
@@ -581,7 +736,6 @@ const removeDriverFromFranchise = () => {
                 </select>
                 <p v-else class="text-xs">{{ selectedDriver?.city }}</p>
               </div>
-
               <div class="space-y-1">
                 <label class="text-[10px] font-bold text-gray-400 uppercase"
                   >Barangay</label
@@ -600,45 +754,46 @@ const removeDriverFromFranchise = () => {
               </div>
             </div>
           </div>
+
+          <div
+            class="col-span-2 mt-2 grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-4"
+          >
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase">
+                License Number:
+              </p>
+              <input
+                v-if="isEditing"
+                v-model="editForm.license_number"
+                class="w-full rounded border px-2 py-1"
+              />
+              <p v-else>{{ selectedDriver?.details.license_number }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase">
+                License Expiry:
+              </p>
+              <input
+                v-if="isEditing"
+                type="date"
+                v-model="editForm.license_expiry"
+                class="w-full rounded border px-2 py-1"
+              />
+              <p v-else>{{ selectedDriver?.details.license_expiry }}</p>
+            </div>
+          </div>
         </div>
 
-        <div
-          class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-4 text-sm"
-        >
-          <div>
-            <p class="text-xs font-bold text-gray-500 uppercase">
-              License Number:
-            </p>
-            <input
-              v-if="isEditing"
-              v-model="editForm.license_number"
-              class="w-full rounded border px-2 py-1"
-            />
-            <p v-else>{{ selectedDriver?.details.license_number }}</p>
-          </div>
-          <div>
-            <p class="text-xs font-bold text-gray-500 uppercase">
-              License Expiry:
-            </p>
-            <input
-              v-if="isEditing"
-              type="date"
-              v-model="editForm.license_expiry"
-              class="w-full rounded border px-2 py-1"
-            />
-            <p v-else>{{ selectedDriver?.details.license_expiry }}</p>
-          </div>
-        </div>
-
-        <div class="flex justify-start gap-2 pt-2">
+        <div class="flex justify-start gap-2 pt-4">
           <template v-if="!isEditing">
             <Button
               variant="outline"
               size="sm"
               @click="isEditing = true"
               class="h-7 text-xs"
-              ><Edit class="mr-1 h-3 w-3" /> Edit Profile</Button
             >
+              <Edit class="mr-1 h-3 w-3" /> Edit Profile
+            </Button>
           </template>
           <template v-else>
             <Button
@@ -659,8 +814,9 @@ const removeDriverFromFranchise = () => {
               size="sm"
               @click="isEditing = false"
               class="h-7 text-xs"
-              ><X class="mr-1 h-3 w-3" /> Cancel</Button
             >
+              <X class="mr-1 h-3 w-3" /> Cancel
+            </Button>
           </template>
         </div>
 
@@ -676,10 +832,7 @@ const removeDriverFromFranchise = () => {
               ] as const"
               :key="field"
             >
-              <div
-                v-if="selectedDriver.details[field as keyof DriverDetails]"
-                class="space-y-1"
-              >
+              <div v-if="selectedDriver.details[field]" class="space-y-1">
                 <div class="flex items-center justify-between">
                   <p class="text-[10px] font-bold text-gray-400 uppercase">
                     {{ field.replace(/_/g, ' ') }}
@@ -692,11 +845,7 @@ const removeDriverFromFranchise = () => {
                       Edit
                     </button>
                     <a
-                      :href="
-                        String(
-                          selectedDriver.details[field as keyof DriverDetails],
-                        )
-                      "
+                      :href="String(selectedDriver.details[field])"
                       class="text-[10px] font-bold text-gray-600 hover:underline"
                       target="_blank"
                       >View</a
@@ -704,9 +853,7 @@ const removeDriverFromFranchise = () => {
                   </div>
                 </div>
                 <img
-                  :src="
-                    String(selectedDriver.details[field as keyof DriverDetails])
-                  "
+                  :src="String(selectedDriver.details[field])"
                   class="h-24 w-full rounded border bg-gray-50 object-cover"
                 />
               </div>
@@ -724,11 +871,10 @@ const removeDriverFromFranchise = () => {
       <DialogContent class="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Confirm Removal</DialogTitle>
-          <DialogDescription
-            >Are you sure you want to remove
-            <strong>{{ driverToRemove?.username }}</strong> from your
-            franchise?</DialogDescription
-          >
+          <DialogDescription>
+            Are you sure you want to remove
+            <strong>{{ driverToRemove?.username }}</strong> from your franchise?
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter class="flex justify-end gap-2">
           <Button variant="outline" @click="removeDialogOpen = false"

@@ -17,6 +17,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import {
   Table,
@@ -26,23 +33,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
+import { debounce } from 'lodash-es';
 import { Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
-import { debounce } from 'lodash-es';
 
 // 🔵 ADDED
 interface Branch {
@@ -254,7 +254,11 @@ const handleAction = (id: number, action: 'request' | 'cancel') => {
   <Head title="Driver Applications" />
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="space-y-6 p-6">
-      <Tabs v-model="activeTab" class="w-full">
+      <Tabs
+        v-if="franchiseVehicleTypes.length > 1"
+        v-model="activeTab"
+        class="w-full"
+      >
         <TabsList
           class="w-full justify-start overflow-x-auto bg-muted/50 p-1.5"
         >

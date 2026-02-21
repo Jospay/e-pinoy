@@ -12,23 +12,86 @@ use Inertia\Inertia;
 
 class DriverManagementController extends Controller
 {
-    public function index()
-    {
-        $franchise = auth()->user()->ownerDetails?->franchises()->first();
+   public function index(Request $request)
+{
+    $franchise = auth()->user()->ownerDetails?->franchises()->first();
 
-        if (!$franchise) {
-            abort(404, 'Franchise not found');
+    if (!$franchise) {
+        abort(404, 'Franchise not found');
+    }
+
+    $activeStatusId = Status::where('name', 'active')->value('id');
+    $franchiseVehicleTypes = $franchise->vehicleTypes()
+        ->wherePivot('status_id', $activeStatusId)
+        ->get(['vehicle_types.id', 'name']);
+
+    $allowedTypeNames = $franchiseVehicleTypes->pluck('name')->toArray();
+    $requestedType = $request->input('vehicle_type');
+
+    $activeVehicleType = in_array($requestedType, $allowedTypeNames)
+        ? $requestedType
+        : ($franchiseVehicleTypes->first()?->name);
+
+    $statusFilter = $request->input('status', 'active');
+    $search = $request->input('search');
+    $branchFilter = $request->input('branch_id');
+
+    // Load branches for the dropdown filter
+    $branches = $franchise->branches()->select('id', 'name')->get();
+    $branchIds = $branches->pluck('id');
+
+    /**
+     * Start query from UserDriver to allow filtering by either Franchise OR Branches.
+     * This ensures you see all drivers under your management.
+     */
+    $query = UserDriver::query()
+        ->with(['user', 'status', 'vehicleTypes', 'branches'])
+        ->where(function ($q) use ($franchise, $branchIds) {
+            $q->whereHas('franchises', fn($f) => $f->where('franchises.id', $franchise->id))
+              ->orWhereHas('branches', fn($b) => $b->whereIn('branches.id', $branchIds));
+        });
+
+    // Specific Branch Filter logic
+    if ($branchFilter && $branchFilter !== 'all') {
+        if ($branchFilter === 'franchise') {
+            $query->whereDoesntHave('branches');
+        } elseif ($branchFilter === 'only_branches') {
+            $query->whereHas('branches');
+        } else {
+            $query->whereHas('branches', function($q) use ($branchFilter) {
+                $q->where('branches.id', $branchFilter);
+            });
         }
+    }
 
-        $statusQuery = ['active', 'inactive', 'suspended', 'retired'];
+    // Status Filter logic
+    if ($statusFilter && $statusFilter !== 'all') {
+        $query->whereHas('status', fn($q) => $q->where('name', $statusFilter));
+    } else {
+        $query->whereHas('status', fn($q) =>
+            $q->whereIn('name', ['active', 'inactive', 'suspended', 'retired'])
+        );
+    }
 
-        $drivers = $franchise->drivers()
-            ->with(['user', 'status'])
-            ->whereHas('status', function ($query) use ($statusQuery) {
-                $query->whereIn('name', $statusQuery);
-            })
-            ->paginate(10)
-            ->through(fn($driver) => [
+    // Vehicle Type Filter
+    if ($activeVehicleType) {
+        $query->whereHas('vehicleTypes', fn($q) => $q->where('name', $activeVehicleType));
+    }
+
+    // Search Logic (Searching the User table)
+    if ($search) {
+        $query->whereHas('user', function ($q) use ($search) {
+            $q->where('username', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%")
+              ->orWhere('name', 'like', "%{$search}%");
+        });
+    }
+
+    $drivers = $query->paginate(10)
+        ->appends($request->all())
+        ->through(function($driver) use ($franchise) {
+            $firstBranch = $driver->branches->first();
+            return [
                 'id' => $driver->id,
                 'name' => $driver->user?->name,
                 'username' => $driver->user?->username,
@@ -40,41 +103,46 @@ class DriverManagementController extends Controller
                 'barangay' => $driver->user?->barangay,
                 'address' => $driver->user?->address,
                 'status' => $driver->status?->name,
-
-                'details' => [
-                    'code_number'     => $driver->code_number,
-                    'license_number'  => $driver->license_number,
-                    'license_expiry'  => $driver->license_expiry,
-                    'is_verified'     => $driver->is_verified,
-                    'shift'           => $driver->shift,
-                    'hire_date'       => $driver->hire_date,
-
-                    'front_license_picture' => $driver->front_license_picture
-                        ? asset('storage/driver_documents/' . $driver->front_license_picture)
-                        : null,
-
-                    'back_license_picture' => $driver->back_license_picture
-                        ? asset('storage/driver_documents/' . $driver->back_license_picture)
-                        : null,
-
-                    'nbi_clearance' => $driver->nbi_clearance
-                        ? asset('storage/driver_documents/' . $driver->nbi_clearance)
-                        : null,
-
-                    'selfie_picture' => $driver->selfie_picture
-                        ? asset('storage/driver_documents/' . $driver->selfie_picture)
-                        : null,
+                'assignment' => [
+                    'type' => $firstBranch ? 'branch' : 'franchise',
+                    'name' => $firstBranch ? $firstBranch->name : $franchise->name,
+                    'id'   => $firstBranch ? $firstBranch->id : null,
                 ],
-            ]);
+                'vehicle_types' => $driver->vehicleTypes->map(fn($vt) => [
+                    'id'   => $vt->id,
+                    'name' => $vt->name,
+                ]),
+                'details' => [
+                    'code_number' => $driver->code_number,
+                    'license_number' => $driver->license_number,
+                    'license_expiry' => $driver->license_expiry,
+                    'is_verified' => $driver->is_verified,
+                    'shift' => $driver->shift,
+                    'hire_date' => $driver->hire_date,
+                    'front_license_picture' => $driver->front_license_picture ? asset('storage/driver_documents/' . $driver->front_license_picture) : null,
+                    'back_license_picture' => $driver->back_license_picture ? asset('storage/driver_documents/' . $driver->back_license_picture) : null,
+                    'nbi_clearance' => $driver->nbi_clearance ? asset('storage/driver_documents/' . $driver->nbi_clearance) : null,
+                    'selfie_picture' => $driver->selfie_picture ? asset('storage/driver_documents/' . $driver->selfie_picture) : null,
+                ],
+            ];
+        });
 
-        $statuses = Status::whereIn('name', ['active', 'suspended', 'retired', 'inactive'])
-            ->get(['id', 'name']);
+    $statuses = Status::whereIn('name', ['active', 'suspended', 'retired', 'inactive'])
+        ->get(['id', 'name']);
 
-        return Inertia::render('owner/driver-management/Index', [
-            'drivers' => $drivers,
-            'statuses' => $statuses,
-        ]);
-    }
+    return Inertia::render('owner/driver-management/Index', [
+        'drivers' => $drivers,
+        'branches' => $branches,
+        'statuses' => $statuses,
+        'franchiseVehicleTypes' => $franchiseVehicleTypes,
+        'filters' => [
+            'search' => $search,
+            'status' => $statusFilter,
+            'vehicle_type' => $activeVehicleType,
+            'branch_id' => $branchFilter,
+        ],
+    ]);
+}
 
     public function update(Request $request, string $id)
     {
