@@ -62,7 +62,8 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::patch('/accreditation/{franchise}/change', [AccreditationController::class, 'changeStatus'])->name('accreditation.change');
 
     Route::get('/station', [StationController::class, 'index'])->name('station.index');
-    Route::get('/station/{franchise}', [StationController::class, 'show'])->name('station.show');
+    Route::get('/station/{id}', [StationController::class, 'show'])->name('station.show');
+    Route::patch('/station/{id}/status', [StationController::class, 'updateStatus'])->name('station.updateStatus');
 
     Route::get('/earning', [EarningController::class, 'index'])->name('earning.index');
     Route::get('/earning/show', [EarningController::class, 'show'])->name('earning.show');

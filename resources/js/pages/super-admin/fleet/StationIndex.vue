@@ -32,16 +32,14 @@ import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { MapPin, MoreHorizontal } from 'lucide-vue-next';
+import { MapPin, MoreHorizontal, ShieldCheck } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
+import { toast } from 'vue-sonner';
 
-// --- Define Props ---
 const props = defineProps<{
-  stations: {
-    data: stationRow[];
-  };
+  stations: { data: StationRow[] };
   franchises: { id: number; name: string }[];
   branches: { id: number; name: string }[];
   vehicleTypes: { id: number; name: string }[];
@@ -52,9 +50,10 @@ const props = defineProps<{
   };
 }>();
 
-interface stationRow {
+interface StationRow {
   id: number;
   franchise_name: string;
+  branch_name?: string;
   stations: StationEntry[];
 }
 
@@ -63,33 +62,18 @@ interface StationEntry {
   status: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-  { title: 'Bus Station Management', href: '#' },
-];
-
-// --- 4. Setup Reactive State for Filters ---
-const selectedType = ref(props.filters.type || 'franchise');
-const selectedBranches = ref<string[]>(props.filters.branches || []);
-const selectedFranchise = ref<string[]>(props.filters.franchises || []);
-
-// Options for MultiSelect
-const franchiseOptions = computed(() =>
-  props.franchises.map((f) => ({ id: f.id, label: f.name })),
-);
-const branchOptions = computed(() =>
-  props.branches.map((b) => ({ id: b.id, label: b.name })),
-);
+interface StationDetail {
+  id: number;
+  name: string;
+  code_no: string;
+  status: string;
+  latitude: number | null;
+  longitude: number | null;
+}
 
 interface StationModalData {
   franchise_name: string;
-  stations: {
-    id: number;
-    name: string;
-    code_no: string;
-    status: string;
-    latitude: number | null;
-    longitude: number | null;
-  }[];
+  stations: StationDetail[];
   fares: {
     from_id: number;
     from_code: string;
@@ -98,7 +82,28 @@ interface StationModalData {
     amount: string;
   }[];
 }
-// Convenient computed refs for the template
+
+const breadcrumbs: BreadcrumbItem[] = [
+  { title: 'Bus Station Management', href: '#' },
+];
+
+// --- Filter State ---
+const selectedType = ref(props.filters.type || 'franchise');
+const selectedBranches = ref<string[]>(props.filters.branches || []);
+const selectedFranchise = ref<string[]>(props.filters.franchises || []);
+
+const franchiseOptions = computed(() =>
+  props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
+);
+
+// --- View Station Modal ---
+const stationModal = useDetailsModal<StationModalData>({
+  baseUrl: '/super-admin/station',
+});
+
 const modalData = computed(() => stationModal.data.value);
 const mapMarkers = computed(() =>
   (modalData.value?.stations ?? [])
@@ -113,18 +118,82 @@ const mapMarkers = computed(() =>
     })),
 );
 
-// --- Modal State ---
-const stationModal = useDetailsModal<StationModalData>({
-  baseUrl: '/super-admin/station',
+const statusForm = useForm({
+  station_id: null as number | null,
+  status: null as 'active' | 'inactive' | null,
 });
 
-// Computed columns for the data table
-const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
-  const baseColumns: ColumnDef<stationRow>[] = [
+interface StatusModalState {
+  isOpen: boolean;
+  parentId: number | null;
+  parentName: string;
+  stations: StationDetail[];
+  fares: StationModalData['fares'];
+  pendingStatus: Record<number, 'active' | 'inactive' | null>;
+}
+
+const statusModal = ref<StatusModalState>({
+  isOpen: false,
+  parentId: null,
+  parentName: '',
+  stations: [],
+  fares: [],
+  pendingStatus: {},
+});
+
+const openStatusModal = async (row: StationRow) => {
+  const response = await stationModal.open(row.id, {
+    params: { type: selectedType.value },
+  });
+  const d = stationModal.data.value;
+  if (!d) return;
+
+  statusModal.value = {
+    isOpen: true,
+    parentId: row.id,
+    parentName: d.franchise_name,
+    stations: d.stations,
+    fares: d.fares,
+    pendingStatus: Object.fromEntries(d.stations.map((s) => [s.id, null])),
+  };
+};
+
+const closeStatusModal = () => {
+  statusModal.value.isOpen = false;
+  statusForm.reset();
+};
+
+const statusOptions = (current: string): ('active' | 'inactive')[] => {
+  if (current === 'active') return ['inactive'];
+  if (current === 'inactive') return ['active'];
+  return ['active', 'inactive'];
+};
+
+const applyStatusChange = (station: StationDetail) => {
+  const newStatus = statusModal.value.pendingStatus[station.id];
+  if (!newStatus) return;
+
+  statusForm.station_id = station.id;
+  statusForm.status = newStatus;
+
+  statusForm.patch(
+    `${superAdmin.station.updateStatus(statusModal.value.parentId!).url}?type=${selectedType.value}`,
     {
-      accessorKey: 'franchise_name',
-      header: 'Franchise',
+      preserveScroll: true,
+      onSuccess: () => {
+        station.status = newStatus;
+        statusModal.value.pendingStatus[station.id] = null;
+        statusForm.reset();
+        toast.success('Station status updated successfully!');
+      },
     },
+  );
+};
+
+// --- Table Columns ---
+const stationColumns = computed<ColumnDef<StationRow>[]>(() => {
+  const baseColumns: ColumnDef<StationRow>[] = [
+    { accessorKey: 'franchise_name', header: 'Franchise' },
   ];
 
   if (selectedType.value === 'branch') {
@@ -137,9 +206,8 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
       header: 'Station Codes',
       cell: ({ row }) => {
         const stations = row.original.stations;
-        if (!stations || stations.length === 0) {
+        if (!stations?.length)
           return h('span', { class: 'text-muted-foreground' }, 'N/A');
-        }
         return h(
           'div',
           { class: 'flex flex-wrap gap-1' },
@@ -154,9 +222,8 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
       header: 'Statuses',
       cell: ({ row }) => {
         const stations = row.original.stations;
-        if (!stations || stations.length === 0) {
+        if (!stations?.length)
           return h('div', { class: 'text-muted-foreground' }, 'N/A');
-        }
         return h(
           'div',
           { class: 'flex flex-wrap gap-1' },
@@ -179,8 +246,7 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
       id: 'actions',
       header: () => h('div', { class: 'text-center' }, 'Actions'),
       cell: ({ row }) => {
-        const franchise = row.original;
-
+        const station = row.original;
         return h('div', { class: 'relative text-center' }, [
           h(DropdownMenu, null, () => [
             h(
@@ -198,7 +264,10 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
                 DropdownMenuItem,
                 {
                   class: 'cursor-pointer',
-                  onclick: () => stationModal.open(franchise.id),
+                  onclick: () =>
+                    stationModal.open(station.id, {
+                      params: { type: selectedType.value },
+                    }),
                 },
                 () => 'View Station Details',
               ),
@@ -207,6 +276,7 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
                 DropdownMenuItem,
                 {
                   class: 'cursor-pointer text-blue-500 focus:text-blue-600',
+                  onclick: () => openStatusModal(station),
                 },
                 () => 'Change Status',
               ),
@@ -216,10 +286,11 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
       },
     },
   );
+
   return baseColumns;
 });
 
-// --- Watchers to Update URL ---
+// --- URL Filter Watchers ---
 const updateFilters = () => {
   router.get(
     superAdmin.station.index().url,
@@ -228,10 +299,7 @@ const updateFilters = () => {
       franchises: selectedFranchise.value || [],
       branches: selectedBranches.value || [],
     },
-    {
-      preserveScroll: true,
-      replace: true,
-    },
+    { preserveScroll: true, replace: true },
   );
 };
 
@@ -254,7 +322,9 @@ watch(selectedFranchise, () => {
     <div class="flex h-full flex-1 flex-col gap-4 p-4">
       <div class="rounded-xl border p-4">
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Franchise Bus Station</h2>
+          <h2 class="font-mono text-xl font-semibold capitalize">
+            {{ selectedType }} Bus Station
+          </h2>
 
           <div class="flex gap-4">
             <Select v-model="selectedType">
@@ -262,12 +332,12 @@ watch(selectedFranchise, () => {
                 <SelectValue placeholder="Filter by..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="franchise" class="cursor-pointer">
-                  Franchise
-                </SelectItem>
-                <SelectItem value="branch" class="cursor-pointer">
-                  Branch
-                </SelectItem>
+                <SelectItem value="franchise" class="cursor-pointer"
+                  >Franchise</SelectItem
+                >
+                <SelectItem value="branch" class="cursor-pointer"
+                  >Branch</SelectItem
+                >
               </SelectContent>
             </Select>
 
@@ -279,7 +349,6 @@ watch(selectedFranchise, () => {
               @change="
                 (val) => {
                   selectedFranchise = val;
-
                   updateFilters();
                 }
               "
@@ -294,7 +363,6 @@ watch(selectedFranchise, () => {
               @change="
                 (val) => {
                   selectedBranches = val;
-
                   updateFilters();
                 }
               "
@@ -310,6 +378,7 @@ watch(selectedFranchise, () => {
       </div>
     </div>
 
+    <!-- View Station Details Modal -->
     <Dialog v-model:open="stationModal.isOpen.value">
       <DialogContent class="overflow-hidden p-0 sm:max-w-3xl">
         <div class="flex max-h-[90vh] flex-col">
@@ -320,21 +389,18 @@ watch(selectedFranchise, () => {
             </DialogTitle>
             <DialogDescription>
               Franchise:
-              <span class="font-bold text-blue-500">
-                {{ modalData?.franchise_name ?? '...' }}
-              </span>
+              <span class="font-bold text-blue-500">{{
+                modalData?.franchise_name ?? '...'
+              }}</span>
             </DialogDescription>
           </DialogHeader>
 
-          <!-- Loading -->
           <div
             v-if="stationModal.isLoading.value"
             class="flex items-center justify-center py-16"
           >
             <span class="text-sm text-slate-500">Loading...</span>
           </div>
-
-          <!-- Error -->
           <div
             v-else-if="stationModal.isError.value"
             class="p-6 text-center text-sm text-rose-500"
@@ -342,14 +408,12 @@ watch(selectedFranchise, () => {
             Failed to load station details.
           </div>
 
-          <!-- Content -->
           <div
             v-else-if="modalData"
             class="flex-1 overflow-y-auto"
             style="scrollbar-gutter: stable both-edges"
           >
             <div class="space-y-4 p-4">
-              <!-- Station list -->
               <div class="grid grid-cols-2 gap-2">
                 <div
                   v-for="s in modalData.stations"
@@ -372,7 +436,6 @@ watch(selectedFranchise, () => {
                 </div>
               </div>
 
-              <!-- Map -->
               <div
                 class="relative h-72 overflow-hidden rounded-xl border-2 border-slate-100"
               >
@@ -388,7 +451,6 @@ watch(selectedFranchise, () => {
                 </div>
               </div>
 
-              <!-- Legend -->
               <div class="flex gap-3 text-[10px] text-slate-500">
                 <span class="flex items-center gap-1">
                   <span
@@ -409,6 +471,7 @@ watch(selectedFranchise, () => {
                   Inactive
                 </span>
               </div>
+
               <div class="space-y-2">
                 <p class="text-[10px] font-black text-slate-400 uppercase">
                   Point-to-Point Fare Rates
@@ -420,6 +483,114 @@ watch(selectedFranchise, () => {
 
           <DialogFooter class="flex items-center justify-end border-t p-4">
             <Button variant="outline" @click="stationModal.close">Close</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Change Status Modal -->
+    <Dialog v-model:open="statusModal.isOpen">
+      <DialogContent class="overflow-hidden p-0 sm:max-w-2xl">
+        <div class="flex max-h-[90vh] flex-col">
+          <DialogHeader class="p-6 pb-2">
+            <DialogTitle class="flex items-center gap-2">
+              <ShieldCheck class="h-5 w-5 text-blue-600" />
+              Change Station Status
+            </DialogTitle>
+            <DialogDescription>
+              {{ selectedType === 'branch' ? 'Branch' : 'Franchise' }}:
+              <span class="font-bold text-blue-500">{{
+                statusModal.parentName
+              }}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div
+            class="flex-1 overflow-y-auto p-4"
+            style="scrollbar-gutter: stable both-edges"
+          >
+            <div class="space-y-2">
+              <div
+                v-for="s in statusModal.stations"
+                :key="s.id"
+                class="flex items-center justify-between rounded-lg border bg-slate-50 px-4 py-3"
+              >
+                <!-- Station info -->
+                <div class="flex items-center gap-3">
+                  <div>
+                    <p class="text-xs font-black text-slate-400 uppercase">
+                      {{ s.code_no }}
+                    </p>
+                    <p class="text-sm font-semibold text-slate-700">
+                      {{ s.name }}
+                    </p>
+                  </div>
+                  <span
+                    class="inline-block rounded px-2 py-0.5 text-[10px] font-bold text-white"
+                    :class="{
+                      'bg-blue-500': s.status === 'active',
+                      'bg-amber-500': s.status === 'pending',
+                      'bg-rose-500': s.status === 'inactive',
+                    }"
+                    >{{ s.status }}</span
+                  >
+                </div>
+
+                <!-- Status selector + apply -->
+                <div class="flex items-center gap-2">
+                  <Select
+                    :model-value="statusModal.pendingStatus[s.id] ?? ''"
+                    @update:model-value="
+                      (val) =>
+                        (statusModal.pendingStatus[s.id] = val as
+                          | 'active'
+                          | 'inactive')
+                    "
+                  >
+                    <SelectTrigger class="w-[120px] cursor-pointer text-xs">
+                      <SelectValue placeholder="Change to..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="opt in statusOptions(s.status)"
+                        :key="opt"
+                        :value="opt"
+                        class="cursor-pointer text-xs"
+                      >
+                        {{ opt.charAt(0).toUpperCase() + opt.slice(1) }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    size="sm"
+                    :disabled="
+                      !statusModal.pendingStatus[s.id] || statusForm.processing
+                    "
+                    class="text-xs"
+                    @click="applyStatusChange(s)"
+                  >
+                    {{
+                      statusForm.processing && statusForm.station_id === s.id
+                        ? 'Saving...'
+                        : 'Apply'
+                    }}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Fares (collapsed summary, optional) -->
+            <div v-if="statusModal.fares.length" class="mt-4 space-y-2">
+              <p class="text-[10px] font-black text-slate-400 uppercase">
+                Point-to-Point Fare Rates
+              </p>
+              <StationFareMatrix :fares="statusModal.fares" />
+            </div>
+          </div>
+
+          <DialogFooter class="flex items-center justify-end border-t p-4">
+            <Button variant="outline" @click="closeStatusModal">Close</Button>
           </DialogFooter>
         </div>
       </DialogContent>

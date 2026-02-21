@@ -5,6 +5,7 @@ namespace App\Http\Controllers\SuperAdmin;
 use App\Http\Controllers\Controller;
 use App\Models\Franchise;
 use App\Models\Branch;
+use App\Models\BusStation;
 use App\Models\VehicleType;
 use App\Models\Status;
 use Illuminate\Http\Request;
@@ -104,17 +105,59 @@ class StationController extends Controller
         return $query;
     }
 
-    public function show(Franchise $franchise)
+    public function show(Request $request, int $id)
     {
-        $franchise->loadMissing(['busStations' => function ($q) {
-            $q->select('id', 'franchise_id', 'name', 'code_no', 'latitude', 'longitude', 'status_id')
-            ->with([
-                  'status:id,name',
-                  'fromAmounts.toStation:id,code_no',
-            ])
-            ->orderBy('id');
-        }]);
+        $type = $request->query('type', 'franchise');
 
-        return new StationShowResource($franchise);
+        if ($type === 'branch') {
+            $model = Branch::findOrFail($id);
+            $model->loadMissing([
+                'busStations' => function ($q) {
+                    $q->select('id', 'branch_id', 'name', 'code_no', 'latitude', 'longitude', 'status_id')
+                    ->with(['status:id,name', 'fromAmounts.toStation:id,code_no'])
+                    ->orderBy('id');
+                },
+                'franchise:id,name',
+            ]);
+        } else {
+            $model = Franchise::findOrFail($id);
+            $model->loadMissing([
+                'busStations' => function ($q) {
+                    $q->select('id', 'franchise_id', 'name', 'code_no', 'latitude', 'longitude', 'status_id')
+                    ->with(['status:id,name', 'fromAmounts.toStation:id,code_no'])
+                    ->orderBy('id');
+                },
+            ]);
+        }
+
+        return new StationShowResource($model);
+    }
+
+    public function updateStatus(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'station_id' => ['required', 'integer', 'exists:bus_stations,id'],
+            'status'     => ['required', 'string', Rule::in(['active', 'inactive'])],
+        ]);
+
+        $station = BusStation::where('id', $validated['station_id'])
+            ->where(function ($q) use ($id, $request) {
+                if ($request->query('type') === 'branch') {
+                    $q->where('branch_id', $id);
+                } else {
+                    $q->where('franchise_id', $id);
+                }
+            })
+            ->firstOrFail();
+
+        if ($station->status_id === Status::where('name', $validated['status'])->value('id')) {
+            return back()->withErrors(['status' => 'Station already has this status.']);
+        }
+
+        $station->update([
+            'status_id' => Status::where('name', $validated['status'])->value('id'),
+        ]);
+
+        return back();
     }
 }

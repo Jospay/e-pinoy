@@ -14,17 +14,13 @@ class StationShowResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $isBranch = $this->relationLoaded('franchise');
         $stations = $this->busStations;
 
-        $fareMatrix = [];
-        foreach ($stations as $station) {
-            foreach ($station->fromAmounts as $fare) {
-                $fareMatrix[$station->id][$fare->to_bus_station_id] = $fare->amount;
-            }
-        }
-
         return [
-            'franchise_name' => $this->name,
+            'franchise_name' => $isBranch
+                ? ($this->franchise?->name ?? 'N/A') . ' — ' . $this->name
+                : $this->name,
             'stations' => $stations->map(fn ($s) => [
                 'id'        => $s->id,
                 'name'      => $s->name,
@@ -33,7 +29,6 @@ class StationShowResource extends JsonResource
                 'latitude'  => $s->latitude  ? (float) $s->latitude  : null,
                 'longitude' => $s->longitude ? (float) $s->longitude : null,
             ])->values(),
-            // Flat list of pairs for display
             'fares' => $stations->flatMap(fn ($s) =>
                 $s->fromAmounts->map(fn ($fare) => [
                     'from_id'   => $s->id,
