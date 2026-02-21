@@ -375,7 +375,11 @@ const removeDriverFromFranchise = () => {
     />
 
     <div class="space-y-6 p-6">
-      <Tabs v-model="activeTab" class="w-full">
+      <Tabs
+        v-if="franchiseVehicleTypes.length > 1"
+        v-model="activeTab"
+        class="w-full"
+      >
         <TabsList
           class="w-full justify-start overflow-x-auto bg-muted/50 p-1.5"
         >
