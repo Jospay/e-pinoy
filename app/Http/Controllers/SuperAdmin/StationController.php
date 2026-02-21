@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Franchise;
+use App\Models\Branch;
 use App\Models\VehicleType;
 use App\Models\Status;
 use Illuminate\Http\Request;
@@ -20,12 +21,16 @@ class StationController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
+            'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
             'franchises' => ['sometimes', 'nullable', 'array'],
+            'branches' => ['sometimes', 'nullable', 'array'],
         ]);
 
         // 2. Set defaults
         $filters = [
+            'type' => $validated['type'] ?? 'franchise',
             'franchises' => $validated['franchises'] ?? [],
+            'branches' => $validated['branches'] ?? [],
         ];
 
         // 3. Build and execute query
@@ -37,11 +42,19 @@ class StationController extends Controller
                 ->where('franchise_vehicle_type.status_id', Status::where('name', 'active')->value('id'));
             })
             ->get();
+        
+        $branchList = Branch::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) {
+                $q->where('vehicle_types.name', 'bus')
+                ->where('branch_vehicle_type.status_id', Status::where('name', 'active')->value('id'));
+            })
+            ->get();
 
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/StationIndex', [
             'stations' => StationDatatableResource::collection($stations),
             'franchises' => fn () => $franchiseList,
+            'branches' => fn () => $branchList,
             'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
@@ -55,20 +68,40 @@ class StationController extends Controller
         $activeStatusId = Status::where('name', 'active')->value('id');
         $busVehicleTypeId = VehicleType::where('name', 'bus')->value('id');
 
-        return Franchise::where('status_id', $activeStatusId)
-            ->whereHas('vehicleTypes', function ($q) use ($busVehicleTypeId, $activeStatusId) {
-                $q->where('vehicle_types.id', $busVehicleTypeId)
-                ->where('franchise_vehicle_type.status_id', $activeStatusId);
-            })
-            ->with([
-                'busStations' => function ($q) {
-                    $q->select('id', 'franchise_id', 'code_no', 'status_id')
-                    ->with('status:id,name');
-                }
-            ])
-            ->when(!empty($filters['franchises']), function ($query) use ($filters) {
-                $query->whereIn('id', $filters['franchises']);
-            });
+        if ($filters['type'] === 'franchise') {
+            $query = Franchise::where('status_id', $activeStatusId)
+                ->whereHas('vehicleTypes', function ($q) use ($busVehicleTypeId, $activeStatusId) {
+                    $q->where('vehicle_types.id', $busVehicleTypeId)
+                    ->where('franchise_vehicle_type.status_id', $activeStatusId);
+                })
+                ->with([
+                    'busStations' => function ($q) {
+                        $q->select('id', 'franchise_id', 'code_no', 'status_id')
+                        ->with('status:id,name');
+                    }
+                ])
+                ->when(!empty($filters['franchises']), function ($query) use ($filters) {
+                    $query->whereIn('id', $filters['franchises']);
+                });
+        } else {
+            $query = Branch::where('status_id', $activeStatusId)
+                ->whereHas('vehicleTypes', function ($q) use ($busVehicleTypeId, $activeStatusId) {
+                    $q->where('vehicle_types.id', $busVehicleTypeId)
+                    ->where('branch_vehicle_type.status_id', $activeStatusId);
+                })
+                ->with([
+                    'busStations' => function ($q) {
+                        $q->select('id', 'branch_id', 'code_no', 'status_id')
+                        ->with('status:id,name');
+                    },
+                    'franchise:id,name'
+                ])
+                ->when(!empty($filters['branches']), function ($query) use ($filters) {
+                    $query->whereIn('id', $filters['branches']);
+                });
+        }
+
+        return $query;
     }
 
     public function show(Franchise $franchise)

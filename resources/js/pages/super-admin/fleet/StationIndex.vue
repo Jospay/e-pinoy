@@ -21,6 +21,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
@@ -36,9 +43,12 @@ const props = defineProps<{
     data: stationRow[];
   };
   franchises: { id: number; name: string }[];
+  branches: { id: number; name: string }[];
   vehicleTypes: { id: number; name: string }[];
   filters: {
+    type: 'franchise' | 'branch';
     franchises: string[];
+    branches: string[];
   };
 }>();
 
@@ -58,11 +68,16 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
+const selectedType = ref(props.filters.type || 'franchise');
+const selectedBranches = ref<string[]>(props.filters.branches || []);
 const selectedFranchise = ref<string[]>(props.filters.franchises || []);
 
 // Options for MultiSelect
 const franchiseOptions = computed(() =>
   props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
 );
 
 interface StationModalData {
@@ -110,6 +125,13 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
       accessorKey: 'franchise_name',
       header: 'Franchise',
     },
+  ];
+
+  if (selectedType.value === 'branch') {
+    baseColumns.push({ accessorKey: 'branch_name', header: 'Branch' });
+  }
+
+  baseColumns.push(
     {
       accessorKey: 'stations',
       header: 'Station Codes',
@@ -193,7 +215,7 @@ const stationColumns = computed<ColumnDef<stationRow>[]>(() => {
         ]);
       },
     },
-  ];
+  );
   return baseColumns;
 });
 
@@ -202,7 +224,9 @@ const updateFilters = () => {
   router.get(
     superAdmin.station.index().url,
     {
+      type: selectedType.value,
       franchises: selectedFranchise.value || [],
+      branches: selectedBranches.value || [],
     },
     {
       preserveScroll: true,
@@ -211,7 +235,14 @@ const updateFilters = () => {
   );
 };
 
+watch([selectedType], () => {
+  selectedFranchise.value = [];
+  selectedBranches.value = [];
+  updateFilters();
+});
+
 watch(selectedFranchise, () => {
+  selectedBranches.value = [];
   updateFilters();
 });
 </script>
@@ -226,6 +257,20 @@ watch(selectedFranchise, () => {
           <h2 class="font-mono text-xl font-semibold">Franchise Bus Station</h2>
 
           <div class="flex gap-4">
+            <Select v-model="selectedType">
+              <SelectTrigger class="w-[150px] cursor-pointer">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="franchise" class="cursor-pointer">
+                  Franchise
+                </SelectItem>
+                <SelectItem value="branch" class="cursor-pointer">
+                  Branch
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
             <MultiSelect
               v-model="selectedFranchise"
               :options="franchiseOptions"
@@ -234,6 +279,21 @@ watch(selectedFranchise, () => {
               @change="
                 (val) => {
                   selectedFranchise = val;
+
+                  updateFilters();
+                }
+              "
+            />
+
+            <MultiSelect
+              v-if="selectedType === 'branch'"
+              v-model="selectedBranches"
+              :options="branchOptions"
+              placeholder="Select Branches"
+              all-label="All Branches"
+              @change="
+                (val) => {
+                  selectedBranches = val;
 
                   updateFilters();
                 }

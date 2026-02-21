@@ -25,6 +25,11 @@ class BusStation extends Model
         return $this->belongsTo(Franchise::class);
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
     public function status(): BelongsTo
     {
         return $this->belongsTo(Status::class);

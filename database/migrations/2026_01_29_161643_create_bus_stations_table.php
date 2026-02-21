@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('bus_stations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('franchise_id')->constrained('franchises')->onDelete('cascade');
+            $table->foreignId('franchise_id')->nullable()->constrained('franchises')->onDelete('cascade');
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->onDelete('cascade');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
             $table->string('name', 255)->unique();
             $table->string('code_no', 255)->unique();

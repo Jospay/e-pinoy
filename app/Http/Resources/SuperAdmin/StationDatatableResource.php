@@ -14,6 +14,18 @@ class StationDatatableResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        if ($this->relationLoaded('franchise')) {
+            return [
+                'id'             => $this->id,
+                'branch_name'    => $this->name,
+                'franchise_name' => $this->franchise?->name,
+                'stations'       => $this->busStations->map(fn ($s) => [
+                    'code'   => $s->code_no,
+                    'status' => $s->status?->name ?? 'N/A',
+                ])->values(),
+            ];
+        }
+
         return [
             'id'             => $this->id,
             'franchise_name' => $this->name,

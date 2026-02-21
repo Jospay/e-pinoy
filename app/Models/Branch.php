@@ -90,4 +90,15 @@ class Branch extends Model
     {
         return $this->hasMany(Violation::class);
     }
+
+    public function vehicleTypes(): BelongsToMany
+    {
+        return $this->belongsToMany(VehicleType::class)
+            ->withPivot('status_id');
+    }
+
+    public function busStations(): HasMany
+    {
+        return $this->hasMany(BusStation::class);
+    }
 }
