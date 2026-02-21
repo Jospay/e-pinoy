@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
-import owner from '@/routes/owner';
 import AppLayout from '@/layouts/AppLayout.vue';
+import owner from '@/routes/owner';
 import type { BreadcrumbItem } from '@/types';
+import { Head, useForm } from '@inertiajs/vue3';
 import { Pencil } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 // UI Components
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -16,9 +17,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Lock, CheckCircle2, AlertCircle, Clock } from 'lucide-vue-next';
+import { AlertCircle, CheckCircle2, Clock, Lock } from 'lucide-vue-next';
 
 // Define Props from Controller
 const props = defineProps<{
@@ -66,9 +66,7 @@ const getStatusDetails = (statusId: number) => {
 };
 
 // --- MAP IMPORTS & LOGIC ---
-import LocationBusStation, {
-  type MarkerData,
-} from '@/components/LocationBusStation.vue';
+import LocationMap, { type MarkerData } from '@/components/LocationMap.vue';
 
 // New refs for state management
 const originalLocation = ref<{ lat: string; lng: string } | null>(null);
@@ -424,7 +422,7 @@ const hasPendingOrDenied = computed(() =>
                 <div
                   class="relative mt-2.5 overflow-hidden rounded-xl border-2 border-slate-100"
                 >
-                  <LocationBusStation
+                  <LocationMap
                     :locations="mapMarkers"
                     :selectable="!viewMode"
                     @locationSelected="handleLocationSelected"
