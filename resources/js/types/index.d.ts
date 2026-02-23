@@ -11,6 +11,22 @@ export interface BreadcrumbItem {
   href: string;
 }
 
+export interface Branch {
+  id: number;
+  name: string;
+  franchise_id: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface VehicleType {
+  id: number;
+  name: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface NavItem {
   title: string;
   href: NonNullable<InertiaLinkProps['href']>;

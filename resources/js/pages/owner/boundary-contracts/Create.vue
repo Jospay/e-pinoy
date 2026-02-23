@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import { computed, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 import DatePicker from '@/components/DatePicker.vue';
+import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +16,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import InputError from '@/components/InputError.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
 import { type BreadcrumbItem } from '@/types';
@@ -127,7 +127,7 @@ const submit = () => {
   <Head title="Create Boundary Contract" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="m-6 max-w-4xl rounded-xl border bg-white p-6 shadow-sm">
+    <div class="m-6 max-w-4xl rounded-xl border p-6 shadow-sm">
       <h2 class="mb-6 font-mono text-2xl font-bold">
         Create New Boundary Contract
       </h2>

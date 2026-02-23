@@ -491,16 +491,6 @@ const removeDriverFromFranchise = () => {
               <TableCell>{{ driver.email }}</TableCell>
               <TableCell>
                 <div class="flex flex-col">
-                  <span class="text-sm font-medium">{{
-                    driver.assignment.name || 'Main Franchise'
-                  }}</span>
-                  <span class="text-[10px] text-muted-foreground uppercase">{{
-                    driver.assignment.type
-                  }}</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                <div class="flex flex-col">
                   <span class="text-sm font-medium">
                     {{
                       driver.assignment?.name?.trim()
@@ -511,6 +501,23 @@ const removeDriverFromFranchise = () => {
                   <span class="text-[10px] text-muted-foreground uppercase">
                     {{ driver.assignment?.type || 'franchise' }}
                   </span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <div class="flex flex-wrap gap-1">
+                  <Badge
+                    v-for="vType in driver.vehicle_types"
+                    :key="vType.id"
+                    variant="outline"
+                    class="text-[10px] font-bold uppercase"
+                  >
+                    {{ vType.name }}
+                  </Badge>
+                  <span
+                    v-if="driver.vehicle_types.length === 0"
+                    class="text-xs text-gray-400"
+                    >None</span
+                  >
                 </div>
               </TableCell>
               <TableCell>
