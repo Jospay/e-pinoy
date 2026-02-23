@@ -86,7 +86,9 @@ class BoundaryContractController extends Controller
         $contract->loadMissing([
             'driver.user:id,username,name,email,phone',
             'franchise:id,name,email,phone',
-            'status:id,name'
+            'vehicleTypes' => function ($query) {
+                $query->withPivot('amount', 'status_id');
+            },
         ]);
 
         return new BoundaryContractResource($contract);

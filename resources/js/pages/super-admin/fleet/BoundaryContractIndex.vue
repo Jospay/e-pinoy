@@ -88,6 +88,7 @@ interface ContractModal {
   id: number;
   name: string;
   amount: number;
+  vehicle_type: string;
   coverage_area: string;
   contract_terms: string;
   renewal_terms: string;
@@ -108,6 +109,7 @@ const contractDetails = computed(() => {
 
   return [
     { label: 'Contract', value: data.name, type: 'text' },
+    { label: 'Vehicle Type', value: data.vehicle_type, type: 'text' },
     { label: 'Status', value: data.status_name, type: 'text' },
     { label: 'Amount', value: formatCurrency(data.amount), type: 'text' },
     { label: 'Coverage Area', value: data.coverage_area, type: 'text' },
