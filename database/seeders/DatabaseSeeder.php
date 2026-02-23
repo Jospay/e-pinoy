@@ -98,7 +98,9 @@ class DatabaseSeeder extends Seeder
 
         $this->call(PercentageTypeSeeder::class);
         $this->call(RevenueBreakdownSeeder::class);
-        
+
+        $this->call(BranchSeeder::class);
+
         $this->call(BusStationSeeder::class);
 
         $this->call(InventorySeeder::class);
