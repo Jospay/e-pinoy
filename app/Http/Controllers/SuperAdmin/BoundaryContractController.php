@@ -13,6 +13,8 @@ use App\Models\Vehicle;
 use App\Models\BoundaryContract;
 use App\Models\Franchise;
 use App\Models\UserDriver;
+use App\Models\VehicleType;
+use App\Models\Branch;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
@@ -25,28 +27,31 @@ class BoundaryContractController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
+            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
             'franchise' => ['sometimes', 'nullable', 'array'], 
-            'status' => ['sometimes', 'string', Rule::in(['active', 'pending', 'terminated', 'expired'])],
+            'status' => ['sometimes', 'string', Rule::in(['active', 'pending', 'inactive'])],
         ]);
 
         // 2. Set defaults
         $filters = [
+            'tab' => $validated['tab'] ?? 'taxi',
             'franchise' => $validated['franchise'] ?? [],
             'status' => $validated['status'] ?? 'active',
         ];
 
         // 3. Build and execute query
-        $query = $this->buildBaseQuery($filters);
-        $contracts = $query->get();
+        $contracts = $this->buildBaseQuery($filters)->get();
+        // Pass status map to the resource class statically — 1 query, no N+1
+        BoundaryContractDatatableResource::withStatusMap(
+            Status::all()->keyBy('id')
+        );
 
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/BoundaryContractIndex', [
             'contracts' => BoundaryContractDatatableResource::collection($contracts),
             'franchises' => fn () => Franchise::select('id', 'name')->get(),
-            'filters' => [
-                'franchise' => $filters['franchise'],
-                'status' => $filters['status'],
-            ],
+            'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
+            'filters' => $filters,
         ]);
     }
 
@@ -55,10 +60,19 @@ class BoundaryContractController extends Controller
      */
     private function buildBaseQuery(array $filters): Builder
     {
+        $pivotStatusId = Status::where('name', $filters['status'])->value('id');
+        
         $query = BoundaryContract::with([
+            'vehicleTypes' => function ($q) use ($filters, $pivotStatusId) {
+                    $q->where('vehicle_types.name', $filters['tab'])
+                    ->where('boundary_contract_vehicle_type.status_id', $pivotStatusId)
+                    ->withPivot('amount', 'status_id');
+                },
             'driver.user:id,username',
-            'status:id,name',
-        ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
+        ])->whereHas('vehicleTypes', function ($q) use ($filters, $pivotStatusId) {
+            $q->where('vehicle_types.name', $filters['tab'])
+            ->where('boundary_contract_vehicle_type.status_id', $pivotStatusId);
+        });
 
         $query->whereNotNull('franchise_id')
             ->when(!empty($filters['franchise']), fn ($q) => $q->whereIn('franchise_id', $filters['franchise']))
@@ -73,7 +87,9 @@ class BoundaryContractController extends Controller
         $contract->loadMissing([
             'driver.user:id,username,name,email,phone',
             'franchise:id,name,email,phone',
-            'status:id,name'
+            'vehicleTypes' => function ($query) {
+                $query->withPivot('amount', 'status_id');
+            },
         ]);
 
         return new BoundaryContractResource($contract);
@@ -81,8 +97,24 @@ class BoundaryContractController extends Controller
 
     public function create(): Response
     {
+        // Fetch franchises with their "Active" vehicle types only
+        $franchises = Franchise::select('id', 'name')
+            ->with(['vehicleTypes' => function ($query) {
+                $query->select('vehicle_types.id', 'vehicle_types.name')
+                    ->wherePivot('status_id', function ($q) {
+                        $q->select('id')->from('statuses')->where('name', 'active');
+                    });
+            }])
+            ->get();
+
+        // Fetch branches with their franchise relationship
+        $branches = Branch::select('id', 'franchise_id', 'name')
+            ->with('franchise:id,name')
+            ->get();
+
         return Inertia::render('super-admin/fleet/BoundaryContractCreate', [
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => $franchises,
+            'branches' => $branches,
         ]);
     }
 
@@ -95,7 +127,6 @@ class BoundaryContractController extends Controller
 
         // 1. Get ID of 'active' and 'available' status
         $activeStatusId = Status::where('name', 'active')->value('id');
-        $availableStatusId = Status::where('name', 'available')->value('id');
 
         if (!$activeStatusId) {
             return response()->json(['drivers' => []]);
@@ -115,25 +146,8 @@ class BoundaryContractController extends Controller
             ->get()
             ->map(fn($d) => ['id' => $d->user->id, 'name' => $d->user->name]);
 
-        // 3. Query Vehicles
-        $vehicles = Vehicle::query()
-            ->select('id', 'plate_number', 'brand', 'model')
-            ->where('status_id', $availableStatusId) // Vehicle itself must be available
-            // Check ownership
-            ->where('franchise_id', $entityId)
-            // Check availability (No active contract)
-            ->whereDoesntHave('boundaryContracts', function ($q) use ($activeStatusId) {
-                $q->where('status_id', $activeStatusId);
-            })
-            ->get()
-            ->map(fn($v) => [
-                'id' => $v->id, 
-                'name' => "{$v->plate_number} - {$v->brand} {$v->model}" 
-            ]);
-
         return response()->json([
             'drivers' => $drivers,
-            'vehicles' => $vehicles
         ]);
     }
 
