@@ -14,6 +14,7 @@ use App\Models\BoundaryContract;
 use App\Models\Franchise;
 use App\Models\UserDriver;
 use App\Models\VehicleType;
+use App\Models\Branch;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
@@ -96,8 +97,24 @@ class BoundaryContractController extends Controller
 
     public function create(): Response
     {
+        // Fetch franchises with their "Active" vehicle types only
+        $franchises = Franchise::select('id', 'name')
+            ->with(['vehicleTypes' => function ($query) {
+                $query->select('vehicle_types.id', 'vehicle_types.name')
+                    ->wherePivot('status_id', function ($q) {
+                        $q->select('id')->from('statuses')->where('name', 'active');
+                    });
+            }])
+            ->get();
+
+        // Fetch branches with their franchise relationship
+        $branches = Branch::select('id', 'franchise_id', 'name')
+            ->with('franchise:id,name')
+            ->get();
+
         return Inertia::render('super-admin/fleet/BoundaryContractCreate', [
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => $franchises,
+            'branches' => $branches,
         ]);
     }
 
@@ -110,7 +127,6 @@ class BoundaryContractController extends Controller
 
         // 1. Get ID of 'active' and 'available' status
         $activeStatusId = Status::where('name', 'active')->value('id');
-        $availableStatusId = Status::where('name', 'available')->value('id');
 
         if (!$activeStatusId) {
             return response()->json(['drivers' => []]);
@@ -130,25 +146,8 @@ class BoundaryContractController extends Controller
             ->get()
             ->map(fn($d) => ['id' => $d->user->id, 'name' => $d->user->name]);
 
-        // 3. Query Vehicles
-        $vehicles = Vehicle::query()
-            ->select('id', 'plate_number', 'brand', 'model')
-            ->where('status_id', $availableStatusId) // Vehicle itself must be available
-            // Check ownership
-            ->where('franchise_id', $entityId)
-            // Check availability (No active contract)
-            ->whereDoesntHave('boundaryContracts', function ($q) use ($activeStatusId) {
-                $q->where('status_id', $activeStatusId);
-            })
-            ->get()
-            ->map(fn($v) => [
-                'id' => $v->id, 
-                'name' => "{$v->plate_number} - {$v->brand} {$v->model}" 
-            ]);
-
         return response()->json([
             'drivers' => $drivers,
-            'vehicles' => $vehicles
         ]);
     }
 

@@ -21,16 +21,25 @@ import { toast } from 'vue-sonner';
 
 // Props passed from Controller
 defineProps<{
-  franchises: { id: number; name: string }[];
+  franchises: {
+    id: number;
+    name: string;
+    vehicle_types: [{ id: number; name: string }];
+  }[];
+  branches: {
+    id: number;
+    name: string;
+    franchise_id: number;
+    franchise: { name: string };
+  }[];
 }>();
 
+const contextType = ref<'franchise' | 'branch' | ''>('');
 const selectedEntityId = ref<string>('');
 // drivers
 const availableDrivers = ref<{ id: number; name: string }[]>([]);
 const isLoadingDrivers = ref(false);
-// vehicles
-const availableVehicles = ref<{ id: number; name: string }[]>([]);
-const isLoadingVehicles = ref(false);
+
 
 // Watcher: When the specific ID changes, fetch drivers
 const handleEntityChange = async (newId: any) => {
@@ -50,11 +59,6 @@ const handleEntityChange = async (newId: any) => {
 
   // Set Loading States
   isLoadingDrivers.value = true;
-  isLoadingVehicles.value = true;
-
-  // Clear Lists
-  availableDrivers.value = [];
-  availableVehicles.value = [];
 
   try {
     const response = await axios.get(
@@ -68,13 +72,11 @@ const handleEntityChange = async (newId: any) => {
 
     // Destructure response
     availableDrivers.value = response.data.drivers;
-    availableVehicles.value = response.data.vehicles;
   } catch (error) {
     toast.error('Failed to load available resources.');
     console.error(error);
   } finally {
     isLoadingDrivers.value = false;
-    isLoadingVehicles.value = false;
   }
 };
 
@@ -191,37 +193,6 @@ const breadcrumbs = [
             <InputError :message="form.errors.driver_id" />
           </div>
 
-          <div class="space-y-2">
-            <Label>Assign Vehicle</Label>
-            <Select v-model="form.vehicle_id" :disabled="!form.franchise_id"
-              @update:model-value="form.errors.vehicle_id = ''">
-              <SelectTrigger :class="{
-                'border-red-500': form.errors.vehicle_id,
-              }">
-                <SelectValue :placeholder="isLoadingVehicles ? 'Loading...' : 'Select Vehicle'
-                  " />
-              </SelectTrigger>
-              <SelectContent>
-                <div v-if="availableVehicles.length === 0" class="p-2 text-sm text-gray-500">
-                  {{
-                    isLoadingVehicles
-                      ? 'Loading...'
-                      : 'No available available vehicles found'
-                  }}
-                </div>
-                <SelectItem v-for="vehicle in availableVehicles" :key="vehicle.id" :value="String(vehicle.id)">
-                  {{ vehicle.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-xs text-rose-500" v-if="
-              availableVehicles.length === 0 &&
-              form.franchise_id
-            ">
-              * Only "available" vehicles without assign drivers are shown.
-            </p>
-            <InputError :message="form.errors.vehicle_id" />
-          </div>
         </div>
         <div class="my-4 border-t" />
 
