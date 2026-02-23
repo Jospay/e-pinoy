@@ -225,7 +225,7 @@ const createContract = () => {
         </Button>
       </div>
 
-      <div class="rounded-lg border bg-white">
+      <div class="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -251,10 +251,8 @@ const createContract = () => {
               <TableCell class="font-medium">{{ contract.name }}</TableCell>
               <TableCell>{{ contract.driver_username || '—' }}</TableCell>
               <TableCell>{{ contract.franchise || '—' }}</TableCell>
-              <TableCell class="font-medium text-green-700"
-                >₱{{ contract.amount }}</TableCell
-              >
-              <TableCell class="max-w-[150px] truncate text-gray-600">
+              <TableCell class="font-medium">₱{{ contract.amount }}</TableCell>
+              <TableCell class="max-w-[150px] truncate">
                 {{ contract.coverage_area }}
               </TableCell>
               <TableCell>
@@ -352,7 +350,7 @@ const createContract = () => {
               <div class="text-[10px] font-semibold uppercase ...">
                 {{ key.replace(/_/g, ' ') }}
               </div>
-              <div class="text-gray-900">
+              <div>
                 {{ selectedContract[key] || 'Not provided' }}
               </div>
             </template>

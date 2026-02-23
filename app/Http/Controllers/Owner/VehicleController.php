@@ -4,16 +4,15 @@ namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
+use App\Models\Status;
+use App\Models\VehicleType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class VehicleController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request)
     {
         $franchise = auth()->user()->ownerDetails?->franchises()->first();
 
@@ -22,10 +21,45 @@ class VehicleController extends Controller
         }
 
         $vehicles = $franchise->vehicles()
-            ->with('status')
+            ->with(['status', 'branch', 'vehicleType'])
+            ->when($request->search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('plate_number', 'like', "%{$search}%")
+                      ->orWhere('vin', 'like', "%{$search}%")
+                      ->orWhere('brand', 'like', "%{$search}%")
+                      ->orWhere('model', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->status, function ($query, $status) {
+                $query->whereHas('status', function($q) use ($status) {
+                    $q->where('name', $status);
+                });
+            })
+            ->when($request->branch_id, function ($query, $branchId) {
+                if ($branchId === 'franchise') {
+                    $query->whereNull('branch_id');
+                } elseif ($branchId === 'only_branches') {
+                    $query->whereNotNull('branch_id');
+                } elseif ($branchId !== 'all') {
+                    $query->where('branch_id', $branchId);
+                }
+            })
+            ->when($request->vehicle_type, function ($query, $type) {
+                $query->whereHas('vehicleType', function($q) use ($type) {
+                    $q->where('name', $type);
+                });
+            })
             ->orderByDesc('created_at')
             ->paginate(10)
+            ->withQueryString()
             ->through(function ($vehicle) {
+
+                $orCrValue = $vehicle->or_cr;
+
+                if ($orCrValue && !filter_var($orCrValue, FILTER_VALIDATE_URL)) {
+                    $orCrValue = asset('storage/vehicle_documents/' . $orCrValue);
+                }
+
                 return [
                     'id' => $vehicle->id,
                     'plate_number' => $vehicle->plate_number,
@@ -34,111 +68,91 @@ class VehicleController extends Controller
                     'model' => $vehicle->model,
                     'color' => $vehicle->color,
                     'year' => $vehicle->year,
+                    'capacity' => $vehicle->capacity,
                     'status_id' => $vehicle->status_id,
                     'status_name' => $vehicle->status?->name,
-                    // Return the full URL for the frontend
-                    'or_cr' => $vehicle->or_cr
-                        ? asset('storage/vehicle_documents/' . $vehicle->or_cr)
-                        : null,
+                    'branch_id' => $vehicle->branch_id,
+                    'branch_name' => $vehicle->branch?->name,
+                    'vehicle_type_id' => $vehicle->vehicle_type_id,
+                    'vehicle_type_name' => $vehicle->vehicleType?->name,
+                    'or_cr' => $orCrValue,
                 ];
             });
 
         return Inertia::render('owner/vehicles/Index', [
             'vehicles' => $vehicles,
+            'branches' => $franchise->branches,
+            'statuses' => Status::whereIn('name', ['Available', 'Maintenance'])->get(),
+            'franchiseVehicleTypes' => VehicleType::whereHas('franchises', function($q) use ($franchise) {
+                $q->where('franchise_id', $franchise->id);
+            })->get(),
+            'filters' => $request->only(['search', 'status', 'vehicle_type', 'branch_id']),
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'plate_number' => 'required|string|max:255|unique:vehicles',
-            'vin'          => 'required|string|max:255|unique:vehicles',
-            'brand'        => 'required|string|max:255',
-            'model'        => 'required|string|max:255',
-            'color'        => 'required|string|max:255',
-            'year'         => 'required|integer',
-            'status_id'    => 'required|exists:statuses,id',
-            'or_cr'        => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
+        $request->validate([
+            'plate_number'    => 'required|string|max:255|unique:vehicles',
+            'vin'             => 'required|string|max:255|unique:vehicles',
+            'brand'           => 'required|string|max:255',
+            'model'           => 'required|string|max:255',
+            'color'           => 'required|string|max:255',
+            'year'            => 'required|integer',
+            'capacity'        => 'required|integer|min:1', // Now required for the DB
+            'status_id'       => 'required|exists:statuses,id',
+            'branch_id'       => 'nullable|exists:branches,id',
+            'vehicle_type_id' => 'required|exists:vehicle_types,id',
+            'or_cr'           => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
         ]);
 
         $franchise = auth()->user()->ownerDetails?->franchises()->first();
-        if (!$franchise) {
-            return redirect()->back()->with('error', 'No franchise found.');
-        }
 
-        // 1. Create the record first to get the ID (optional, or use timestamp)
+        // Using except('or_cr') automatically picks up 'capacity' from the request
         $vehicle = new Vehicle($request->except('or_cr'));
         $vehicle->franchise_id = $franchise->id;
 
-        // 2. Handle File Upload using your driver logic
         if ($request->hasFile('or_cr')) {
             $file = $request->file('or_cr');
-            // Using time() + plate_number to ensure uniqueness before ID is generated
-            $filename = time() . '_or_cr_' . str_replace(' ', '_', $request->plate_number) . '.' . $file->getClientOriginalExtension();
-
+            $filename = time() . '_' . $request->plate_number . '.' . $file->getClientOriginalExtension();
             $file->storeAs('vehicle_documents', $filename, 'public');
             $vehicle->or_cr = $filename;
         }
 
         $vehicle->save();
-
         return redirect()->back()->with('success', 'Vehicle created!');
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Vehicle $vehicle)
     {
         $request->validate([
-            'plate_number' => 'required|string|max:255|unique:vehicles,plate_number,' . $vehicle->id,
-            'vin'          => 'required|string|max:255|unique:vehicles,vin,' . $vehicle->id,
-            'brand'        => 'required|string|max:255',
-            'model'        => 'required|string|max:255',
-            'color'        => 'required|string|max:255',
-            'year'         => 'required|integer',
-            'status_id'    => 'required|exists:statuses,id',
-            'or_cr'        => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+            'plate_number'    => 'required|string|max:255|unique:vehicles,plate_number,' . $vehicle->id,
+            'vin'             => 'required|string|max:255|unique:vehicles,vin,' . $vehicle->id,
+            'brand'           => 'required|string|max:255',
+            'model'           => 'required|string|max:255',
+            'color'           => 'required|string|max:255',
+            'year'            => 'required|integer',
+            'capacity'        => 'required|integer|min:1',
+            'status_id'       => 'required|exists:statuses,id',
+            'branch_id'       => 'nullable|exists:branches,id',
+            'vehicle_type_id' => 'required|exists:vehicle_types,id',
+            'or_cr'           => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
         ]);
 
-        // Handle File Update
         if ($request->hasFile('or_cr')) {
-            // Delete old file
             if ($vehicle->or_cr) {
                 Storage::disk('public')->delete('vehicle_documents/' . $vehicle->or_cr);
             }
-
             $file = $request->file('or_cr');
-            $filename = time() . '_or_cr_' . $vehicle->id . '.' . $file->getClientOriginalExtension();
-
+            $filename = time() . '_' . $vehicle->id . '.' . $file->getClientOriginalExtension();
             $file->storeAs('vehicle_documents', $filename, 'public');
             $vehicle->or_cr = $filename;
         }
 
-        // Update other fields
         $vehicle->update($request->only([
-            'plate_number', 'vin', 'brand', 'model', 'color', 'year', 'status_id'
+            'plate_number', 'vin', 'brand', 'model', 'color', 'year', 'capacity', 'status_id', 'branch_id', 'vehicle_type_id'
         ]));
 
-        $vehicle->save();
-
         return redirect()->back()->with('success', 'Vehicle updated!');
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Vehicle $vehicle)
-    {
-        // Clean up the file from storage before deleting the record
-        if ($vehicle->or_cr) {
-            Storage::disk('public')->delete('vehicle_documents/' . $vehicle->or_cr);
-        }
-
-        $vehicle->delete();
-        return redirect()->back()->with('success', 'Vehicle deleted!');
     }
 }
