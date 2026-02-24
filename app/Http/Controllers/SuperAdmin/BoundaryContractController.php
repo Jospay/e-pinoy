@@ -17,6 +17,7 @@ use App\Models\VehicleType;
 use App\Models\Branch;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Carbon\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -131,58 +132,90 @@ class BoundaryContractController extends Controller
 
     public function create(): Response
     {
-        // Fetch franchises with their "Active" vehicle types only
-        $franchises = Franchise::select('id', 'name')
-            ->with(['vehicleTypes' => function ($query) {
-                $query->select('vehicle_types.id', 'vehicle_types.name')
-                    ->wherePivot('status_id', function ($q) {
-                        $q->select('id')->from('statuses')->where('name', 'active');
-                    });
-            }])
-            ->get();
-
-        // Fetch branches with their franchise relationship
-        $branches = Branch::select('id', 'franchise_id', 'name')
-            ->with('franchise:id,name')
-            ->get();
+        $franchises = Franchise::select('id', 'name')->get();
+        $branches   = Branch::select('id', 'name', 'franchise_id')
+                            ->with('franchise:id,name')
+                            ->get();
 
         return Inertia::render('super-admin/fleet/BoundaryContractCreate', [
             'franchises' => $franchises,
-            'branches' => $branches,
+            'branches'   => $branches,
         ]);
     }
 
-    public function getContractResources(Request $request)
+    public function getVehicleTypes(Request $request): JsonResponse
     {
         $request->validate([
+            'type' => ['required', 'string', Rule::in(['franchise', 'branch'])],
             'id'   => ['required', 'integer'],
         ]);
-        $entityId = $request->id;
 
-        // 1. Get ID of 'active' and 'available' status
         $activeStatusId = Status::where('name', 'active')->value('id');
 
-        if (!$activeStatusId) {
+        // Resolve the franchise ID — branch uses its parent franchise
+        $franchiseId = $request->type === 'franchise'
+            ? $request->id
+            : Branch::where('id', $request->id)->value('franchise_id');
+
+        if (! $franchiseId) {
+            return response()->json(['vehicleTypes' => []]);
+        }
+
+        $vehicleTypes = VehicleType::select('id', 'name')
+            ->whereHas('franchises', function ($q) use ($franchiseId, $activeStatusId) {
+                $q->where('franchises.id', $franchiseId)
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->orderBy('id')
+            ->get();
+
+        return response()->json(['vehicleTypes' => $vehicleTypes]);
+    }
+
+    public function getDrivers(Request $request): JsonResponse
+    {
+        $request->validate([
+            'type'            => ['required', 'string', Rule::in(['franchise', 'branch'])],
+            'id'              => ['required', 'integer'],
+            'vehicle_type_id' => ['required', 'integer'],
+        ]);
+
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        if (! $activeStatusId) {
             return response()->json(['drivers' => []]);
         }
 
-        // 2. Query Drivers
         $drivers = UserDriver::with('user:id,name')
-            ->where('status_id', $activeStatusId) // Driver must be active
-            // Check pivot/relationship for franchise ownership
-            ->whereHas('franchises', function ($q) use ($entityId) {
-                $q->where('franchises.id', $entityId);
+            ->where('status_id', $activeStatusId)
+            // Must have the selected vehicle type
+            ->whereHas('vehicleTypes', function ($q) use ($request) {
+                $q->where('vehicle_types.id', $request->vehicle_type_id);
             })
-            // Check availability (No active contract)
+            // Must belong to the selected franchise or branch
+            ->when($request->type === 'franchise', function ($q) use ($request) {
+                $q->whereHas('franchises', fn ($q) =>
+                    $q->where('franchises.id', $request->id)
+                );
+            })
+            ->when($request->type === 'branch', function ($q) use ($request) {
+                $q->whereHas('branches', fn ($q) =>
+                    $q->where('branches.id', $request->id)
+                );
+            })
+            // Must NOT have an active boundary contract (status lives on the pivot)
             ->whereDoesntHave('boundaryContracts', function ($q) use ($activeStatusId) {
-                $q->where('status_id', $activeStatusId);
+                $q->whereHas('vehicleTypes', fn ($q) =>
+                    $q->where('boundary_contract_vehicle_type.status_id', $activeStatusId)
+                );
             })
             ->get()
-            ->map(fn($d) => ['id' => $d->user->id, 'name' => $d->user->name]);
+            ->map(fn ($d) => [
+                'id'   => $d->id,
+                'name' => $d->user->name,
+            ]);
 
-        return response()->json([
-            'drivers' => $drivers,
-        ]);
+        return response()->json(['drivers' => $drivers]);
     }
 
     public function store(StoreBoundaryContractRequest $request)
