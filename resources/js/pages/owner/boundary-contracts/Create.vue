@@ -119,20 +119,36 @@ const submit = () => {
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Driver Assignment</Label>
-            <Select v-model="form.driver_id">
+            <Select v-model="form.driver_id" :disabled="drivers.length === 0">
               <SelectTrigger
                 :class="{ 'border-red-500': form.errors.driver_id }"
               >
-                <SelectValue placeholder="Select Approved Driver" />
+                <SelectValue
+                  :placeholder="
+                    drivers.length > 0
+                      ? 'Select Approved Driver'
+                      : 'No drivers available'
+                  "
+                />
               </SelectTrigger>
+
               <SelectContent>
-                <SelectItem
-                  v-for="driver in drivers"
-                  :key="driver.id"
-                  :value="driver.id.toString()"
+                <template v-if="drivers.length > 0">
+                  <SelectItem
+                    v-for="driver in drivers"
+                    :key="driver.id"
+                    :value="driver.id.toString()"
+                  >
+                    {{ driver.username }}
+                  </SelectItem>
+                </template>
+
+                <div
+                  v-else
+                  class="p-4 text-center text-sm text-muted-foreground"
                 >
-                  {{ driver.username }}
-                </SelectItem>
+                  No approved drivers found.
+                </div>
               </SelectContent>
             </Select>
             <InputError :message="form.errors.driver_id" />
