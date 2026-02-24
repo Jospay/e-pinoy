@@ -50,6 +50,8 @@ class StationController extends Controller
             ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId) {
                 $q->where('vehicle_types.name', 'bus')
                 ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })->when(!empty($filters['franchises']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchises']);
             })
             ->get();
 

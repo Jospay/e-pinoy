@@ -49,17 +49,29 @@ class DriverController extends Controller
         $query = $this->buildBaseQuery($filters);
         $drivers = $query->get();
 
-        $branchesList = Branch::select('id', 'name')
-            ->when(!empty($filters['franchise']), function ($q) use ($filters) {
-                $q->whereIn('franchise_id', $filters['franchise']);
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->get();
+            
+        $branchList = Branch::select('id', 'name', 'franchise_id')
+            ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })->when(!empty($filters['franchises']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchises']);
             })
             ->get();
 
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/DriverIndex', [
             'drivers' => DriverDatatableResource::collection($drivers),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
-            'branches' => $branchesList,
+            'franchises' => $franchiseList,
+            'branches' => $branchList,
             'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
