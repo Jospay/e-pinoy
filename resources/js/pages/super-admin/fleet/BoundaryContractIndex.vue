@@ -45,10 +45,13 @@ const props = defineProps<{
     data: ContractRow[];
   };
   franchises: { id: number; name: string }[];
+  branches: { id: number; name: string }[];
   vehicleTypes: { id: number; name: string }[];
   filters: {
     tab: string;
+    type: 'franchise' | 'branch';
     franchise: string[];
+    branches: string[];
     status: 'active' | 'pending' | 'inactive';
   };
 }>();
@@ -76,12 +79,17 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // --- 4. Setup Reactive State for Filters ---
 const activeTab = ref(props.filters.tab);
+const selectedType = ref(props.filters.type || 'franchise');
 const selectedFranchise = ref<string[]>(props.filters.franchise || []);
+const selectedBranches = ref<string[]>(props.filters.branches || []);
 const selectedStatus = ref(props.filters.status || 'active');
 
 // Options for MultiSelect
 const franchiseOptions = computed(() =>
   props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
 );
 
 interface ContractModal {
@@ -102,6 +110,9 @@ interface ContractModal {
   franchise_name?: string;
   franchise_email?: string;
   franchise_phone?: string;
+  branch_name?: string;
+  branch_email?: string;
+  branch_phone?: string;
 }
 const contractDetails = computed(() => {
   const data = contractModal.data.value;
@@ -124,6 +135,9 @@ const contractDetails = computed(() => {
     { label: 'Franchise Name', value: data.franchise_name, type: 'text' },
     { label: 'Franchise Email', value: data.franchise_email, type: 'text' },
     { label: 'Franchise Phone', value: data.franchise_phone, type: 'text' },
+    { label: 'Branch Name', value: data.branch_name, type: 'text' },
+    { label: 'Branch Email', value: data.branch_email, type: 'text' },
+    { label: 'Branch Phone', value: data.branch_phone, type: 'text' },
   ].filter((item) => item.value);
 });
 
@@ -155,10 +169,15 @@ const contractColumns = computed<ColumnDef<ContractRow>[]>(() => {
       accessorKey: 'driver_username',
       header: 'Driver',
     },
-    {
-      accessorKey: 'franchise_name',
-      header: 'Franchise',
-    },
+  ];
+
+  if (selectedType.value === 'branch') {
+    baseColumns.push({ accessorKey: 'branch_name', header: 'Branch' });
+  } else if (selectedType.value === 'franchise') {
+    baseColumns.push({ accessorKey: 'franchise_name', header: 'Franchise' });
+  }
+
+  baseColumns.push(
     {
       accessorKey: 'amount',
       header: 'Amount',
@@ -232,7 +251,8 @@ const contractColumns = computed<ColumnDef<ContractRow>[]>(() => {
         ]);
       },
     },
-  ];
+  );
+
   return baseColumns;
 });
 
@@ -242,8 +262,10 @@ const updateFilters = () => {
     superAdmin.boundaryContract.index().url,
     {
       tab: activeTab.value,
+      type: selectedType.value,
       status: selectedStatus.value,
       franchise: selectedFranchise.value || [],
+      branches: selectedBranches.value || [],
     },
     {
       preserveScroll: true,
@@ -252,8 +274,14 @@ const updateFilters = () => {
   );
 };
 
-watch([activeTab], () => {
+watch([activeTab, selectedType], () => {
   selectedFranchise.value = [];
+  selectedBranches.value = [];
+  updateFilters();
+});
+
+watch(selectedFranchise, () => {
+  selectedBranches.value = [];
   updateFilters();
 });
 
@@ -294,6 +322,20 @@ watch(
           <h2 class="font-mono text-xl font-semibold">Franchise Contracts</h2>
 
           <div class="flex gap-4">
+            <Select v-model="selectedType">
+              <SelectTrigger class="w-[150px] cursor-pointer">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="franchise" class="cursor-pointer">
+                  Franchise
+                </SelectItem>
+                <SelectItem value="branch" class="cursor-pointer">
+                  Branch
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select v-model="selectedStatus">
               <SelectTrigger class="w-[150px]">
                 <SelectValue placeholder="Filter by..." />
@@ -313,6 +355,21 @@ watch(
               @change="
                 (val) => {
                   selectedFranchise = val;
+
+                  updateFilters();
+                }
+              "
+            />
+
+            <MultiSelect
+              v-if="selectedType === 'branch'"
+              v-model="selectedBranches"
+              :options="branchOptions"
+              placeholder="Select Branches"
+              all-label="All Branches"
+              @change="
+                (val) => {
+                  selectedBranches = val;
 
                   updateFilters();
                 }
