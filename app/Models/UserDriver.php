@@ -104,7 +104,6 @@ class UserDriver extends Model
         return $this->belongsToMany(Branch::class);
     }
 
-    // Do the same for franchises just to be safe
     public function franchises(): BelongsToMany
     {
         return $this->belongsToMany(Franchise::class);
