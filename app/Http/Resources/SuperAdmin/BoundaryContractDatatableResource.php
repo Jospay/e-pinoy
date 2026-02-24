@@ -32,6 +32,7 @@ class BoundaryContractDatatableResource extends JsonResource
             'driver_username' => $this->whenLoaded('driver', $this->driver->user->username),
             'status_name' => $statusName,
             'franchise_name' => $this->whenLoaded('franchise', fn () => $this->franchise?->name),
+            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
             'vehicle_type' => $vehicleType?->name,
         ];
 

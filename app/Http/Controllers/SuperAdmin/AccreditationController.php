@@ -41,10 +41,19 @@ class AccreditationController extends Controller
             Status::all()->keyBy('id')
         );
 
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->get();
+
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/AccreditationIndex', [
             'accreditations' => AccreditationDatatableResource::collection($accreditations),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => fn () => $franchiseList,
             'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);

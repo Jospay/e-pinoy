@@ -46,8 +46,20 @@ class VehicleController extends Controller
         $query = $this->buildBaseQuery($filters);
         $vehicles = $query->get();
 
-        $branchesList = Branch::select('id', 'name')
-            ->when(!empty($filters['franchises']), function ($q) use ($filters) {
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->get();
+            
+        $branchList = Branch::select('id', 'name', 'franchise_id')
+            ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })->when(!empty($filters['franchises']), function ($q) use ($filters) {
                 $q->whereIn('franchise_id', $filters['franchises']);
             })
             ->get();
@@ -55,8 +67,8 @@ class VehicleController extends Controller
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/VehicleIndex', [
             'vehicles' => VehicleDatatableResource::collection($vehicles),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
-            'branches' => $branchesList,
+            'franchises' => $franchiseList,
+            'branches' => $branchList,
             'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);

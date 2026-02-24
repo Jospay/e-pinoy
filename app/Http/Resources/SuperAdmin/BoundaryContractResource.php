@@ -15,12 +15,11 @@ class BoundaryContractResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // Get the first vehicle type
         $vehicleType = $this->vehicleTypes->first();
-        
-        // Fetch the status name based on pivot status_id
         $statusId = $vehicleType?->pivot->status_id;
         $statusName = $statusId ? Status::find($statusId)?->name : 'N/A';
+
+        $isBranch = $this->relationLoaded('branch') && $this->branch;
 
         return [
             'id' => $this->id,
@@ -33,18 +32,27 @@ class BoundaryContractResource extends JsonResource
             'start_date' => $this->start_date ? date('F j, Y', strtotime($this->start_date)) : 'N/A',
             'end_date' => $this->end_date ? date('F j, Y', strtotime($this->end_date)) : 'N/A',
             
+            // Driver Info
             'driver_username' => $this->whenLoaded('driver', fn() => $this->driver->user->username),
             'driver_name' => $this->whenLoaded('driver', fn() => $this->driver->user->name ?? 'N/A'),
             'driver_email' => $this->whenLoaded('driver', fn() => $this->driver->user->email),
             'driver_phone' => $this->whenLoaded('driver', fn() => $this->driver->user->phone),
             
-            // This now pulls from the pivot logic defined above
             'status_name' => $statusName,
             'vehicle_type' => ucfirst($vehicleType?->name),
-            
-            'franchise_name' => $this->whenLoaded('franchise', fn () => $this->franchise?->name),
-            'franchise_email' => $this->whenLoaded('franchise', fn () => $this->franchise?->email),
-            'franchise_phone' => $this->whenLoaded('franchise', fn () => $this->franchise?->phone),
+
+            // Branch Specific Data
+            'branch_name'  => $this->when($isBranch, fn() => $this->branch->name),
+            'branch_email' => $this->when($isBranch, fn() => $this->branch->email),
+            'branch_phone' => $this->when($isBranch, fn() => $this->branch->phone),
+
+            // Franchise Data
+            'franchise_name' => $isBranch 
+                ? $this->branch->franchise?->name 
+                : ($this->franchise?->name ?? 'N/A'),
+
+            'franchise_email' => $this->when(!$isBranch, fn() => $this->franchise?->email),
+            'franchise_phone' => $this->when(!$isBranch, fn() => $this->franchise?->phone),
         ];
     }
 }

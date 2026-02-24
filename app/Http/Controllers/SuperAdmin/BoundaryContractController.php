@@ -28,14 +28,18 @@ class BoundaryContractController extends Controller
         // 1. Validate all filters
         $validated = $request->validate([
             'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
-            'franchise' => ['sometimes', 'nullable', 'array'], 
+            'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
+            'franchises' => ['sometimes', 'nullable', 'array'],
+            'branches' => ['sometimes', 'nullable', 'array'],
             'status' => ['sometimes', 'string', Rule::in(['active', 'pending', 'inactive'])],
         ]);
 
         // 2. Set defaults
         $filters = [
             'tab' => $validated['tab'] ?? 'taxi',
-            'franchise' => $validated['franchise'] ?? [],
+            'type' => $validated['type'] ?? 'franchise',
+            'franchises' => $validated['franchises'] ?? [],
+            'branches' => $validated['branches'] ?? [],
             'status' => $validated['status'] ?? 'active',
         ];
 
@@ -46,10 +50,29 @@ class BoundaryContractController extends Controller
             Status::all()->keyBy('id')
         );
 
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->get();
+            
+        $branchList = Branch::select('id', 'name', 'franchise_id')
+            ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })->when(!empty($filters['franchises']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchises']);
+            })
+            ->get();
+
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/fleet/BoundaryContractIndex', [
             'contracts' => BoundaryContractDatatableResource::collection($contracts),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => $franchiseList,
+            'branches' => $branchList,
             'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
@@ -74,9 +97,18 @@ class BoundaryContractController extends Controller
             ->where('boundary_contract_vehicle_type.status_id', $pivotStatusId);
         });
 
-        $query->whereNotNull('franchise_id')
-            ->when(!empty($filters['franchise']), fn ($q) => $q->whereIn('franchise_id', $filters['franchise']))
-            ->with('franchise:id,name');
+        if ($filters['type'] === 'franchise') {
+            $query->whereNotNull('franchise_id')
+                ->when(!empty($filters['franchises']), fn ($q) => $q->whereIn('franchise_id', $filters['franchises']))
+                ->with('franchise:id,name');
+        } else {
+            $query->whereNotNull('branch_id')
+                ->whereHas('branch.franchise.vehicleTypes', function ($q) use ($filters) {
+                    $q->where('vehicle_types.name', $filters['tab']);
+                })
+                ->when(!empty($filters['branches']), fn ($q) => $q->whereIn('branch_id', $filters['branches']))
+                ->with(['branch:id,name,franchise_id', 'branch.franchise:id,name']);
+        }
 
         return $query;
     }
@@ -85,9 +117,11 @@ class BoundaryContractController extends Controller
     {
         // Load relationships and return as JSON
         $contract->loadMissing([
-            'driver.user:id,username,name,email,phone',
-            'franchise:id,name,email,phone',
-            'vehicleTypes' => function ($query) {
+        'driver.user:id,username,name,email,phone',
+        'franchise:id,name,email,phone', 
+        'branch:id,name,email,phone,franchise_id',
+        'branch.franchise:id,name',
+        'vehicleTypes' => function ($query) {
                 $query->withPivot('amount', 'status_id');
             },
         ]);
