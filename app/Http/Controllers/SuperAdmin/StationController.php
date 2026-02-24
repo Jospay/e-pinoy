@@ -37,17 +37,19 @@ class StationController extends Controller
         // 3. Build and execute query
         $stations = $this->buildBaseQuery($filters)->get();
 
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
         $franchiseList = Franchise::select('id', 'name')
-            ->whereHas('vehicleTypes', function ($q) {
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId) {
                 $q->where('vehicle_types.name', 'bus')
-                ->where('franchise_vehicle_type.status_id', Status::where('name', 'active')->value('id'));
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
             })
             ->get();
         
-        $branchList = Branch::select('id', 'name')
-            ->whereHas('vehicleTypes', function ($q) {
+        $branchList = Branch::select('id', 'name', 'franchise_id')
+            ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId) {
                 $q->where('vehicle_types.name', 'bus')
-                ->where('branch_vehicle_type.status_id', Status::where('name', 'active')->value('id'));
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
             })
             ->get();
 
@@ -86,9 +88,9 @@ class StationController extends Controller
                 });
         } else {
             $query = Branch::where('status_id', $activeStatusId)
-                ->whereHas('vehicleTypes', function ($q) use ($busVehicleTypeId, $activeStatusId) {
+                ->whereHas('franchise.vehicleTypes', function ($q) use ($busVehicleTypeId, $activeStatusId) {
                     $q->where('vehicle_types.id', $busVehicleTypeId)
-                    ->where('branch_vehicle_type.status_id', $activeStatusId);
+                    ->where('franchise_vehicle_type.status_id', $activeStatusId);
                 })
                 ->with([
                     'busStations' => function ($q) {
