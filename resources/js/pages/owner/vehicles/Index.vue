@@ -129,10 +129,12 @@ watch(
 
 const breadcrumbs = [{ title: 'Vehicle Management', href: '/owner/vehicles' }];
 
-// Filters
+// --- FILTERS LOGIC ---
 const globalFilter = ref(props.filters?.search || '');
 const statusFilter = ref(props.filters?.status || 'all');
 const branchFilter = ref(props.filters?.branch_id?.toString() || 'all');
+
+// Use props.filters.vehicle_type as the primary source of truth for the active tab
 const activeTab = ref(
   props.filters?.vehicle_type || props.franchiseVehicleTypes[0]?.name || '',
 );
@@ -150,11 +152,19 @@ const updateFilters = debounce(() => {
   );
 }, 300);
 
-watch([statusFilter, activeTab, globalFilter, branchFilter], () =>
-  updateFilters(),
+// Sync filters when inputs change
+watch(
+  [statusFilter, activeTab, globalFilter, branchFilter],
+  (newVals, oldVals) => {
+    // Only trigger router if values actually changed to avoid double-loading on mount
+    const hasChanged = newVals.some((val, i) => val !== oldVals[i]);
+    if (hasChanged) {
+      updateFilters();
+    }
+  },
 );
 
-// State
+// --- STATE & DIALOGS ---
 const isSaving = ref(false);
 const deletingId = ref<number | null>(null);
 const selectedVehicleToDelete = ref<Vehicle | null>(null);
@@ -162,7 +172,6 @@ const or_cr_file = ref<File | null>(null);
 
 const filteredVehicles = computed(() => paginator.value.data);
 
-// Dialogs
 const showDialog = ref(false);
 const dialogMode = ref<'create' | 'edit'>('create');
 const editingVehicle = ref<Vehicle | null>(null);
@@ -186,11 +195,10 @@ const openCreateDialog = () => {
   year.value = undefined;
   capacity.value = undefined;
 
-  // Default to ID 15 (Available)
-  statusId.value = '15';
+  statusId.value = '15'; // Default to ID 15 (Available)
   branchId.value = 'franchise';
 
-  // Logic for Vehicle Type: Automatic if only 1, otherwise set by tab
+  // Set vehicle type based on current active tab
   if (props.franchiseVehicleTypes.length === 1) {
     vehicleTypeId.value = props.franchiseVehicleTypes[0].id.toString();
   } else {

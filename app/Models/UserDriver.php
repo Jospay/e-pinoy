@@ -101,24 +101,30 @@ class UserDriver extends Model
     }
 
     // Find this function at the bottom of UserDriver.php and replace it:
-public function branches(): BelongsToMany
-{
-    return $this->belongsToMany(
-        Branch::class,
-        'branch_user_driver', // Your actual table name
-        'user_driver_id',     // The FK for this model
-        'branch_id'           // The FK for the Branch model
-    );
-}
+    public function branches(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Branch::class,
+            'branch_user_driver', // Your actual table name
+            'user_driver_id',     // The FK for this model
+            'branch_id'           // The FK for the Branch model
+        );
+    }
 
-// Do the same for franchises just to be safe
-public function franchises(): BelongsToMany
-{
-    return $this->belongsToMany(
-        Franchise::class,
-        'franchise_user_driver',
-        'user_driver_id',
-        'franchise_id'
-    );
-}
+    // Do the same for franchises just to be safe
+    public function franchises(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Franchise::class,
+            'franchise_user_driver',
+            'user_driver_id',
+            'franchise_id'
+        );
+    }
+
+    // app/Models/UserDriver.php
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }

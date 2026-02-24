@@ -12,7 +12,7 @@ use Inertia\Inertia;
 
 class VehicleController extends Controller
 {
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $franchise = auth()->user()->ownerDetails?->franchises()->first();
 
@@ -20,21 +20,32 @@ class VehicleController extends Controller
             abort(404, 'Franchise not found');
         }
 
+        // 1. Get vehicle types first to establish the default filter
+        $franchiseVehicleTypes = VehicleType::whereHas('franchises', function($q) use ($franchise) {
+            $q->where('franchise_id', $franchise->id);
+        })->get();
+
+        // 2. Set the default vehicle type if none is provided in the request
+        $selectedType = $request->vehicle_type ?: $franchiseVehicleTypes->first()?->name;
+
         $vehicles = $franchise->vehicles()
             ->with(['status', 'branch', 'vehicleType'])
+            // Filter: Search
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('plate_number', 'like', "%{$search}%")
-                      ->orWhere('vin', 'like', "%{$search}%")
-                      ->orWhere('brand', 'like', "%{$search}%")
-                      ->orWhere('model', 'like', "%{$search}%");
+                    ->orWhere('vin', 'like', "%{$search}%")
+                    ->orWhere('brand', 'like', "%{$search}%")
+                    ->orWhere('model', 'like', "%{$search}%");
                 });
             })
+            // Filter: Status
             ->when($request->status, function ($query, $status) {
-                $query->whereHas('status', function($q) use ($status) {
-                    $q->where('name', $status);
-                });
+                if ($status !== 'all') {
+                    $query->whereHas('status', fn($q) => $q->where('name', $status));
+                }
             })
+            // Filter: Branch
             ->when($request->branch_id, function ($query, $branchId) {
                 if ($branchId === 'franchise') {
                     $query->whereNull('branch_id');
@@ -44,18 +55,15 @@ class VehicleController extends Controller
                     $query->where('branch_id', $branchId);
                 }
             })
-            ->when($request->vehicle_type, function ($query, $type) {
-                $query->whereHas('vehicleType', function($q) use ($type) {
-                    $q->where('name', $type);
-                });
+            // Filter: Vehicle Type (Always applied now)
+            ->when($selectedType, function ($query, $type) {
+                $query->whereHas('vehicleType', fn($q) => $q->where('name', $type));
             })
             ->orderByDesc('created_at')
             ->paginate(10)
             ->withQueryString()
             ->through(function ($vehicle) {
-
                 $orCrValue = $vehicle->or_cr;
-
                 if ($orCrValue && !filter_var($orCrValue, FILTER_VALIDATE_URL)) {
                     $orCrValue = asset('storage/vehicle_documents/' . $orCrValue);
                 }
@@ -83,10 +91,13 @@ class VehicleController extends Controller
             'vehicles' => $vehicles,
             'branches' => $franchise->branches,
             'statuses' => Status::whereIn('name', ['Available', 'Maintenance'])->get(),
-            'franchiseVehicleTypes' => VehicleType::whereHas('franchises', function($q) use ($franchise) {
-                $q->where('franchise_id', $franchise->id);
-            })->get(),
-            'filters' => $request->only(['search', 'status', 'vehicle_type', 'branch_id']),
+            'franchiseVehicleTypes' => $franchiseVehicleTypes,
+            'filters' => [
+                'search' => $request->search,
+                'status' => $request->status ?? 'all',
+                'branch_id' => $request->branch_id ?? 'all',
+                'vehicle_type' => $selectedType,
+            ],
         ]);
     }
 
@@ -99,7 +110,7 @@ class VehicleController extends Controller
             'model'           => 'required|string|max:255',
             'color'           => 'required|string|max:255',
             'year'            => 'required|integer',
-            'capacity'        => 'required|integer|min:1', // Now required for the DB
+            'capacity'        => 'required|integer|min:1',
             'status_id'       => 'required|exists:statuses,id',
             'branch_id'       => 'nullable|exists:branches,id',
             'vehicle_type_id' => 'required|exists:vehicle_types,id',
