@@ -41,7 +41,7 @@ defineProps<{
         <tr
           v-for="fare in fares"
           :key="`${fare.from_id}-${fare.to_id}`"
-          class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
+          class="border-b border-slate-100 last:border-b-0"
         >
           <td class="border-r border-slate-200 p-2 font-bold">
             {{ fare.from_code }}
