@@ -15,10 +15,15 @@ const props = defineProps<{
     data: MarkerData[];
   };
   franchises: { id: number; name: string }[];
+  branches: { id: number; name: string }[];
+  vehicleTypes: { id: number; name: string }[];
   drivers: { id: number; username: string }[];
   filters: {
-    franchise: string[];
-    driver: string[];
+    tab: string;
+    type: 'franchise' | 'branch';
+    franchises: string[];
+    branches: string[];
+    drivers: string[];
   };
 }>();
 
@@ -31,17 +36,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
-const selectedFranchise = ref<string[]>(props.filters.franchise || []);
-const selectedDriver = ref<string[]>(props.filters.driver || []);
+const activeTab = ref(props.filters.tab);
+const selectedType = ref(props.filters.type || 'franchise');
+const selectedFranchises = ref<string[]>(props.filters.franchises || []);
+const selectedBranches = ref<string[]>(props.filters.branches || []);
+const selectedDrivers = ref<string[]>(props.filters.drivers || []);
 
-const selectedContext = computed({
-  get: () =>
-    selectedFranchise.value,
-  set: (val: string[]) => {
-    selectedFranchise.value = val;
-    selectedDriver.value = [];
-  },
-});
+// Options for MultiSelect
+const franchiseOptions = computed(() =>
+  props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
+);
 
 // Mapping options for the MultiSelect
 const driverOptions = computed(() =>
@@ -83,8 +90,8 @@ const refreshMapMarkers = () => {
     only: ['mapMarkers'], // Only fetch the markers, ignore dropdown lists
     // Explicitly pass current filters to ensure the backend query is accurate
     data: {
-      franchise: selectedFranchise.value || [],
-      driver: selectedDriver.value,
+      franchise: selectedFranchises.value || [],
+      driver: selectedDrivers.value,
     },
     onSuccess: () => {
       console.log('GPS positions updated');
@@ -120,8 +127,10 @@ const updateFilters = () => {
   router.get(
     superAdmin.gpsTracker.index().url,
     {
-      driver: selectedDriver.value,
-      franchise: selectedFranchise.value || [],
+      tab: activeTab.value,
+      type: selectedType.value,
+      franchises: selectedFranchises.value || [],
+      branches: selectedBranches.value || [],
     },
     {
       preserveScroll: true,
@@ -129,65 +138,117 @@ const updateFilters = () => {
     },
   );
 };
+
+watch([activeTab, selectedType], () => {
+  selectedFranchises.value = [];
+  selectedBranches.value = [];
+  updateFilters();
+});
+
+watch(selectedFranchises, () => {
+  selectedBranches.value = [];
+  updateFilters();
+});
 </script>
 
 <template>
-
   <Head title="Gps Monitoring" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-      <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
+    <div
+      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
+    >
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
+          <TabsTrigger
+            v-for="type in vehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="cursor-pointer px-8 py-2 font-semibold capitalize"
+            :class="{ 'pointer-events-none': activeTab === type.name }"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div
+        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
+      >
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">
-            Franchise Monitoring
+          <h2 class="font-mono text-xl font-semibold capitalize">
+            {{ selectedType }} Monitoring
           </h2>
 
           <div class="flex gap-4">
-            <MultiSelect v-model="selectedDriver" :options="driverOptions" placeholder="Select Drivers"
-              all-label="All Drivers" @change="updateFilters" />
+            <MultiSelect
+              v-model="selectedDrivers"
+              :options="driverOptions"
+              placeholder="Select Drivers"
+              all-label="All Drivers"
+              @change="updateFilters"
+            />
 
-            <MultiSelect v-model="selectedContext" :options="contextOptions" placeholder="Select Franchises" all-label="
-                All Franchises
-              " @change="
+            <MultiSelect
+              v-model="selectedFranchises"
+              :options="franchiseOptions"
+              placeholder="Select Franchises"
+              all-label="All Franchises"
+              @change="
                 (val) => {
-                  selectedFranchise = val;
+                  selectedFranchises = val;
+
                   updateFilters();
                 }
-              " />
+              "
+            />
           </div>
         </div>
 
         <div class="w-full rounded-lg border shadow-sm">
-          <LeafletMap :locations="props.mapMarkers.data" :fit-bounds="props.mapMarkers.data.length > 0">
+          <LeafletMap
+            :locations="props.mapMarkers.data"
+            :fit-bounds="props.mapMarkers.data.length > 0"
+          >
             <template #popup="{ item }">
               <div class="min-w-[150px] space-y-2 p-1">
                 <div class="border-b pb-1">
                   <h3 class="text-sm text-gray-500">
-                    {{ item.franchise_name }}
+                    {{ item.franchise_name ?? item.branch_name }}
                   </h3>
                 </div>
                 <div class="flex items-center justify-between gap-2">
                   <h3 class="font-bold text-gray-900">
                     {{ item.username }}
                   </h3>
-                  <Badge :class="[
-                    item.isOnline
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700',
-                  ]">
+                  <Badge
+                    :class="[
+                      item.isOnline
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-700',
+                    ]"
+                  >
                     {{ item.isOnline ? 'Online' : 'Offline' }}
                   </Badge>
                 </div>
                 <div v-if="!item.isOnline">
-                  <span class="font-mono text-xs text-rose-600">driver last seen is here</span>
+                  <span class="font-mono text-xs text-rose-600"
+                    >driver last seen is here</span
+                  >
                 </div>
-                <div class="flex items-center gap-2">
+
+                <div class="flex items-center justify-between gap-2">
                   <span class="font-semibold text-gray-600">Plate No:</span>
-                  <span
-                    class="inline-block rounded bg-blue-100 px-1.5 py-0.5 font-mono text-sm font-semibold text-blue-700">
-                    {{ item.plate_number }}
-                  </span>
+                  <div class="flex items-center space-x-1">
+                    <span
+                      class="inline-block rounded bg-blue-100 px-1.5 py-0.5 font-mono text-sm font-semibold text-blue-700"
+                    >
+                      {{ item.plate_number }}
+                    </span>
+                    <Badge variant="secondary">
+                      {{ item.vehicle_type }}
+                    </Badge>
+                  </div>
                 </div>
               </div>
             </template>
