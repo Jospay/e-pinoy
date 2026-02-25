@@ -35,11 +35,16 @@ class StoreBoundaryContractRequest extends FormRequest
             'contract_terms' => ['required', 'string', 'max:1000'],
             'renewal_terms' => ['required', 'string', 'max:1000'],
             
-            // LOGIC: Ensure exactly one is present Franchise
             'franchise_id' => [
-                'required',
+                'nullable',
                 'integer',
                 'exists:franchises,id'
+            ],
+
+            'branch_id' => [
+                'nullable',
+                'integer',
+                'exists:branches,id'
             ],
 
             // LOGIC: Driver validation
@@ -51,9 +56,11 @@ class StoreBoundaryContractRequest extends FormRequest
                 function ($attribute, $value, $fail) {
                     $activeStatusId = Status::where('name', 'active')->value('id');
 
-                    // 1. Check if Driver has an existing Active Contract
+                    // 1. Check if Driver has an existing Active Contract through pivot
                     $hasActiveContract = BoundaryContract::where('driver_id', $value)
-                        ->where('status_id', $activeStatusId)
+                        ->whereHas('vehicleTypes', function ($q) use ($activeStatusId) {
+                            $q->where('boundary_contract_vehicle_type.status_id', $activeStatusId);
+                        })
                         ->exists();
 
                     if ($hasActiveContract) {
@@ -75,46 +82,55 @@ class StoreBoundaryContractRequest extends FormRequest
                             ->where('franchise_id', $this->franchise_id)
                             ->where('user_driver_id', $value)
                             ->exists();
+                    } elseif ($this->branch_id) {
+                        $existsInEntity = DB::table('branch_user_driver')
+                            ->where('branch_id', $this->branch_id)
+                            ->where('user_driver_id', $value)
+                            ->exists();
                     }
 
                     if (!$existsInEntity) {
-                        $fail('The selected driver does not belong to the selected franchise.');
+                        $fail('The selected driver does not belong to the selected franchise or branch.');
                     }
                 },
             ],
 
-            // LOGIC: Vehicle validation
-            'vehicle_id' => [
+            // LOGIC: Vehicle type validation
+            'vehicle_type_id' => [
                 'required',
                 'integer',
-                'exists:vehicles,id',
-                // Custom rule: Available Status + Belongs to Entity + No Active Contract
+                'exists:vehicle_types,id',
                 function ($attribute, $value, $fail) {
-                    $availableStatusId = Status::where('name', 'available')->value('id');
                     $activeStatusId = Status::where('name', 'active')->value('id');
 
-                    // 1. Check ownership
-                    $vehicle = Vehicle::find($value);
-                    if ($this->franchise_id && $vehicle->franchise_id != $this->franchise_id) {
-                        $fail('The selected vehicle does not belong to this franchise.');
-                        return;
+                    // 1. Check if Vehicle Type is connected to franchise / branch
+                    $existsInEntity = false;
+                    if ($this->franchise_id) {
+                        $existsInEntity = DB::table('franchise_vehicle_type')
+                            ->where('franchise_id', $this->franchise_id)
+                            ->where('vehicle_type_id', $value)
+                            ->where('status_id', $activeStatusId)
+                            ->exists();
+                    } elseif ($this->branch_id) {
+                        $existsInEntity = DB::table('branch_vehicle_type')
+                            ->where('branch_id', $this->branch_id)
+                            ->where('vehicle_type_id', $value)
+                            ->where('status_id', $activeStatusId)
+                            ->exists();
                     }
 
-                    // 2. Check Availability (Is it already in an active contract?)
-                    $hasActiveContract = BoundaryContract::where('vehicle_id', $value)
-                        ->where('status_id', $activeStatusId)
-                        ->exists();
-
-                    if ($hasActiveContract) {
-                        $fail('The selected vehicle is currently assigned to another active contract.');
+                    if (!$existsInEntity) {
+                        $fail('The selected vehicle type does not belong to the selected franchise or branch.');
                     }
 
-                    $hasAvailableStatus = Vehicle::where('id', $value)
-                        ->where('status_id', $availableStatusId)
+                    // 2. Check if Vehicle Type is connected to driver
+                    $existsInEntity = DB::table('user_driver_vehicle_type')
+                        ->where('user_driver_id', $this->driver_id)
+                        ->where('vehicle_type_id', $value)
                         ->exists();
 
-                    if (!$hasAvailableStatus) {
-                        $fail('The selected vehicle is not available.');
+                    if (!$existsInEntity) {
+                        $fail('The selected vehicle type is not connected to the selected driver.');
                     }
                 },
             ],

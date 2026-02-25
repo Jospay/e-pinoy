@@ -73,8 +73,8 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/boundary-contract', [BoundaryContractController::class, 'index'])->name('boundaryContract.index');
     Route::post('/boundary-contract', [BoundaryContractController::class, 'store'])->name('boundaryContract.store');
     Route::get('/boundary-contract/create', [BoundaryContractController::class, 'create'])->name('boundaryContract.create');
-    Route::get('boundary-contract/vehicle-types', [BoundaryContractController::class, 'getVehicleTypes'])->name('boundaryContract.vehicleTypes');
-    Route::get('boundary-contract/drivers', [BoundaryContractController::class, 'getDrivers'])->name('boundaryContract.drivers');
+    Route::get('/boundary-contract/vehicle-types', [BoundaryContractController::class, 'getVehicleTypes'])->name('boundaryContract.vehicleTypes');
+    Route::get('/boundary-contract/drivers', [BoundaryContractController::class, 'getDrivers'])->name('boundaryContract.drivers');
     Route::get('/boundary-contract/{contract}', [BoundaryContractController::class, 'show'])->name('boundaryContract.show');
 
     Route::get('/gps-tracker', [GpsTrackerController::class, 'index'])->name('gpsTracker.index');
