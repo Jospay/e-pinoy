@@ -46,6 +46,10 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::get('bus-station', [BusStationController::class, 'index'])->name('busstationmanagement');
         Route::post('bus-station', [BusStationController::class, 'store'])->name('busstationmanagement.store');
         Route::put('bus-station/{busStation}', [BusStationController::class, 'update'])->name('busstationmanagement.update');
+        // Schedules
+        Route::post('bus-station/schedule', [BusStationController::class, 'storeSchedule'])->name('bus-station.schedule.store');
+        Route::put('bus-station/schedule/{schedule}', [BusStationController::class, 'updateSchedule'])->name('bus-station.schedule.update');
+        Route::delete('bus-station/schedule/{schedule}', [BusStationController::class, 'deleteSchedule'])->name('bus-station.schedule.delete');
 
         // export for driver
         Route::get('/earning', [ReportDriverController::class, 'index'])->name('driverownerreport');
