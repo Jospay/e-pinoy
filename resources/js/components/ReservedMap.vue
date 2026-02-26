@@ -62,7 +62,7 @@ function onMapReady() {
 </script>
 
 <template>
-  <div class="relative h-[300px] w-full rounded-lg border-gray-200 bg-slate-50">
+  <div class="relative h-[200px] w-full rounded-lg border-gray-200 bg-slate-50">
     <l-map
       ref="map"
       :center="center ?? [14.5995, 120.9842]"
