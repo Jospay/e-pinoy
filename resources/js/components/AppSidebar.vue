@@ -435,7 +435,7 @@ const navConfig: Record<string, NavItem[]> = {
 
   passenger: [
     {
-      title: 'Dashboard',
+      title: 'Available Terminals',
       href: passenger.dashboard(),
       icon: LayoutGrid,
       group: 'Overview',

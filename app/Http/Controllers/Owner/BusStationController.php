@@ -5,57 +5,124 @@ namespace App\Http\Controllers\Owner;
 use App\Http\Controllers\Controller;
 use App\Models\BusStation;
 use App\Models\StationAmount;
+use App\Models\StationSchedule;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
-use Inertia\Response;
 
 class BusStationController extends Controller
 {
-
-
-   public function index(): Response | \Illuminate\Http\RedirectResponse
+    public function index(Request $request)
     {
-        $franchise = $this->getFranchiseOrDefault();
+        $franchise = auth()->user()->ownerDetails?->franchises()->first();
         $franchiseId = $franchise?->id;
 
-        // Check if the franchise is active for Bus (Type 2)
-        $hasAccess = $franchiseId && \DB::table('franchise_vehicle_type')
-            ->where('franchise_id', $franchiseId)
-            ->where('vehicle_type_id', 2)
-            ->where('status_id', 1)
+        $hasAccess = $franchiseId && DB::table('franchise_vehicle_type')
+            ->where(['franchise_id' => $franchiseId, 'vehicle_type_id' => 2, 'status_id' => 1])
             ->exists();
 
-        if ($hasAccess) {
-            $stations = BusStation::where('franchise_id', $franchiseId)
-                ->with(['toAmounts' => function($query) {
-                    $query->select('to_bus_station_id', 'amount');
-                }])
-                ->orderBy('id', 'asc')
-                ->get()
-                ->map(function ($station) {
-                    return [
-                        'id' => $station->id,
-                        'name' => $station->name,
-                        'code_no' => $station->code_no,
-                        'lat' => (string)$station->latitude,
-                        'lng' => (string)$station->longitude,
-                        'status_id' => $station->status_id,
-                        'amount' => $station->toAmounts->first()?->amount ?? 0,
-                    ];
-                });
-
-            return Inertia::render('owner/bus-station/Index', [
-                'stations' => $stations,
-                'franchise_id' => $franchiseId
-            ]);
+        if (!$hasAccess) {
+            return redirect()->route('owner.dashboard')->with('error', 'Access disabled.');
         }
 
-        return redirect()->route('owner.dashboard')->with('error', 'Bus Station access is disabled.');
+        $stations = BusStation::where('franchise_id', $franchiseId)
+            ->with(['schedules', 'toAmounts'])
+            ->orderBy('id', 'asc')
+            ->get()
+            ->map(function($s) {
+                $amountRecord = $s->toAmounts->first();
+
+                return [
+                    'id' => $s->id,
+                    'name' => $s->name,
+                    'code_no' => $s->code_no,
+                    'lat' => (string)$s->latitude,
+                    'lng' => (string)$s->longitude,
+                    'status_id' => (int)$s->status_id,
+                    'amount' => $amountRecord?->amount ?? 0,
+                    'station_amount_id' => $amountRecord?->id ?? null,
+                    'schedules' => $s->schedules->map(function($sched) {
+                        return [
+                            'id' => $sched->id,
+                            'bus_station_id' => $sched->bus_station_id,
+                            // Native PHP date formatting instead of Carbon
+                            'to_time' => date('H:i', strtotime($sched->to_time)),
+                            'from_time' => date('H:i', strtotime($sched->from_time)),
+                        ];
+                    })->toArray(),
+                ];
+            });
+
+        return Inertia::render('owner/bus-station/Index', [
+            'stations' => $stations,
+            'franchise_id' => $franchiseId,
+            'activeTab' => $request->query('tab', 'stations')
+        ]);
     }
 
-    protected function getFranchiseOrDefault()
+    public function storeSchedule(Request $request)
     {
-        return auth()->user()->ownerDetails?->franchises()->first();
+        $validated = $request->validate([
+            'bus_station_id' => 'required|exists:bus_stations,id',
+            'from_time' => 'required',
+            'to_time' => 'required',
+        ]);
+
+        // Native PHP comparison: Convert "HH:mm" to integer for easy comparison
+        $arrive = (int) str_replace(':', '', $validated['to_time']);
+        $depart = (int) str_replace(':', '', $validated['from_time']);
+
+        if ($arrive > $depart) {
+            return redirect()->back()->withErrors(['to_time' => 'Arrival must be before departure.']);
+        }
+
+        $exists = StationSchedule::where('bus_station_id', $validated['bus_station_id'])
+            ->where(function($query) use ($validated) {
+                $query->where('from_time', '<', $validated['from_time'])
+                      ->where('to_time', '>', $validated['to_time']);
+            })->exists();
+
+        if ($exists) {
+            return redirect()->back()->withErrors(['from_time' => 'This time slot overlaps with an existing schedule.']);
+        }
+
+        StationSchedule::create($validated);
+        return redirect()->back()->with('success', 'Station time added.');
+    }
+
+    public function updateSchedule(Request $request, StationSchedule $schedule)
+    {
+        $validated = $request->validate([
+            'from_time' => 'required',
+            'to_time' => 'required',
+        ]);
+
+        $arrive = (int) str_replace(':', '', $validated['to_time']);
+        $depart = (int) str_replace(':', '', $validated['from_time']);
+
+        if ($arrive > $depart) {
+            return redirect()->back()->withErrors(['to_time' => 'Arrival must be before departure.']);
+        }
+
+        $exists = StationSchedule::where('bus_station_id', $schedule->bus_station_id)
+            ->where('id', '!=', $schedule->id)
+            ->where(function($query) use ($validated) {
+                $query->where('from_time', '<', $validated['from_time'])
+                      ->where('to_time', '>', $validated['to_time']);
+            })->exists();
+
+        if ($exists) {
+            return redirect()->back()->withErrors(['from_time' => 'This time slot overlaps with another.']);
+        }
+
+        $schedule->update($validated);
+        return redirect()->back()->with('success', 'Station time updated.');
+    }
+
+    public function deleteSchedule(StationSchedule $schedule)
+    {
+        $schedule->delete();
+        return redirect()->back()->with('success', 'Schedule deleted.');
     }
 
     public function store(Request $request)
@@ -63,8 +130,8 @@ class BusStationController extends Controller
         $validated = $request->validate([
             'name' => 'required|unique:bus_stations,name',
             'code_no' => 'required|unique:bus_stations,code_no',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
             'amount' => 'required|numeric|min:0',
             'franchise_id' => 'required|exists:franchises,id',
             'previous_station_id' => 'nullable|exists:bus_stations,id',
@@ -79,7 +146,6 @@ class BusStationController extends Controller
             'longitude' => $validated['longitude'],
         ]);
 
-        // Only create fare amount if there is a sequence (Station B, C, etc.)
         if ($validated['previous_station_id']) {
             StationAmount::create([
                 'from_bus_station_id' => $validated['previous_station_id'],
@@ -88,7 +154,7 @@ class BusStationController extends Controller
             ]);
         }
 
-        return redirect()->back();
+        return redirect()->back()->with('success', 'Station created.');
     }
 
     public function update(Request $request, BusStation $busStation)
@@ -96,8 +162,8 @@ class BusStationController extends Controller
         $validated = $request->validate([
             'name' => 'required|unique:bus_stations,name,' . $busStation->id,
             'code_no' => 'required|unique:bus_stations,code_no,' . $busStation->id,
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
             'amount' => 'required|numeric|min:0',
         ]);
 
@@ -108,7 +174,7 @@ class BusStationController extends Controller
             'code_no' => $validated['code_no'],
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
-            'status_id' => $newStatus, // Reset to Pending
+            'status_id' => $newStatus,
         ]);
 
         $hasPrevious = StationAmount::where('to_bus_station_id', $busStation->id)->first();
@@ -116,6 +182,6 @@ class BusStationController extends Controller
             $hasPrevious->update(['amount' => $validated['amount']]);
         }
 
-        return redirect()->back();
+        return redirect()->back()->with('success', 'Station updated.');
     }
 }

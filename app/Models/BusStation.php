@@ -25,23 +25,26 @@ class BusStation extends Model
         return $this->belongsTo(Franchise::class);
     }
 
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
-    }
-
     public function status(): BelongsTo
     {
         return $this->belongsTo(Status::class);
     }
+
+    /**
+     * Relationship for schedules specific to this station
+     */
+    public function schedules(): HasMany
+{
+    return $this->hasMany(StationSchedule::class, 'bus_station_id');
+}
 
     public function fromAmounts(): HasMany
     {
         return $this->hasMany(StationAmount::class, 'from_bus_station_id');
     }
 
-    public function toAmounts(): HasMany
-    {
-        return $this->hasMany(StationAmount::class, 'to_bus_station_id');
-    }
+    public function toAmounts()
+{
+    return $this->hasMany(StationAmount::class, 'to_bus_station_id');
+}
 }

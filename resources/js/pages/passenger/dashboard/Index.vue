@@ -1,155 +1,112 @@
-<!-- <script setup lang="ts">
-import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
+<script setup lang="ts">
+import LocationMap from '@/components/ReservedMap.vue';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
-import passenger from '@/routes/passenger';
-import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
+import { ArrowRight, Navigation } from 'lucide-vue-next';
 
-const breadcrumbs: BreadcrumbItem[] = [
-  {
-    title: 'Dashboard',
-    href: passenger.dashboard().url,
-  },
-];
+const props = defineProps<{
+  stations: Array<{
+    id: number;
+    name: string;
+    code: string;
+    lat: number;
+    lng: number;
+    address: string;
+  }>;
+}>();
+
+const breadcrumbs = [{ title: 'Select Station', href: '#' }];
+
+const goToReservation = (stationId: number) => {
+  // Use the specific Reserve route
+  router.get(`/passenger/dashboard/Reserve?from_id=${stationId}`);
+};
 </script>
 
 <template>
-  <Head title="Passenger Dashboard" />
+  <Head title="Available Terminals" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div
-      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
-      <div class="grid auto-rows-min gap-4 md:grid-cols-3">
+    <div class="p-6">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">Available Terminals</h1>
+        <p class="text-sm text-muted-foreground">
+          Select a starting point for your trip.
+        </p>
+      </div>
+
+      <div
+        v-if="stations.length >= 2"
+        class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"
+      >
         <div
-          class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
+          v-for="station in stations"
+          :key="station.id"
+          class="group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
         >
-          <PlaceholderPattern />
-        </div>
-        <div
-          class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-        >
-          <PlaceholderPattern />
-        </div>
-        <div
-          class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-        >
-          <PlaceholderPattern />
+          <div class="relative aspect-video w-full border-b bg-slate-100">
+            <LocationMap
+              :locations="[
+                {
+                  id: station.id,
+                  latitude: station.lat,
+                  longitude: station.lng,
+                  type: 'Pin',
+                  name: station.name,
+                },
+              ]"
+              :zoom="14"
+              :center="[station.lat, station.lng]"
+              :selectable="false"
+            />
+          </div>
+
+          <div class="flex flex-1 flex-col p-5">
+            <span
+              class="mb-2 w-fit rounded bg-brand-blue/10 px-2 py-0.5 text-[10px] font-bold text-brand-blue uppercase"
+            >
+              {{ station.code }}
+            </span>
+            <h3 class="text-lg font-bold text-slate-900">{{ station.name }}</h3>
+
+            <div class="mt-2 mb-6 flex items-start gap-2 text-slate-500">
+              <Navigation class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p class="line-clamp-2 text-xs leading-tight">
+                {{ station.address }}
+              </p>
+            </div>
+
+            <div class="mt-auto border-t pt-4">
+              <Button
+                @click="goToReservation(station.id)"
+                class="group flex w-full justify-between bg-slate-900 text-white hover:bg-slate-800"
+              >
+                <span>Book from this terminal</span>
+                <ArrowRight
+                  class="h-4 w-4 transition-transform group-hover:translate-x-1"
+                />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
+
       <div
-        class="relative min-h-[100vh] flex-1 rounded-xl border border-sidebar-border/70 md:min-h-min dark:border-sidebar-border"
+        v-else
+        class="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 py-24 text-center"
       >
-        <PlaceholderPattern />
+        <div class="mb-4 rounded-full bg-white p-4 shadow-sm">
+          <MapPinOff class="h-10 w-10 text-slate-300" />
+        </div>
+        <h2 class="text-xl font-bold text-slate-900">
+          Routes Currently Unavailable
+        </h2>
+        <p class="mt-2 max-w-sm text-sm text-slate-500">
+          A minimum of two active terminals are required to create a booking
+          route. Please check back later.
+        </p>
       </div>
     </div>
   </AppLayout>
 </template>
- -->
-
- <script setup lang="ts">
-import { home, logout } from '@/routes';
-import { Head, Link } from '@inertiajs/vue3';
-</script>
-
-<template>
-  <Head title="Download Our App" />
-
-  <div
-    class="flex h-screen w-full items-center justify-center bg-[#EFF8FF] p-4 sm:p-6"
-  >
-    <div class="relative z-0 w-full max-w-md">
-      <!-- Background circle pulse -->
-      <div
-        class="absolute top-[-60px] left-1/2 z-0 h-[125px] w-[125px] -translate-x-1/2 animate-ping rounded-full bg-white shadow-brand-shadow"
-      ></div>
-
-      <!-- Mobile Icon -->
-      <div>
-        <i
-          class="fa-solid fa-mobile-screen-button absolute top-[-45px] left-1/2 z-10 -translate-x-1/2 animate-bounce text-[90px] text-auth-blue"
-        ></i>
-      </div>
-
-      <!-- Card background -->
-      <div
-        class="absolute left-1/2 z-0 h-full w-full -translate-x-1/2 rounded-2xl bg-white shadow-brand-shadow"
-      ></div>
-
-      <!-- Content -->
-      <div
-        class="animate-fadeIn relative rounded-2xl bg-white p-6 text-center sm:p-10"
-      >
-        <div class="h-14 sm:h-1"></div>
-
-        <h1
-          class="animate-slideDown mb-4 text-2xl font-bold text-auth-blue sm:text-3xl"
-        >
-          Download Our App
-        </h1>
-
-        <p class="text-md animate-fadeIn mb-6 text-gray-700 leading-relaxed">
-          Get the best experience right at your fingertips. Download our app now
-          and enjoy seamless access, exclusive updates, and a smoother journey!
-        </p>
-
-        <!-- CTA Button -->
-        <div class="animate-fadeIn">
-          <a
-            href="https://play.google.com/store/apps/details?id=com.example.app"
-            target="_blank"
-            rel="noopener"
-            class="inline-block w-full rounded-lg bg-auth-blue px-6 py-3 text-center font-semibold text-white shadow-lg transition hover:scale-105 hover:bg-brand-blue"
-          >
-            <i class="fa-brands fa-google-play mr-2"></i>
-            Get it on Google Play
-          </a>
-
-          <div class="animate-fadeIn flex gap-3 mt-5">
-            <Link
-              :href="home()"
-              class="block w-full rounded-lg bg-green-500 px-4 py-2 text-center font-semibold text-white transition hover:bg-green-700"
-            >
-              Home
-            </Link>
-            <Link
-              :href="logout()"
-              class="block w-full rounded-lg bg-[#CE2D3C] px-4 py-2 text-center font-semibold text-white transition hover:bg-red-700"
-            >
-              Logout
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@keyframes slideDown {
-  from {
-    transform: translateY(-20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-.animate-fadeIn {
-  animation: fadeIn 0.8s ease forwards;
-}
-.animate-slideDown {
-  animation: slideDown 0.6s ease forwards;
-}
-</style>
