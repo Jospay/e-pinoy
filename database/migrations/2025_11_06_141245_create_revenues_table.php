@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
             $table->foreignId('franchise_id')->nullable()->constrained('franchises')->onDelete('restrict');
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->onDelete('restrict');
             $table->foreignId('vehicle_type_id')->constrained('vehicle_types')->onDelete('restrict');
             $table->foreignId('driver_id')->nullable()->constrained('user_drivers')->onDelete('restrict');
             $table->foreignId('boundary_contract_id')->nullable()->constrained('boundary_contracts')->onDelete('restrict');

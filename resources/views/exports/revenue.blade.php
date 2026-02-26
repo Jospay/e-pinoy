@@ -78,7 +78,7 @@
                     <td>{{ Carbon::parse($row->payment_date)->format('M j, Y h:i A') }}</td>
                     <td class="amount">₱{{ number_format($row->amount, 2) }}</td>
                 @else
-                    <td>{{ $row->{$tab . '_name'} ?? 'N/A' }}</td>
+                    <td>{{ $type === 'franchise' ? ($row->franchise_name ?? '-') : ($row->branch_name ?? '-') }}</td>
                     <td>
                         @if(isset($row->month_name)) {{ $row->month_name }}
                         @elseif(isset($row->week_start)) {{ date('M j', strtotime($row->week_start)) }} - {{ date('M j, Y', strtotime($row->week_end)) }}
