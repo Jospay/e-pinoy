@@ -41,9 +41,13 @@ const props = defineProps<{
     data: RevenueRow[];
   };
   franchises: { id: number; name: string }[];
+  branches: { id: number; name: string }[];
+  vehicleTypes: { id: number; name: string }[];
   filters: {
-    franchise: string[];
-    service: 'Trips' | 'Boundary';
+    tab: string;
+    type: 'franchise' | 'branch';
+    franchises: string[];
+    branches: string[];
     period: 'daily' | 'weekly' | 'monthly';
   };
 }>();
@@ -66,24 +70,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
-const selectedFranchise = ref<string[]>(props.filters.franchise || []);
-const selectedService = ref(props.filters.service);
+const activeTab = ref(props.filters.tab);
+const selectedType = ref(props.filters.type || 'franchise');
+const selectedFranchises = ref<string[]>(props.filters.franchises || []);
+const selectedBranches = ref<string[]>(props.filters.branches || []);
 const selectedPeriod = ref(props.filters.period);
 
-const selectedContext = computed({
-  get: () =>
-    selectedFranchise.value,
-  set: (val: string[]) => {
-    selectedFranchise.value = val;
-  },
-});
-
-// Mapping options for the MultiSelect
-const contextOptions = computed(() => {
-  const data =
-    props.franchises;
-  return data.map((item) => ({ id: item.id, label: item.name }));
-});
+// Options for MultiSelect
+const franchiseOptions = computed(() =>
+  props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
+);
 
 const showExportModal = ref(false);
 const exportType = ref<'pdf' | 'excel' | 'csv'>('pdf');
@@ -140,15 +139,24 @@ function handleExport() {
 
   // 1. Get all *current* page filters
   const params = new URLSearchParams({
-    service: selectedService.value,
+    tab: activeTab.value,
+    type: selectedType.value,
     period: selectedPeriod.value,
     export: exportType.value,
     year: exportYear.value,
   });
 
   // 2. Add franchise filter if not 'all'
-  if (selectedFranchise.value.length > 0) {
-    selectedFranchise.value.forEach((f) => params.append('franchise[]', f));
+  if (
+    selectedType.value === 'franchise' &&
+    selectedFranchises.value.length > 0
+  ) {
+    selectedFranchises.value.forEach((f) => params.append('franchises[]', f));
+  } else if (
+    selectedType.value === 'branch' &&
+    selectedBranches.value.length > 0
+  ) {
+    selectedBranches.value.forEach((b) => params.append('branches[]', b));
   }
 
   // 3. Add months
@@ -176,11 +184,12 @@ const formatCurrency = (amount: number): string => {
 // Computed columns for the data table
 const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
   const isDaily = selectedPeriod.value === 'daily';
+  const isFranchise = selectedType.value === 'franchise';
 
   const columns: ColumnDef<RevenueRow>[] = [
     {
-      accessorKey: 'franchise_name',
-      header: 'Franchise',
+      accessorKey: isFranchise ? 'franchise_name' : 'branch_name',
+      header: isFranchise ? 'Franchise' : 'Branch',
     },
     {
       accessorKey: 'payment_date',
@@ -223,8 +232,10 @@ const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
                       start: rowData.query_params.start,
                       end: rowData.query_params.end,
                       label: rowData.payment_date,
-                      service: selectedService.value,
+                      tab: activeTab.value,
+                      type: selectedType.value,
                       franchise: rowData.franchise_id,
+                      branch: rowData.branch_id,
                     };
 
                     router.get(superAdmin.revenue.show().url, queryParams, {
@@ -250,9 +261,11 @@ const updateFilters = () => {
   router.get(
     superAdmin.revenue.index().url,
     {
-      service: selectedService.value,
+      tab: activeTab.value,
+      type: selectedType.value,
       period: selectedPeriod.value,
-      franchise: selectedFranchise.value || [],
+      franchises: selectedFranchises.value || [],
+      branches: selectedBranches.value || [],
     },
     {
       preserveScroll: true,
@@ -261,9 +274,20 @@ const updateFilters = () => {
   );
 };
 
+watch([activeTab, selectedType], () => {
+  selectedFranchises.value = [];
+  selectedBranches.value = [];
+  updateFilters();
+});
+
+watch(selectedFranchises, () => {
+  selectedBranches.value = [];
+  updateFilters();
+});
+
 // Watch all filters for changes (debounced)
 watch(
-  [selectedService, selectedPeriod],
+  [selectedPeriod],
   debounce(() => {
     updateFilters();
   }, 300),
@@ -271,25 +295,43 @@ watch(
 </script>
 
 <template>
-
   <Head title="Revenue Report" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+    <div
+      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
+    >
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
+          <TabsTrigger
+            v-for="type in vehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="cursor-pointer px-8 py-2 font-semibold capitalize"
+            :class="{ 'pointer-events-none': activeTab === type.name }"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
+      <div
+        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
+      >
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">
-            Franchise Revenues
-          </h2>
+          <h2 class="font-mono text-xl font-semibold">Franchise Revenues</h2>
           <div class="flex gap-4">
-            <Select v-model="selectedService">
-              <SelectTrigger class="w-[150px]">
+            <Select v-model="selectedType">
+              <SelectTrigger class="w-[150px] cursor-pointer">
                 <SelectValue placeholder="Filter by..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Trips"> Trips </SelectItem>
-                <SelectItem value="Boundary"> Boundary </SelectItem>
+                <SelectItem value="franchise" class="cursor-pointer">
+                  Franchise
+                </SelectItem>
+                <SelectItem value="branch" class="cursor-pointer">
+                  Branch
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -304,17 +346,42 @@ watch(
               </SelectContent>
             </Select>
 
-            <MultiSelect v-model="selectedContext" :options="contextOptions" placeholder="Select Franchises"
-              all-label="All Franchises" @change="
+            <MultiSelect
+              v-model="selectedFranchises"
+              :options="franchiseOptions"
+              placeholder="Select Franchises"
+              all-label="All Franchises"
+              @change="
                 (val) => {
-                  selectedFranchise = val;
+                  selectedFranchises = val;
+
                   updateFilters();
                 }
-              " />
+              "
+            />
+
+            <MultiSelect
+              v-if="selectedType === 'branch'"
+              v-model="selectedBranches"
+              :options="branchOptions"
+              placeholder="Select Branches"
+              all-label="All Branches"
+              @change="
+                (val) => {
+                  selectedBranches = val;
+
+                  updateFilters();
+                }
+              "
+            />
           </div>
         </div>
 
-        <DataTable :columns="revenueColumns" :data="revenues.data" search-placeholder="Search revenues...">
+        <DataTable
+          :columns="revenueColumns"
+          :data="revenues.data"
+          search-placeholder="Search revenues..."
+        >
           <template #custom-actions>
             <Button @click="openExportModal('pdf')"> Export PDF </Button>
             <Button @click="openExportModal('excel')"> Export Excel </Button>
@@ -340,7 +407,11 @@ watch(
                   <SelectValue placeholder="Select year" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="year in yearOptions" :key="year" :value="year">
+                  <SelectItem
+                    v-for="year in yearOptions"
+                    :key="year"
+                    :value="year"
+                  >
                     {{ year }}
                   </SelectItem>
                 </SelectContent>
@@ -349,9 +420,16 @@ watch(
             <div class="grid grid-cols-4 items-start gap-4">
               <label class="pt-2 text-right">Months</label>
               <div class="col-span-3 grid grid-cols-2 gap-2">
-                <div v-for="month in monthOptions" :key="month.id" class="flex items-center gap-2">
-                  <Checkbox :id="`month-${month.id}`" :model-value="exportMonths.includes(month.id)"
-                    @update:model-value="() => toggleMonth(month.id)" />
+                <div
+                  v-for="month in monthOptions"
+                  :key="month.id"
+                  class="flex items-center gap-2"
+                >
+                  <Checkbox
+                    :id="`month-${month.id}`"
+                    :model-value="exportMonths.includes(month.id)"
+                    @update:model-value="() => toggleMonth(month.id)"
+                  />
 
                   <label :for="`month-${month.id}`" class="cursor-pointer">
                     {{ month.label }}
