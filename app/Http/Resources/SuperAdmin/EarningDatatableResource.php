@@ -20,6 +20,7 @@ class EarningDatatableResource extends JsonResource
             'driver_id'      => $this->driver_id,
             'driver_username'    => $this->driver_username,
             'franchise_name' => $this->franchise_name ?? null,
+            'branch_name'    => $this->branch_name ?? null,
             'total_amount'   => (float) $this->total_amount,
             'driver_earning' => (float) $this->driver_earning,
             'payment_date'   => 'N/A',

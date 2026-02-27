@@ -101,8 +101,6 @@ class EarningController extends Controller
             'label'   => ['required', 'string'],
             'tab'       => ['required', 'string', 'exists:vehicle_types,name'],
             'type'      => ['required', 'string', Rule::in(['franchise', 'branch'])],
-            'franchise' => ['nullable'],
-            'branch'    => ['nullable'],
         ]);
 
         $driverId = $validated['driver'];
@@ -110,24 +108,13 @@ class EarningController extends Controller
 
         // 2. Get Shared Data
         $feeTypes = $this->getFeeTypes();
-
-        $id = $validated['type'] === 'franchise' ? $validated['franchise'] : $validated['branch'];
-
+                        
         // 3. Build Base Query (Reuse filters, but enforce specific driver)
         $filters = [
             'tab'       => $validated['tab'] ?? 'taxi',
             'type'      => $validated['type'] ?? 'franchise',
-            'franchise' => $validated['type'] === 'franchise' ? [$id] : [],
-            'branch'    => $validated['type'] === 'branch' ? [$id] : [],
             'driver' => [$driverId], 
         ];
-
-        $targetName = 'N/A';
-        if ($validated['type'] === 'franchise' && $id) {
-            $targetName = Franchise::find($id)?->name;
-        } elseif ($validated['type'] === 'branch' && $id) {
-            $targetName = Branch::find($id)?->name;
-        }
 
         // 4. Build Base Query
         $query = $this->buildBaseQuery($filters);
@@ -170,7 +157,6 @@ class EarningController extends Controller
                 'id' => $driver->id,
                 'username' => $driver->user->username,
             ],
-            'targetName' => $targetName,
             'targetTab'  =>  $validated['tab'],
             'periodLabel' => $dateLabel,
             'feeTypes' => $feeTypes,
@@ -226,7 +212,9 @@ class EarningController extends Controller
             ->whereHas('status', fn ($q) => $q->where('name', 'paid'))
             ->whereNotNull('payment_date')
             ->where('service_type', 'Trips')
-            ->whereHas('vehicleType', fn ($q) => $q->where('name', $filters['tab']));
+            ->when($filters['tab'], function ($query, $tab) {
+                $query->whereHas('vehicleType', fn ($q) => $q->where('name', $tab));
+            });
 
         // --- Apply date constraints for export only ---
         if ($year) {
@@ -309,9 +297,9 @@ class EarningController extends Controller
         ];
 
         // Add SUM aggregators for each dynamic fee type
-        foreach ($feeTypes as $type) {
+        foreach ($feeTypes as $fType) {
             // "{$type['slug']}_amount" must match the alias in joinBreakdownSubquery
-            $selects[] = DB::raw("SUM(breakdowns.{$type['slug']}_amount) as total_{$type['slug']}");
+            $selects[] = DB::raw("SUM(breakdowns.{$fType['slug']}_amount) as total_{$fType['slug']}");
         }
 
         // Add Franchise/Branch Name
@@ -428,6 +416,7 @@ class EarningController extends Controller
             'end'        => ['required', 'date'],
             'label'      => ['required', 'string'],
             'export'     => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
+            'tab'        => ['required', 'string', 'exists:vehicle_types,name'],
         ]);
 
         $driverId = $validated['driver'];
@@ -437,6 +426,7 @@ class EarningController extends Controller
         $filters = [
             'driver' => [$driverId],
             'tab' => null,
+            'type' => null,
         ];
 
         $query = $this->buildBaseQuery($filters);
@@ -468,7 +458,8 @@ class EarningController extends Controller
         // 4. Prepare Metadata
         $driver = UserDriver::with('user')->find($driverId);
         $driverName = $driver->user->name;
-        $title = "Trip Earning Details for {$driverName} - " . $validated['label'];
+        $tabName = ucfirst($validated['tab']);
+        $title = "{$tabName} Trip Earning Details for {$driverName} - " . $validated['label'];
         $fileName = 'details_' . Str::slug($driverName) . '_' . now()->format('Y-m-d');
 
         // 5. Handle PDF
@@ -476,7 +467,7 @@ class EarningController extends Controller
             return Pdf::loadView('exports.earning', [
                 'rows' => $transactions,
                 'title' => $title,
-                'tab' => null, // Signal that this is the Detail view
+                'type' => null, // Signal that this is the Detail view
                 'feeTypes' => $feeTypes,
                 'isDetailView' => true // New flag
             ])->setPaper('a4', 'landscape')->download($fileName.'.pdf');
@@ -486,7 +477,7 @@ class EarningController extends Controller
         return (new EarningExport(
             $transactions,
             $title,
-            'show', // Pass 'show' as the tab name to signal logic switch
+            'show', // Pass 'show' as the type name to signal logic switch
             $feeTypes
         ))->download($fileName . '.' . ($validated['export'] === 'excel' ? 'xlsx' : 'csv'));
     }
@@ -497,7 +488,8 @@ class EarningController extends Controller
     private function buildExportTitle(array $filters, int $year, array $months): string
     {
         $period = ucfirst($filters['period']);
-        $tabName = 'Franchise';
+        $tabName = $filters['type'] === 'franchise' ? 'Franchise' : 'Branch';
+        $tabName = ucfirst($filters['tab'] ?? '');
 
         // Get specific name if filtered
         $targetName = "All {$tabName}s";
@@ -511,6 +503,6 @@ class EarningController extends Controller
         // Format months
         $monthNames = collect($months)->map(fn ($m) => date('F', mktime(0, 0, 0, $m, 1)))->join(', ');
 
-        return "{$period} Total Trip Earnings for {$targetName} - {$monthNames} {$year}";
+        return "{$period} {$tabName} Total Trip Earnings for {$targetName} - {$monthNames} {$year}";
     }
 }

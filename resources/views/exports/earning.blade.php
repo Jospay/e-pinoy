@@ -58,14 +58,14 @@
                 <th>Date</th>
                 <th>Trip Amount</th>
             @else
-                <th>{{ ucfirst($tab) }}</th>
+                <th>{{ ucfirst($type) }}</th>
                 <th>Driver</th>
                 <th style="width: 15%">Date</th>
                 <th>Total Amount</th>
             @endif
 
-            @foreach($feeTypes as $type)
-                <th>{{ $type['display'] }}</th>
+            @foreach($feeTypes as $fType)
+                <th>{{ $fType['display'] }}</th>
             @endforeach
             <th>Driver Earn</th>
             </tr>
@@ -91,15 +91,15 @@
                         <td>{{ Carbon::parse($row->payment_date)->format('M d, Y h:i A') }}</td>
                         <td class="money">&#8369;{{ number_format($row->total_amount, 2) }}</td>
                     @else
-                        <td>{{ $row->franchise_name ?? '-' }}</td>
+                        <td>{{ $type === 'franchise' ? ($row->franchise_name ?? '-') : ($row->branch_name ?? '-') }}</td>
                         <td>{{ $row->driver_username }}</td>
                         <td>{{ $dateDisplay }}</td>
                         <td class="money">&#8369;{{ number_format($row->total_amount, 2) }}</td>
                     @endif
                     
                     {{-- Dynamic Fees --}}
-                    @foreach($feeTypes as $type)
-                        @php $key = 'total_' . $type['slug']; @endphp
+                    @foreach($feeTypes as $fType)
+                        @php $key = 'total_' . $fType['slug']; @endphp
                         <td class="money">&#8369;{{ number_format($row->$key ?? 0, 2) }}</td>
                     @endforeach
 
@@ -118,8 +118,8 @@
                 <td class="money">&#8369;{{ number_format($rows->sum('total_amount'), 2) }}</td>
 
                 {{-- Sum Dynamic Fees --}}
-                @foreach($feeTypes as $type)
-                    @php $key = 'total_' . $type['slug']; @endphp
+                @foreach($feeTypes as $fType)
+                    @php $key = 'total_' . $fType['slug']; @endphp
                     <td class="money">&#8369;{{ number_format($rows->sum($key), 2) }}</td>
                 @endforeach
 

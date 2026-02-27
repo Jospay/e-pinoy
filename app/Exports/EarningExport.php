@@ -30,7 +30,7 @@ class EarningExport implements
     public function __construct(
         protected Collection $data,
         protected string $title,
-        protected string $tabName,
+        protected string $typeName,
         protected $feeTypes
     ) {}
 
@@ -54,7 +54,7 @@ class EarningExport implements
     public function map($row): array
     {
         // A. Detail View Mapping (Show Method)
-        if ($this->tabName === 'show') {
+        if ($this->typeName === 'show') {
             $columns = [
                 $row->invoice_no, // Column A
                 Carbon::parse($row->payment_date)->format('M d, Y h:i A'),
@@ -64,7 +64,7 @@ class EarningExport implements
         // B. Aggregate View Mapping (Index Method)
         else {
             // 1. Resolve Name
-            $nameKey = $this->tabName . '_name';
+            $nameKey = $this->typeName . '_name';
             $name = $row->$nameKey ?? 'N/A';
 
             // 2. Resolve Date Logic (Fixes empty/raw dates)
@@ -105,10 +105,10 @@ class EarningExport implements
 
     public function headings(): array
     {
-        if ($this->tabName === 'show') {
+        if ($this->typeName === 'show') {
             $headers = ['Invoice No.', 'Date', 'Trip Amount'];
         } else {
-            $headers = [ucfirst($this->tabName), 'Driver', 'Date', 'Total Amount'];
+            $headers = [ucfirst($this->typeName), 'Driver', 'Date', 'Total Amount'];
         }
 
         foreach ($this->feeTypes as $type) {
@@ -121,7 +121,7 @@ class EarningExport implements
     public function columnFormats(): array
     {
         // if show format (C) to the end as Currency else (D) 
-        if ($this->tabName === 'show') {
+        if ($this->typeName === 'show') {
             return [
                 'C:Z' => '"₱"#,##0.00',
             ];
@@ -152,7 +152,7 @@ class EarningExport implements
                 $totalRowIndex = $lastRow + 2; 
 
                 // Label "GRAND TOTAL" (Merge A-B) if "show" else (Merge A-C)
-                if ($this->tabName === 'show') {
+                if ($this->typeName === 'show') {
                     $sheet->mergeCells("A{$totalRowIndex}:B{$totalRowIndex}");
                 } else {
                     $sheet->mergeCells("A{$totalRowIndex}:C{$totalRowIndex}");
@@ -163,7 +163,7 @@ class EarningExport implements
 
                 // --- 3. Fill Numeric Totals ---
                 // Start at (C) if show else (D)
-                if ($this->tabName === 'show') {
+                if ($this->typeName === 'show') {
                     $colIndex = 3;
                 } else {
                     $colIndex = 4;
