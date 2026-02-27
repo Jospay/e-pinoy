@@ -18,8 +18,10 @@ return new class extends Migration
             $table->foreignId('passenger_id')->constrained('user_passengers')->onDelete('restrict');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
             $table->decimal('amount', 10, 2);
+            $table->time('reserve_from_time');
+            $table->time('reserve_to_time');
+            $table->date('reserve_date');
             $table->string('qrcode_name');
-            $table->string('qrcode_img');
             $table->string('paymongo_checkout_session_id');
             $table->timestamps();
         });
