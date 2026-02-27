@@ -8,6 +8,9 @@ use App\Http\Resources\SuperAdmin\EarningShowResource;
 use App\Models\Franchise;
 use App\Models\Revenue;
 use App\Models\PercentageType;
+use App\Models\Branch;
+use App\Models\Status;
+use App\Models\VehicleType;
 use App\Models\RevenueBreakdown;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,14 +29,21 @@ class EarningController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
-            'franchise' => ['sometimes', 'nullable', 'array'], 
+            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
+            'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
+            'franchises' => ['sometimes', 'nullable', 'array'], 
+            'branches' => ['sometimes', 'nullable', 'array'],
             'driver' => ['sometimes', 'nullable', 'array'],
             'period' => ['sometimes', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
         ]);
 
         // 2. Set defaults
         $filters = [
-            'franchise' => $validated['franchise'] ?? [],
+            'tab' => $validated['tab'] ?? 'taxi',
+            'type' => $validated['type'] ?? 'franchise',
+            'franchises' => $validated['franchises'] ?? [],
+            'branches' => $validated['branches'] ?? [],
+            'period' => $validated['period'] ?? 'daily',
             'driver' => $validated['driver'] ?? [],
             'period' => $validated['period'] ?? 'daily',
         ];
@@ -48,13 +58,33 @@ class EarningController extends Controller
         $query = $this->joinBreakdownSubquery($query, $feeTypes);
 
         // 6. Apply Grouping & Calculations (Specific to Index)
-        $earnings = $this->applyPeriodGrouping($query, $filters['period'], $feeTypes);
+        $earnings = $this->applyPeriodGrouping($query, $filters['period'], $filters['type'], $feeTypes);
         $driversList = $this->getContextualDrivers($filters);
+
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->get();
+            
+        $branchList = Branch::select('id', 'name', 'franchise_id')
+            ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })->when(!empty($filters['franchises']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchises']);
+            })
+            ->get();
 
         // 7. Return all data to Inertia
         return Inertia::render('super-admin/finance/EarningIndex', [
             'earnings' => EarningDatatableResource::collection($earnings),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => $franchiseList,
+            'branches' => $branchList,
+            'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'drivers' => fn () => $driversList,
             'filters' => $filters,
             'feeTypes' => $feeTypes,
@@ -69,6 +99,10 @@ class EarningController extends Controller
             'start' => ['required', 'date'],
             'end' => ['required', 'date'],
             'label'   => ['required', 'string'],
+            'tab'       => ['required', 'string', 'exists:vehicle_types,name'],
+            'type'      => ['required', 'string', Rule::in(['franchise', 'branch'])],
+            'franchise' => ['nullable'],
+            'branch'    => ['nullable'],
         ]);
 
         $driverId = $validated['driver'];
@@ -77,11 +111,23 @@ class EarningController extends Controller
         // 2. Get Shared Data
         $feeTypes = $this->getFeeTypes();
 
+        $id = $validated['type'] === 'franchise' ? $validated['franchise'] : $validated['branch'];
+
         // 3. Build Base Query (Reuse filters, but enforce specific driver)
         $filters = [
-            'franchise' => $validated['franchise'] ?? [],
+            'tab'       => $validated['tab'] ?? 'taxi',
+            'type'      => $validated['type'] ?? 'franchise',
+            'franchise' => $validated['type'] === 'franchise' ? [$id] : [],
+            'branch'    => $validated['type'] === 'branch' ? [$id] : [],
             'driver' => [$driverId], 
         ];
+
+        $targetName = 'N/A';
+        if ($validated['type'] === 'franchise' && $id) {
+            $targetName = Franchise::find($id)?->name;
+        } elseif ($validated['type'] === 'branch' && $id) {
+            $targetName = Branch::find($id)?->name;
+        }
 
         // 4. Build Base Query
         $query = $this->buildBaseQuery($filters);
@@ -124,6 +170,8 @@ class EarningController extends Controller
                 'id' => $driver->id,
                 'username' => $driver->user->username,
             ],
+            'targetName' => $targetName,
+            'targetTab'  =>  $validated['tab'],
             'periodLabel' => $dateLabel,
             'feeTypes' => $feeTypes,
         ]);
@@ -177,7 +225,8 @@ class EarningController extends Controller
             // Base filters: "paid" status and non-null payment_date
             ->whereHas('status', fn ($q) => $q->where('name', 'paid'))
             ->whereNotNull('payment_date')
-            ->where('service_type', 'Trips');
+            ->where('service_type', 'Trips')
+            ->whereHas('vehicleType', fn ($q) => $q->where('name', $filters['tab']));
 
         // --- Apply date constraints for export only ---
         if ($year) {
@@ -192,9 +241,13 @@ class EarningController extends Controller
             $q->whereIn('driver_id', $filters['driver']);
         });
 
-        $query->whereNotNull('franchise_id')
-            ->when(!empty($filters['franchise']), fn ($q) => $q->whereIn('franchise_id', $filters['franchise']));
-
+        if ($filters['type'] === 'franchise') {
+            $query->whereNotNull('franchise_id')
+                ->when(!empty($filters['franchises']), fn ($q) => $q->whereIn('franchise_id', $filters['franchises']));
+        } elseif ($filters['type'] === 'branch') {
+            $query->whereNotNull('branch_id')
+                ->when(!empty($filters['branches']), fn ($q) => $q->whereIn('branch_id', $filters['branches']));
+        }
         return $query;
     }
 
@@ -206,16 +259,33 @@ class EarningController extends Controller
         // Start with UserDriver and join the base User table to get username
         $query = UserDriver::query()
             ->join('users', 'user_drivers.id', '=', 'users.id')
-            ->select('user_drivers.id', 'users.username');
- 
-        if (!empty($filters['franchise'])) {
-            // Get drivers strictly belonging to this franchise
-            $query->whereHas('franchises', function ($q) use ($filters) {
-                $q->whereIn('franchises.id', $filters['franchise']);
+            ->select('user_drivers.id', 'users.username')
+            ->whereHas('vehicles', function ($q) use ($filters) {
+                $q->whereHas('vehicleType', function ($typeQ) use ($filters) {
+                    $typeQ->where('name', $filters['tab']);
+                });
             });
-        } else {
-            // Get ALL drivers that belong to ANY franchise
-            $query->has('franchises');
+ 
+        if ($filters['tab'] === 'franchise') {
+            if (!empty($filters['franchise'])) {
+                // Get drivers strictly belonging to this franchise
+                $query->whereHas('franchises', function ($q) use ($filters) {
+                    $q->whereIn('franchises.id', $filters['franchise']);
+                });
+            } else {
+                // Get ALL drivers that belong to ANY franchise
+                $query->has('franchises');
+            }
+        } elseif ($filters['tab'] === 'branch') {
+            if (!empty($filters['branch'])) {
+                // Get drivers strictly belonging to this branch
+                $query->whereHas('branches', function ($q) use ($filters) {
+                    $q->whereIn('branches.id', $filters['branch']);
+                });
+            } else {
+                // Get ALL drivers that belong to ANY branch
+                $query->has('branches');
+            }
         }
 
         return $query->orderBy('users.username')->get();
@@ -224,7 +294,7 @@ class EarningController extends Controller
     /**
      * Applies the SELECT and GROUP BY logic based on the period.
      */
-    private function applyPeriodGrouping(Builder $query, string $period, $feeTypes)
+    private function applyPeriodGrouping(Builder $query, string $period, string $type, $feeTypes)
     {
         $query->join('user_drivers', 'revenues.driver_id', '=', 'user_drivers.id')
               ->join('users', 'user_drivers.id', '=', 'users.id');
@@ -244,10 +314,16 @@ class EarningController extends Controller
             $selects[] = DB::raw("SUM(breakdowns.{$type['slug']}_amount) as total_{$type['slug']}");
         }
 
-        // Add Franchise Name
-        $query->join('franchises', 'revenues.franchise_id', '=', 'franchises.id')
-            ->addSelect('franchises.name as franchise_name')
-            ->groupBy('franchises.id', 'franchises.name');
+        // Add Franchise/Branch Name
+        if ($type === 'franchise') {
+            $query->join('franchises', 'revenues.franchise_id', '=', 'franchises.id')
+                ->addSelect('franchises.name as franchise_name')
+                ->groupBy('franchises.id', 'franchises.name');
+        } elseif ($type === 'branch') {
+            $query->join('branches', 'revenues.branch_id', '=', 'branches.id')
+                ->addSelect('branches.name as branch_name')
+                ->groupBy('branches.id', 'branches.name');
+        }
         
         // Apply Selects
         $query->addSelect($selects)
@@ -283,7 +359,10 @@ class EarningController extends Controller
     {
         // 1. Validate all inputs (page filters + modal filters)
         $validated = $request->validate([
-            'franchise' => ['sometimes', 'nullable', 'array'], 
+            'tab' => ['required', 'string', 'exists:vehicle_types,name'],
+            'type' => ['required', 'string', Rule::in(['franchise', 'branch'])],
+            'franchises' => ['sometimes', 'nullable', 'array'], 
+            'branches' => ['sometimes', 'nullable', 'array'],
             'driver' => ['sometimes', 'nullable', 'array'],
             'period' => ['required', 'string',Rule::in(['daily', 'weekly', 'monthly'])],
             'export' => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
@@ -293,7 +372,9 @@ class EarningController extends Controller
         ]);
 
         $filters = [
-            'franchise' => $validated['franchise'] ?? [],
+            'tab' => $validated['tab'] ?? 'taxi',
+            'type' => $validated['type'] ?? 'franchise',
+            'franchises' => $validated['franchises'] ?? [],
             'driver' => $validated['driver'] ?? [],
             'period' => $validated['period'] ?? 'daily',
             'export' => $validated['export'] ?? 'pdf',
@@ -309,7 +390,7 @@ class EarningController extends Controller
         $query = $this->joinBreakdownSubquery($query, $feeTypes);
         
         // 5. Get Data
-        $revenues = $this->applyPeriodGrouping($query, $filters['period'], $feeTypes);
+        $revenues = $this->applyPeriodGrouping($query, $filters['period'], $filters['type'], $feeTypes);
 
         // 6. Generate Title
         $title = $this->buildExportTitle($filters, $validated['year'], $validated['months']);
@@ -321,7 +402,7 @@ class EarningController extends Controller
             return Pdf::loadView('exports.earning', [
                 'rows' => $revenues,
                 'title' => $title,
-                'tab' => 'franchise',
+                'type' => $filters['type'],
                 'feeTypes' => $feeTypes
             ])->setPaper('a4', 'landscape')->download($fileName.'.pdf');
         }
@@ -330,7 +411,7 @@ class EarningController extends Controller
         return (new EarningExport(
             $revenues, 
             $title, 
-            'franchise',
+            $filters['type'],
             $feeTypes // Pass fee types so Export knows what columns to create
         ))->download($fileName . '.' . ($filters['export'] === 'excel' ? 'xlsx' : 'csv'));
     }
@@ -343,8 +424,8 @@ class EarningController extends Controller
         // 1. Validate (Same as show method)
         $validated = $request->validate([
             'driver'     => ['required', 'string'],
-            'start' => ['required', 'date'],
-            'end'   => ['required', 'date'],
+            'start'      => ['required', 'date'],
+            'end'        => ['required', 'date'],
             'label'      => ['required', 'string'],
             'export'     => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
         ]);
