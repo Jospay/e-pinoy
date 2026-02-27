@@ -88,8 +88,8 @@ class GpsTrackerController extends Controller
             ]);
 
         // Filter by specific driver if selected
-        $query->when(!empty($filters['driver']), function ($q) use ($filters) {
-            $q->whereIn('id', $filters['driver']);
+        $query->when(!empty($filters['drivers']), function ($q) use ($filters) {
+            $q->whereIn('id', $filters['drivers']);
         });
 
         if ($filters['type'] === 'franchise') {
@@ -119,7 +119,12 @@ class GpsTrackerController extends Controller
         // Start with UserDriver and join the base User table to get username
         $query = UserDriver::query()
             ->join('users', 'user_drivers.id', '=', 'users.id')
-            ->select('user_drivers.id', 'users.username');
+            ->select('user_drivers.id', 'users.username')
+            ->whereHas('vehicles', function ($q) use ($filters) {
+                $q->whereHas('vehicleType', function ($typeQ) use ($filters) {
+                    $typeQ->where('name', $filters['tab']);
+                });
+            });
 
         if ($filters['type'] === 'franchise') {
             if (!empty($filters['franchises'])) {

@@ -2,6 +2,13 @@
 import LeafletMap, { type MarkerData } from '@/components/LeafletMap.vue';
 import MultiSelect from '@/components/MultiSelect.vue';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
@@ -54,10 +61,6 @@ const branchOptions = computed(() =>
 const driverOptions = computed(() =>
   props.drivers.map((d) => ({ id: d.id, label: d.username })),
 );
-const contextOptions = computed(() => {
-  const data = props.franchises;
-  return data.map((item) => ({ id: item.id, label: item.name }));
-});
 
 // --- Auto-Refresh Logic ---
 const userIsActive = ref(true);
@@ -90,8 +93,11 @@ const refreshMapMarkers = () => {
     only: ['mapMarkers'], // Only fetch the markers, ignore dropdown lists
     // Explicitly pass current filters to ensure the backend query is accurate
     data: {
+      tab: activeTab.value,
+      type: selectedType.value,
       franchise: selectedFranchises.value || [],
-      driver: selectedDrivers.value,
+      branch: selectedBranches.value || [],
+      drivers: selectedDrivers.value,
     },
     onSuccess: () => {
       console.log('GPS positions updated');
@@ -131,6 +137,7 @@ const updateFilters = () => {
       type: selectedType.value,
       franchises: selectedFranchises.value || [],
       branches: selectedBranches.value || [],
+      drivers: selectedDrivers.value,
     },
     {
       preserveScroll: true,
@@ -142,11 +149,13 @@ const updateFilters = () => {
 watch([activeTab, selectedType], () => {
   selectedFranchises.value = [];
   selectedBranches.value = [];
+  selectedDrivers.value = [];
   updateFilters();
 });
 
 watch(selectedFranchises, () => {
   selectedBranches.value = [];
+  selectedDrivers.value = [];
   updateFilters();
 });
 </script>
@@ -181,6 +190,20 @@ watch(selectedFranchises, () => {
           </h2>
 
           <div class="flex gap-4">
+            <Select v-model="selectedType">
+              <SelectTrigger class="w-[150px] cursor-pointer">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="franchise" class="cursor-pointer">
+                  Franchise
+                </SelectItem>
+                <SelectItem value="branch" class="cursor-pointer">
+                  Branch
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
             <MultiSelect
               v-model="selectedDrivers"
               :options="driverOptions"
@@ -197,6 +220,21 @@ watch(selectedFranchises, () => {
               @change="
                 (val) => {
                   selectedFranchises = val;
+
+                  updateFilters();
+                }
+              "
+            />
+
+            <MultiSelect
+              v-if="selectedType === 'branch'"
+              v-model="selectedBranches"
+              :options="branchOptions"
+              placeholder="Select Branches"
+              all-label="All Branches"
+              @change="
+                (val) => {
+                  selectedBranches = val;
 
                   updateFilters();
                 }
