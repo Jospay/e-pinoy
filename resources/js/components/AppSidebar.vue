@@ -35,6 +35,7 @@ import {
   History,
   LayoutGrid,
   Map,
+  MapPin,
   ReceiptText,
   ShieldCheck,
   Ticket,
@@ -437,7 +438,14 @@ const navConfig: Record<string, NavItem[]> = {
     {
       title: 'Available Terminals',
       href: passenger.dashboard(),
-      icon: LayoutGrid,
+      icon: MapPin,
+      group: 'Overview',
+    },
+
+    {
+      title: 'Transaction History',
+      href: passenger.transactionhisory(),
+      icon: History,
       group: 'Overview',
     },
   ],

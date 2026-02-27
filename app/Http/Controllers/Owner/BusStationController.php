@@ -14,6 +14,7 @@ class BusStationController extends Controller
 {
     public function index(Request $request)
     {
+        // 1. Get Franchise and Access Check
         $franchise = auth()->user()->ownerDetails?->franchises()->first();
         $franchiseId = $franchise?->id;
 
@@ -25,37 +26,75 @@ class BusStationController extends Controller
             return redirect()->route('owner.dashboard')->with('error', 'Access disabled.');
         }
 
-        $stations = BusStation::where('franchise_id', $franchiseId)
+        // 2. Fetch Stations for the Franchise
+        $stationsQuery = BusStation::where('franchise_id', $franchiseId)
             ->with(['schedules', 'toAmounts'])
             ->orderBy('id', 'asc')
+            ->get();
+
+        $stations = $stationsQuery->map(function($s) {
+            $amountRecord = $s->toAmounts->first();
+
+            return [
+                'id' => $s->id,
+                'name' => $s->name,
+                'code_no' => $s->code_no,
+                'lat' => (string)$s->latitude,
+                'lng' => (string)$s->longitude,
+                'status_id' => (int)$s->status_id,
+                'amount' => $amountRecord?->amount ?? 0,
+                'station_amount_id' => $amountRecord?->id ?? null,
+                'schedules' => $s->schedules->map(function($sched) {
+                    return [
+                        'id' => $sched->id,
+                        'bus_station_id' => $sched->bus_station_id,
+                        'to_time' => date('H:i', strtotime($sched->to_time)),
+                        'from_time' => date('H:i', strtotime($sched->from_time)),
+                    ];
+                })->toArray(),
+            ];
+        });
+
+        // 3. Fetch Reservations for the Franchise
+        // We identify reservations belonging to this franchise via the from_bus_station_id
+        $stationIds = $stationsQuery->pluck('id');
+        $filter = $request->query('status', 'completed');
+
+        $transactions = \App\Models\Reservation::with(['fromStation', 'toStation', 'status', 'passenger.user'])
+            ->whereIn('from_bus_station_id', $stationIds)
+            ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function($s) {
-                $amountRecord = $s->toAmounts->first();
+            ->map(function ($item) {
+                $statusName = $item->status->name ?? 'Pending';
+                $lowerStatus = strtolower($statusName);
+
+                // Logic to categorize status for the frontend UI
+                $isCompleted = str_contains($lowerStatus, 'completed');
+                $isPaid = str_contains($lowerStatus, 'paid') && !$isCompleted;
+                $isPending = !$isPaid && !$isCompleted;
 
                 return [
-                    'id' => $s->id,
-                    'name' => $s->name,
-                    'code_no' => $s->code_no,
-                    'lat' => (string)$s->latitude,
-                    'lng' => (string)$s->longitude,
-                    'status_id' => (int)$s->status_id,
-                    'amount' => $amountRecord?->amount ?? 0,
-                    'station_amount_id' => $amountRecord?->id ?? null,
-                    'schedules' => $s->schedules->map(function($sched) {
-                        return [
-                            'id' => $sched->id,
-                            'bus_station_id' => $sched->bus_station_id,
-                            // Native PHP date formatting instead of Carbon
-                            'to_time' => date('H:i', strtotime($sched->to_time)),
-                            'from_time' => date('H:i', strtotime($sched->from_time)),
-                        ];
-                    })->toArray(),
+                    'id' => $item->id,
+                    'passenger_name' => $item->passenger?->user?->name ?? 'Guest User',
+                    'origin' => $item->fromStation->name ?? 'N/A',
+                    'destination' => $item->toStation->name ?? 'N/A',
+                    'amount' => number_format($item->amount, 2),
+                    'date' => $item->reserve_date,
+                    'time_window' => date('h:i A', strtotime($item->reserve_from_time)) . ' - ' . date('h:i A', strtotime($item->reserve_to_time)),
+                    'status_text' => $statusName,
+                    'is_paid' => $isPaid,
+                    'is_pending' => $isPending,
+                    'is_completed' => $isCompleted,
+                    'booked_at' => $item->created_at->format('M d, Y'),
                 ];
             });
 
+        // 4. Return to Inertia
         return Inertia::render('owner/bus-station/Index', [
             'stations' => $stations,
             'franchise_id' => $franchiseId,
+            'transactions' => $transactions,
+            'initialFilter' => $filter,
             'activeTab' => $request->query('tab', 'stations')
         ]);
     }

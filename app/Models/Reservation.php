@@ -16,8 +16,10 @@ class Reservation extends Model
         'passenger_id',
         'status_id',
         'amount',
+        'reserve_from_time',
+        'reserve_to_time',
+        'reserve_date',
         'qrcode_name',
-        'qrcode_img',
         'paymongo_checkout_session_id',
     ];
 
