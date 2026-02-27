@@ -82,21 +82,30 @@ class RevenueController extends Controller
             'start'     => ['required', 'date'],
             'end'       => ['required', 'date'],
             'label'     => ['required', 'string'],
-            'service'   => ['required', 'string'],
+            'tab'       => ['required', 'string', 'exists:vehicle_types,name'],
+            'type'      => ['required', 'string', Rule::in(['franchise', 'branch'])],
             'franchise' => ['nullable'],
+            'branch'    => ['nullable'],
         ]);
 
         // 1. Determine which ID we are filtering for
-        $id = $validated['franchise'];
+        $id = $validated['type'] === 'franchise' ? $validated['franchise'] : $validated['branch'];
         
         // 2. Normalize filters for the buildBaseQuery
         $filters = [
-            'service'   => $validated['service'],
-            'franchise' => [$id] ?? [],
+            'tab'       => $validated['tab'] ?? 'taxi',
+            'type'      => $validated['type'] ?? 'franchise',
+            'franchise' => $validated['type'] === 'franchise' ? [$id] : [],
+            'branch'    => $validated['type'] === 'branch' ? [$id] : [],
         ];
 
         // 3. Fetch specific Target Name for header
-        $targetName = Franchise::find($id)?->name ?: 'N/A';
+        $targetName = 'N/A';
+        if ($validated['type'] === 'franchise' && $id) {
+            $targetName = Franchise::find($id)?->name;
+        } elseif ($validated['type'] === 'branch' && $id) {
+            $targetName = Branch::find($id)?->name;
+        }
 
         // 4. Build Query
         $query = $this->buildBaseQuery($filters);
@@ -115,6 +124,7 @@ class RevenueController extends Controller
             'details'     => RevenueShowResource::collection($details),
             'periodLabel' => $validated['label'],
             'targetName'  => $targetName,
+            'targetTab'  => ucfirst($validated['tab']),
             'totalSum'    => $details->sum('amount'),
             'filters'     => $filters,
         ]);
@@ -259,23 +269,32 @@ class RevenueController extends Controller
             'start'     => ['required', 'date'],
             'end'       => ['required', 'date'],
             'label'     => ['required', 'string'],
-            'service'   => ['required', 'string'],
+            'tab'       => ['required', 'string', 'exists:vehicle_types,name'],
+            'type'      => ['required', 'string', Rule::in(['franchise', 'branch'])],
             'franchise' => ['nullable'],
-            'export'     => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
+            'branch'    => ['nullable'],
+            'export'    => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
         ]);
 
         // 1. Determine which ID we are filtering for
-        $id = $validated['franchise'];
+        $id = $validated['type'] === 'franchise' ? $validated['franchise'] : $validated['branch'];
         
         // 2. Normalize filters for the buildBaseQuery
         $filters = [
-            'service'   => $validated['service'],
+            'tab'       => $validated['tab'] ?? 'taxi',
+            'type'      => $validated['type'] ?? 'franchise',
             'franchise' => [$id] ?? [],
+            'branch'    => [$id] ?? [],
             'export' => $validated['export'],
         ];
 
         // 3. Fetch specific Target Name for header
-        $targetName = Franchise::find($id)?->name ?: 'N/A';
+        $targetName = 'N/A';
+        if ($validated['type'] === 'franchise' && $id) {
+            $targetName = Franchise::find($id)?->name;
+        } elseif ($validated['type'] === 'branch' && $id) {
+            $targetName = Branch::find($id)?->name;
+        }
 
         // 4. Build Query
         $query = $this->buildBaseQuery($filters);
@@ -291,15 +310,16 @@ class RevenueController extends Controller
             ->get();
 
         // 4. Generate Title
-        $title = $targetName . ' ' . $validated['service'] . ' Revenue for ' . $validated['label'];
-        $fileName = 'revenues_' . $targetName . '_' . $validated['service'] . '_' . now()->format('Y-m-d_His');
+        $title = $targetName . ' ' . ucfirst($validated['tab']) . ' Trips' . ' Revenue for ' . $validated['label'];
+        $fileName = 'revenues_' . $targetName . ' ' . $validated['tab'] . '_trips_' . now()->format('Y-m-d_His');
 
         // 5. EXPORT (Let RevenueExport handle transformation)
         if ($filters['export'] === 'pdf') {
             return Pdf::loadView('exports.revenue', [
                 'rows' => $details,
                 'title' => $title,
-                'tab' => 'franchise',
+                'tab' => $filters['tab'],
+                'type' => $filters['type'],
                 'source' => 'show'
             ])
             ->setPaper('a4', 'landscape')
@@ -313,7 +333,7 @@ class RevenueController extends Controller
         return (new RevenueExport(
             $details,
             $title,
-            'franchise',
+            $filters['type'],
             'show'
         ))->download($fileName . '.' . ($filters['export'] === 'excel' ? 'xlsx' : 'csv'));
     }
