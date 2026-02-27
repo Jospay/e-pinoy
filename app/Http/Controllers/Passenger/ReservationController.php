@@ -72,19 +72,44 @@ class ReservationController extends Controller
     }
 
     public function create(Request $request)
-    {
-        $fromStationId = $request->query('from_id');
-        $origin = BusStation::findOrFail($fromStationId);
+{
+    $fromId = $request->query('from_id');
+    $origin = BusStation::findOrFail($fromId);
 
-        // Passengers can only book to other ACTIVE stations within the SAME franchise
-        $destinations = BusStation::where('franchise_id', $origin->franchise_id)
-            ->where('id', '!=', $fromStationId)
-            ->where('status_id', 1)
-            ->get();
+    // Get all active destinations in the same franchise
+    $destinations = BusStation::where('franchise_id', $origin->franchise_id)
+        ->where('id', '!=', $fromId)
+        ->where('status_id', 1)
+        ->orderBy('id', 'asc')
+        ->get()
+        ->map(function($dest) use ($fromId) {
+            // Logic: Sum the amounts of all stations between From and To
+            // This assumes stations are ordered by ID as they were created
+            $totalAmount = \App\Models\StationAmount::where('to_bus_station_id', '>', min($fromId, $dest->id))
+                ->where('to_bus_station_id', '<=', max($fromId, $dest->id))
+                // Only sum amounts belonging to this franchise's sequence
+                ->whereHas('toStation', function($q) use ($dest) {
+                    $q->where('franchise_id', $dest->franchise_id);
+                })
+                ->sum('amount');
 
-        return Inertia::render('passenger/dashboard/Reserve', [
-            'origin' => $origin,
-            'destinations' => $destinations,
-        ]);
-    }
+            return [
+                'id' => $dest->id,
+                'name' => $dest->name,
+                'code' => $dest->code_no,
+                'calculated_fare' => (float)($totalAmount > 0 ? $totalAmount : 15.0), // Fallback to base fare
+            ];
+        });
+
+    return Inertia::render('passenger/dashboard/Reserve', [
+        'origin' => [
+            'id' => $origin->id,
+            'name' => $origin->name,
+            'code' => $origin->code_no,
+            'lat' => (float)$origin->latitude,
+            'lng' => (float)$origin->longitude,
+        ],
+        'destinations' => $destinations,
+    ]);
+}
 }
