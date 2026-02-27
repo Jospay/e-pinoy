@@ -319,7 +319,9 @@ watch(
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Franchise Revenues</h2>
+          <h2 class="font-mono text-xl font-semibold capitalize">
+            {{ selectedType }} Revenues
+          </h2>
           <div class="flex gap-4">
             <Select v-model="selectedType">
               <SelectTrigger class="w-[150px] cursor-pointer">

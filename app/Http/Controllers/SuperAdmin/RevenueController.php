@@ -30,7 +30,6 @@ class RevenueController extends Controller
             'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
             'franchises' => ['sometimes', 'nullable', 'array'], 
             'branches' => ['sometimes', 'nullable', 'array'],
-            'service' => ['sometimes', 'string', Rule::in(['Trips', 'Boundary'])],
             'period' => ['sometimes', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
         ]);
 
@@ -124,7 +123,7 @@ class RevenueController extends Controller
             'details'     => RevenueShowResource::collection($details),
             'periodLabel' => $validated['label'],
             'targetName'  => $targetName,
-            'targetTab'  => ucfirst($validated['tab']),
+            'targetTab'  =>  $validated['tab'],
             'totalSum'    => $details->sum('amount'),
             'filters'     => $filters,
         ]);
@@ -311,14 +310,13 @@ class RevenueController extends Controller
 
         // 4. Generate Title
         $title = $targetName . ' ' . ucfirst($validated['tab']) . ' Trips' . ' Revenue for ' . $validated['label'];
-        $fileName = 'revenues_' . $targetName . ' ' . $validated['tab'] . '_trips_' . now()->format('Y-m-d_His');
+        $fileName = 'revenues_' . $targetName . '_' . $validated['tab'] . '_trips_' . now()->format('Y-m-d_His');
 
         // 5. EXPORT (Let RevenueExport handle transformation)
         if ($filters['export'] === 'pdf') {
             return Pdf::loadView('exports.revenue', [
                 'rows' => $details,
                 'title' => $title,
-                'tab' => $filters['tab'],
                 'type' => $filters['type'],
                 'source' => 'show'
             ])

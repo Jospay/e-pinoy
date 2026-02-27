@@ -15,9 +15,14 @@ const props = defineProps<{
   };
   periodLabel: string;
   targetName: string;
+  targetTab: string;
   totalSum: number;
   filters: {
+    tab: string;
+    type: 'franchise' | 'branch';
     franchise?: string[] | string;
+    branch?: string[] | string;
+    service: 'Trips' | 'Boundary';
     period: 'daily' | 'weekly' | 'monthly';
   };
 }>();
@@ -52,8 +57,11 @@ const handleExport = (type: 'pdf' | 'excel' | 'csv') => {
     end: endDate || '',
     label: props.periodLabel,
     export: type,
+    tab: props.filters.tab,
+    type: props.filters.type,
     period: props.filters.period,
     franchise: getFirstValue(props.filters.franchise),
+    branch: getFirstValue(props.filters.branch),
   });
 
   // 2. Open URL
@@ -108,25 +116,41 @@ const goBack = () => {
 </script>
 
 <template>
-
   <Head title="Expense Details" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-      <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
-        <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+    <div
+      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
+    >
+      <div
+        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
+      >
+        <div
+          class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
-            <Button variant="outline" class="mb-4 gap-2 sm:mb-0" @click="goBack">
+            <Button
+              variant="outline"
+              class="mb-4 gap-2 sm:mb-0"
+              @click="goBack"
+            >
               <span>&larr;</span> Back
             </Button>
-            <h2 class="mt-4 font-mono text-2xl font-bold">Expense Details</h2>
+            <h2 class="mt-4 font-mono text-2xl font-bold capitalize">
+              {{ filters.type }} {{ targetTab }} Expense
+            </h2>
           </div>
         </div>
 
         <div
-          class="mb-8 grid grid-cols-2 gap-4 rounded-lg border bg-gray-50 p-4 sm:grid-cols-3 lg:grid-cols-4 dark:bg-zinc-900/50">
-          <div class="col-span-1 border-r border-dashed border-gray-300 pr-4 dark:border-gray-700">
-            <p class="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+          class="mb-8 grid grid-cols-2 gap-4 rounded-lg border bg-gray-50 p-4 sm:grid-cols-3 lg:grid-cols-4 dark:bg-zinc-900/50"
+        >
+          <div
+            class="col-span-1 border-r border-dashed border-gray-300 pr-4 dark:border-gray-700"
+          >
+            <p
+              class="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400"
+            >
               Total Transactions
             </p>
             <p class="text-xl font-bold text-gray-900 dark:text-gray-100">
@@ -134,8 +158,12 @@ const goBack = () => {
             </p>
           </div>
 
-          <div class="col-span-1 border-r border-dashed border-gray-300 pr-4 dark:border-gray-700">
-            <p class="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400">
+          <div
+            class="col-span-1 border-r border-dashed border-gray-300 pr-4 dark:border-gray-700"
+          >
+            <p
+              class="text-xs font-bold tracking-wider text-gray-500 uppercase dark:text-gray-400"
+            >
               Total Expense
             </p>
             <p class="text-xl font-bold text-green-600">
@@ -144,7 +172,9 @@ const goBack = () => {
           </div>
 
           <div class="col-span-1">
-            <p class="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
+            <p
+              class="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+            >
               {{ targetName }}
             </p>
             <p class="text-lg font-semibold text-gray-700 dark:text-gray-300">
@@ -153,7 +183,11 @@ const goBack = () => {
           </div>
         </div>
 
-        <DataTable :columns="detailColumns" :data="props.details.data" search-placeholder="Search Invoice No...">
+        <DataTable
+          :columns="detailColumns"
+          :data="props.details.data"
+          search-placeholder="Search Invoice No..."
+        >
           <template #custom-actions>
             <Button @click="handleExport('pdf')"> Export PDF </Button>
             <Button @click="handleExport('excel')"> Export Excel </Button>

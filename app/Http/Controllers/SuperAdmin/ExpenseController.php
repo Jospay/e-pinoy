@@ -7,6 +7,9 @@ use App\Http\Resources\SuperAdmin\ExpenseDatatableResource;
 use App\Http\Resources\SuperAdmin\ExpenseShowResource;
 use App\Models\Franchise;
 use App\Models\Expense;
+use App\Models\Status;
+use App\Models\Branch;
+use App\Models\VehicleType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -23,24 +26,50 @@ class ExpenseController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
-            'franchise' => ['sometimes', 'nullable', 'array'], 
+            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
+            'type' => ['sometimes', 'string', Rule::in(['franchise', 'branch'])],
+            'franchises' => ['sometimes', 'nullable', 'array'], 
+            'branches' => ['sometimes', 'nullable', 'array'],
             'period' => ['sometimes', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
         ]);
 
         // 2. Set defaults
         $filters = [
-            'franchise' => $validated['franchise'] ?? [],
+            'tab' => $validated['tab'] ?? 'taxi',
+            'type' => $validated['type'] ?? 'franchise',
+            'franchises' => $validated['franchises'] ?? [],
+            'branches' => $validated['branches'] ?? [],
             'period' => $validated['period'] ?? 'daily',
         ];
 
         // 3. Build and execute query
         $query = $this->buildBaseQuery($filters);
-        $expenses = $this->applyPeriodGrouping($query, $filters['period']);
+        $expenses = $this->applyPeriodGrouping($query, $filters['period'], $filters['type']);
+
+        $activeStatusId = Status::where('name', 'active')->value('id');
+
+        $franchiseList = Franchise::select('id', 'name')
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })
+            ->get();
+            
+        $branchList = Branch::select('id', 'name', 'franchise_id')
+            ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId, $filters) {
+                $q->where('vehicle_types.name', $filters['tab'])
+                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            })->when(!empty($filters['franchises']), function ($q) use ($filters) {
+                $q->whereIn('franchise_id', $filters['franchises']);
+            })
+            ->get();
 
         // 4. Return all data to Inertia
         return Inertia::render('super-admin/finance/ExpenseIndex', [
             'expenses' => ExpenseDatatableResource::collection($expenses),
-            'franchises' => fn () => Franchise::select('id', 'name')->get(),
+            'franchises' => $franchiseList,
+            'branches' => $branchList,
+            'vehicleTypes' => fn () => VehicleType::select('id', 'name')->orderBy('id', 'asc')->get(),
             'filters' => $filters,
         ]);
         
@@ -52,19 +81,30 @@ class ExpenseController extends Controller
             'start'     => ['required', 'date'],
             'end'       => ['required', 'date'],
             'label'     => ['required', 'string'],
+            'tab'       => ['required', 'string', 'exists:vehicle_types,name'],
+            'type'      => ['required', 'string', Rule::in(['franchise', 'branch'])],
             'franchise' => ['nullable'],
+            'branch'    => ['nullable'],
         ]);
 
         // 1. Determine which ID we are filtering for
-        $id = $validated['franchise'];
+        $id = $validated['type'] === 'franchise' ? $validated['franchise'] : $validated['branch'];
         
         // 2. Normalize filters for the buildBaseQuery
         $filters = [
-            'franchise' => [$id] ?? [],
+            'tab'       => $validated['tab'] ?? 'taxi',
+            'type'      => $validated['type'] ?? 'franchise',
+            'franchise' => $validated['type'] === 'franchise' ? [$id] : [],
+            'branch'    => $validated['type'] === 'branch' ? [$id] : [],
         ];
 
         // 3. Fetch specific Target Name for header
-        $targetName = Franchise::find($id)?->name ?: 'N/A';
+        $targetName = 'N/A';
+        if ($validated['type'] === 'franchise' && $id) {
+            $targetName = Franchise::find($id)?->name;
+        } elseif ($validated['type'] === 'branch' && $id) {
+            $targetName = Branch::find($id)?->name;
+        }
        
         // 4. Build Query
         $query = $this->buildBaseQuery($filters);
@@ -85,6 +125,7 @@ class ExpenseController extends Controller
             'details'     => ExpenseShowResource::collection($details),
             'periodLabel' => $validated['label'],
             'targetName'  => $targetName,
+            'targetTab'  =>  $validated['tab'],
             'totalSum'    => $details->sum('amount'),
             'filters'     => $filters,
         ]);
@@ -97,7 +138,8 @@ class ExpenseController extends Controller
     {
         $query = Expense::query()
             ->whereHas('status', fn ($q) => $q->where('name', 'paid'))
-            ->whereNotNull('payment_date');
+            ->whereNotNull('payment_date')
+            ->whereHas('maintenance.vehicle.vehicleType', fn ($q) => $q->where('name', $filters['tab']));
 
             // --- Apply date constraints for export only ---
             if ($year) {
@@ -107,16 +149,21 @@ class ExpenseController extends Controller
                 $query->whereIn(DB::raw('MONTH(payment_date)'), $months);
             }
 
-        $query->whereNotNull('franchise_id')
-            ->when(!empty($filters['franchise']), fn ($q) => $q->whereIn('franchise_id', $filters['franchise']));
-        
+        if ($filters['type'] === 'franchise') {
+            $query->whereNotNull('franchise_id')
+                ->when(!empty($filters['franchises']), fn ($q) => $q->whereIn('franchise_id', $filters['franchises']));
+        } elseif ($filters['type'] === 'branch') {
+            $query->whereNotNull('branch_id')
+                ->when(!empty($filters['branches']), fn ($q) => $q->whereIn('branch_id', $filters['branches']));
+        }
+
         return $query;
     }
 
     /**
      * Applies the SELECT and GROUP BY logic based on the period.
      */
-    private function applyPeriodGrouping(Builder $query, string $period)
+    private function applyPeriodGrouping(Builder $query, string $period, string $type)
     {
         // Base selections for ALL periods (now including daily)
         $query->selectRaw('
@@ -124,9 +171,15 @@ class ExpenseController extends Controller
         ');
 
         // Apply franchise grouping
-        $query->join('franchises', 'expenses.franchise_id', '=', 'franchises.id')
-            ->addSelect('franchises.id as franchise_id', 'franchises.name as franchise_name')
-            ->groupBy('franchises.id', 'franchises.name');
+        if ($type === 'franchise') {
+            $query->join('franchises', 'expenses.franchise_id', '=', 'franchises.id')
+                ->addSelect('franchises.id as franchise_id', 'franchises.name as franchise_name')
+                ->groupBy('franchises.id', 'franchises.name');
+        } elseif ($type === 'branch') {
+            $query->join('branches', 'expenses.branch_id', '=', 'branches.id')
+                ->addSelect('branches.id as branch_id', 'branches.name as branch_name')
+                ->groupBy('branches.id', 'branches.name');
+        }
 
         // Apply period-specific grouping
         if ($period === 'daily') {
@@ -153,7 +206,10 @@ class ExpenseController extends Controller
     {
         // 1. Validate all inputs
         $validated = $request->validate([
-            'franchise' => ['sometimes', 'nullable', 'array'], 
+            'tab' => ['required', 'string', 'exists:vehicle_types,name'],
+            'type' => ['required', 'string', Rule::in(['franchise', 'branch'])],
+            'franchises' => ['sometimes', 'nullable', 'array'], 
+            'branches' => ['sometimes', 'nullable', 'array'], 
             'period' => ['required', 'string', Rule::in(['daily', 'weekly', 'monthly'])],
             'export' => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
             'year' => ['required', 'integer', 'min:2020', 'max:2100'],
@@ -162,7 +218,10 @@ class ExpenseController extends Controller
         ]);
 
         $filters = [
-            'franchise' => $validated['franchise'] ?? [],
+            'tab' => $validated['tab'] ?? 'taxi',
+            'type' => $validated['type'] ?? 'franchise',
+            'franchises' => $validated['franchises'] ?? [],
+            'branches' => $validated['branches'] ?? [],
             'period' => $validated['period'],
             'export' => $validated['export'],
         ];
@@ -171,7 +230,7 @@ class ExpenseController extends Controller
         $query = $this->buildBaseQuery($filters, $validated['year'], $validated['months']);
 
         // 3. Get and group data
-        $expenses = $this->applyPeriodGrouping($query, $filters['period']);
+        $expenses = $this->applyPeriodGrouping($query, $filters['period'], $filters['type']);
 
         // 4. Generate Title
         $title = $this->buildExportTitle($filters, $validated['year'], $validated['months']);
@@ -182,7 +241,8 @@ class ExpenseController extends Controller
             return Pdf::loadView('exports.expense', [
                 'rows' => $expenses,
                 'title' => $title,
-                'tab' => 'franchise',
+                'tab' => $filters['tab'],
+                'type' => $filters['type'],
                 'source' => 'index',
             ])
             ->setPaper('a4', 'landscape')
@@ -196,7 +256,7 @@ class ExpenseController extends Controller
         return (new ExpenseExport(
             $expenses,
             $title,
-            'franchise',
+            $filters['type'],
             'index'
         ))->download($fileName . '.' . ($filters['export'] === 'excel' ? 'xlsx' : 'csv'));
     }
@@ -207,21 +267,32 @@ class ExpenseController extends Controller
             'start'     => ['required', 'date'],
             'end'       => ['required', 'date'],
             'label'     => ['required', 'string'],
+            'tab'       => ['required', 'string', 'exists:vehicle_types,name'],
+            'type'      => ['required', 'string', Rule::in(['franchise', 'branch'])],
             'franchise' => ['nullable'],
+            'branch'    => ['nullable'],
             'export'     => ['required', 'string', Rule::in(['pdf', 'excel', 'csv'])],
         ]);
 
         // 1. Determine which ID we are filtering for
-        $id = $validated['franchise'];
+        $id = $validated['type'] === 'franchise' ? $validated['franchise'] : $validated['branch'];
         
         // 2. Normalize filters for the buildBaseQuery
         $filters = [
+            'tab'       => $validated['tab'] ?? 'taxi',
+            'type'      => $validated['type'] ?? 'franchise',
             'franchise' => [$id] ?? [],
-            'export'    => $validated['export'],
+            'branch'    => [$id] ?? [],
+            'export' => $validated['export'],
         ];
 
         // 3. Fetch specific Target Name for header
-        $targetName = Franchise::find($id)?->name ?: 'N/A';
+        $targetName = 'N/A';
+        if ($validated['type'] === 'franchise' && $id) {
+            $targetName = Franchise::find($id)?->name;
+        } elseif ($validated['type'] === 'branch' && $id) {
+            $targetName = Branch::find($id)?->name;
+        }
 
         // 4. Build Query
         $query = $this->buildBaseQuery($filters);
@@ -239,15 +310,16 @@ class ExpenseController extends Controller
             ->get();
 
         // 4. Generate Title
-        $title = $targetName . ' ' . 'Maintenance Expenses for ' . $validated['label'];
-        $fileName = 'expenses_' . $targetName . '_' . now()->format('Y-m-d_His');
+        $title = $targetName . ' ' . ucfirst($validated['tab']) . ' ' . 'Maintenance Expenses for ' . $validated['label'];
+        $fileName = 'expenses_' . $targetName . '_' . $validated['tab'] . '_' . now()->format('Y-m-d_His');
 
         // 5. EXPORT (Let ExpenseExport handle transformation)
         if ($filters['export'] === 'pdf') {
             return Pdf::loadView('exports.expense', [
                 'rows' => $details,
                 'title' => $title,
-                'tab' => 'franchise',
+                'tab' => $filters['tab'],
+                'type' => $filters['type'],
                 'source' => 'show'
             ])
             ->setPaper('a4', 'landscape')
@@ -261,7 +333,7 @@ class ExpenseController extends Controller
         return (new ExpenseExport(
             $details,
             $title,
-            'franchise',
+            $filters['type'],
             'show'
         ))->download($fileName . '.' . ($filters['export'] === 'excel' ? 'xlsx' : 'csv'));
     }
@@ -272,20 +344,26 @@ class ExpenseController extends Controller
     private function buildExportTitle(array $filters, int $year, array $months): string
     {
         $period = ucfirst($filters['period']);
-        $tabName = 'Franchise';
+        $typeName = $filters['type'] === 'franchise' ? 'Franchise' : 'Branch';
+        $tabName = ucfirst($filters['tab'] ?? '');
 
         // Get specific name if filtered
-        $targetName = "All {$tabName}s";
-        if (!empty($filters['franchise'])) {
-            $names = Franchise::whereIn('id', $filters['franchise'])
+        $targetName = "All {$typeName}s";
+        if (!empty($filters['franchises'])) {
+            $names = Franchise::whereIn('id', $filters['franchises'])
                 ->pluck('name')
                 ->join(', ');
             $targetName = $names ?: 'Franchise';
+        } elseif (!empty($filters['branches'])) {
+            $names = Branch::whereIn('id', $filters['branches'])
+                ->pluck('name')
+                ->join(', ');
+            $targetName = $names ?: 'Branch';
         }
 
         // Format months
         $monthNames = collect($months)->map(fn ($m) => date('F', mktime(0, 0, 0, $m, 1)))->join(', ');
 
-        return "{$period} Expense for {$targetName} - {$monthNames} {$year}";
+        return "{$period} {$tabName} Expense for {$targetName} - {$monthNames} {$year}";
     }
 }

@@ -31,7 +31,7 @@ class ExpenseExport implements
     public function __construct(
         protected Collection $data,
         protected string $title,
-        protected string $tabName,
+        protected string $typeName,
         protected string $source
     ) {}
 
@@ -63,7 +63,7 @@ class ExpenseExport implements
         }
 
         return [
-            'Franchise',
+            $this->typeName === 'franchise' ? 'Franchise' : 'Branch',
             'Date',
             'Amount'
         ];
@@ -86,7 +86,7 @@ class ExpenseExport implements
         }
 
         // Index Method Mapping
-        $nameKey = $this->tabName . '_name';
+        $nameKey = $this->typeName . '_name';
         $name = $row->$nameKey ?? 'N/A';
         // Resolve Date Logic
         $dateDisplay = 'N/A';

@@ -20,6 +20,8 @@ class ExpenseDatatableResource extends JsonResource
             'amount' => (float) $this->total_amount, // Use 'total_amount'
             'franchise_id' => $this->franchise_id ?? null,
             'franchise_name' => $this->franchise_name ?? null,
+            'branch_id' => $this->branch_id ?? null,
+            'branch_name' => $this->branch_name ?? null,
             'payment_date' => 'N/A', // Default
             'query_params'   => $this->calculateDateRange($this->resource),
         ];

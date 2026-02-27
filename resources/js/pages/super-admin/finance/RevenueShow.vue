@@ -128,8 +128,8 @@ const goBack = () => {
             >
               <span>&larr;</span> Back
             </Button>
-            <h2 class="mt-4 font-mono text-2xl font-bold">
-              {{ targetTab }} Revenue Details
+            <h2 class="mt-4 font-mono text-2xl font-bold capitalize">
+              {{ filters.type }} {{ targetTab }} Revenue
             </h2>
           </div>
         </div>
