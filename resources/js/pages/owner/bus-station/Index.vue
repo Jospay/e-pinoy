@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock,
   Lock,
+  MapPin,
   Pencil,
   Plus,
   Trash2,
@@ -55,6 +56,21 @@ const props = defineProps<{
     schedules: Array<{ id: number; from_time: string; to_time: string }>;
   }>;
   franchise_id: number;
+  transactions: Array<{
+    id: number;
+    passenger_name: string;
+    origin: string;
+    destination: string;
+    amount: string;
+    date: string;
+    time_window: string;
+    status_text: string;
+    is_paid: boolean;
+    is_pending: boolean;
+    is_completed: boolean;
+    booked_at: string;
+  }>;
+  initialFilter: string;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -74,6 +90,24 @@ watch(activeTab, (newTab) => {
   url.searchParams.set('tab', newTab);
   window.history.replaceState({}, '', url);
 });
+
+// --- RESERVATION LOGIC ---
+const filteredTransactions = computed(() => {
+  if (props.initialFilter === 'completed') {
+    return props.transactions.filter((t) => t.is_completed);
+  } else if (props.initialFilter === 'paid') {
+    return props.transactions.filter((t) => t.is_paid);
+  }
+  return props.transactions.filter((t) => t.is_pending);
+});
+
+const updateFilter = (status: string) => {
+  router.get(
+    window.location.pathname,
+    { tab: 'reservations', status: status },
+    { preserveState: true, replace: true, preserveScroll: true },
+  );
+};
 
 // --- SCHEDULE LOGIC (STATION-SPECIFIC TIMES) ---
 const isScheduleDialogOpen = ref(false);
@@ -303,6 +337,9 @@ const hasPendingOrDenied = computed(() =>
           <TabsTrigger value="schedules" class="px-4"
             >Schedule Management</TabsTrigger
           >
+          <TabsTrigger value="reservations" class="px-4"
+            >Reservation Management</TabsTrigger
+          >
         </TabsList>
       </Tabs>
 
@@ -498,6 +535,226 @@ const hasPendingOrDenied = computed(() =>
             >
               No times set for this station.
             </p>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="activeTab === 'reservations'" class="space-y-6">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight">
+            Station Reservations
+          </h1>
+          <p class="text-gray-600">
+            Monitor and manage passenger bookings originating from your
+            stations.
+          </p>
+        </div>
+
+        <div
+          class="mt-6 mb-8 flex w-fit items-center rounded-2xl bg-slate-200/50 p-1"
+        >
+          <button
+            @click="updateFilter('completed')"
+            :class="[
+              initialFilter === 'completed'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700',
+            ]"
+            class="rounded-xl px-6 py-2 text-xs font-bold transition-all"
+          >
+            Completed
+          </button>
+          <button
+            @click="updateFilter('paid')"
+            :class="[
+              initialFilter === 'paid'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700',
+            ]"
+            class="rounded-xl px-6 py-2 text-xs font-bold transition-all"
+          >
+            Paid Trips
+          </button>
+          <button
+            @click="updateFilter('pending')"
+            :class="[
+              initialFilter === 'pending'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700',
+            ]"
+            class="rounded-xl px-6 py-2 text-xs font-bold transition-all"
+          >
+            Pending
+          </button>
+        </div>
+
+        <div
+          v-if="filteredTransactions.length === 0"
+          class="rounded-3xl border-2 border-dashed border-slate-200 bg-white py-20 text-center"
+        >
+          <div class="flex flex-col items-center justify-center space-y-2">
+            <div class="rounded-full bg-slate-50 p-4">
+              <Clock class="h-8 w-8 text-slate-300" />
+            </div>
+            <p class="text-sm font-medium text-slate-400 italic">
+              No {{ initialFilter }} reservations found for your stations.
+            </p>
+          </div>
+        </div>
+
+        <div
+          v-else
+          class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-1"
+        >
+          <div v-for="tx in filteredTransactions" :key="tx.id">
+            <div
+              class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40"
+            >
+              <div
+                class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-3"
+              >
+                <div class="flex items-center gap-2">
+                  <span
+                    :class="[
+                      'rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wider uppercase',
+                      tx.is_completed
+                        ? 'bg-blue-100 text-blue-700'
+                        : tx.is_paid
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-amber-100 text-amber-700',
+                    ]"
+                  >
+                    {{ tx.status_text }}
+                  </span>
+                  <span class="text-[10px] font-bold text-slate-400 uppercase"
+                    >#{{ tx.id }}</span
+                  >
+                </div>
+                <span
+                  class="text-[10px] font-medium tracking-widest text-slate-400 uppercase"
+                >
+                  Booked: {{ tx.booked_at }}
+                </span>
+              </div>
+
+              <div class="p-6">
+                <div
+                  class="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start"
+                >
+                  <div class="flex gap-4">
+                    <div class="flex flex-col items-center py-1">
+                      <div
+                        class="h-2.5 w-2.5 rounded-full border-2 border-blue-500 bg-white"
+                      ></div>
+                      <div
+                        class="my-1 h-8 w-0.5 border-l-2 border-dotted border-slate-200"
+                      ></div>
+                      <div class="h-2.5 w-2.5 rounded-full bg-red-500"></div>
+                    </div>
+
+                    <div class="space-y-4">
+                      <div>
+                        <p
+                          class="mb-1 text-[10px] leading-none font-bold text-slate-400 uppercase"
+                        >
+                          From
+                        </p>
+                        <p class="leading-tight font-bold text-slate-800">
+                          {{ tx.origin }}
+                        </p>
+                      </div>
+                      <div>
+                        <p
+                          class="mb-1 text-[10px] leading-none font-bold text-slate-400 uppercase"
+                        >
+                          To
+                        </p>
+                        <p class="leading-tight font-bold text-slate-800">
+                          {{ tx.destination }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    class="flex items-end justify-between md:flex-col md:text-right"
+                  >
+                    <div>
+                      <p
+                        class="text-[10px] font-bold tracking-tight text-slate-400 uppercase"
+                      >
+                        Passenger Name
+                      </p>
+                      <div class="flex items-center gap-1 md:justify-end">
+                        <span class="font-bold text-slate-900">{{
+                          tx.passenger_name
+                        }}</span>
+                      </div>
+                    </div>
+                    <div class="mt-2">
+                      <p class="text-2xl font-black text-slate-900">
+                        ₱{{ tx.amount }}
+                      </p>
+                      <p class="text-[10px] font-bold text-slate-400 uppercase">
+                        Fare Amount
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  class="mb-4 flex flex-wrap items-center gap-4 rounded-2xl bg-slate-50 p-4"
+                >
+                  <div class="flex items-center gap-2">
+                    <Clock class="h-4 w-4 text-slate-400" />
+                    <div>
+                      <p class="text-[9px] font-bold text-slate-400 uppercase">
+                        Schedule Time
+                      </p>
+                      <p class="text-xs font-bold text-slate-700">
+                        {{ tx.time_window }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <MapPin class="h-4 w-4 text-slate-400" />
+                    <div>
+                      <p class="text-[9px] font-bold text-slate-400 uppercase">
+                        Departure Date
+                      </p>
+                      <p class="text-xs font-bold text-slate-700">
+                        {{ tx.date }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="tx.is_completed">
+                  <div
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-4 text-sm font-bold text-slate-500"
+                  >
+                    <CheckCircle2 class="h-4 w-4" />
+                    Trip Finished
+                  </div>
+                </div>
+
+                <div v-else-if="tx.is_paid">
+                  <div
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl border border-green-100 bg-green-50 py-4 text-sm font-bold text-green-700"
+                  >
+                    <CheckCircle2 class="h-4 w-4" />
+                    Ticket Active & Paid
+                  </div>
+                </div>
+
+                <div
+                  v-else
+                  class="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-4 text-xs font-bold tracking-widest text-slate-400 uppercase"
+                >
+                  Awaiting Passenger Payment
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
