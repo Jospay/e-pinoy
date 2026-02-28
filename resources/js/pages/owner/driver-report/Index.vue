@@ -33,16 +33,22 @@ import { type ColumnDef } from '@tanstack/vue-table';
 import { debounce } from 'lodash-es';
 import { MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
+
+import { TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Tabs from '@/components/ui/tabs/Tabs.vue';
+
 // --- Define Props ---
 const props = defineProps<{
-  revenues: {
-    data: RevenueRow[];
-  };
+  revenues: { data: RevenueRow[] };
   drivers: { id: number; username: string }[];
+  branches: { id: number; name: string }[]; // Added
+  franchiseVehicleTypes: { id: number; name: string }[]; // Added
   filters: {
-    driver: string | null;
-    service: 'Trips';
-    period: 'daily' | 'weekly' | 'monthly'; // RESTORED: Period filter definition
+    driver: string;
+    service: string;
+    period: string;
+    branch_id: string; // Added
+    vehicle_type: string; // Added
   };
 }>();
 
@@ -77,8 +83,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 // --- 4. Setup Reactive State for Filters ---
 const selectedDriver = ref(props.filters.driver || 'all');
-const selectedService = ref(props.filters.service);
-const selectedPeriod = ref(props.filters.period); // RESTORED: Period state
+const selectedPeriod = ref(props.filters.period);
+const branchFilter = ref(props.filters.branch_id || 'all'); // New
+const activeTab = ref(props.filters.vehicle_type); // New
 
 // --- 5. Computed Properties for UI ---
 const title = computed(() => {
@@ -140,14 +147,22 @@ function handleExport() {
 
   // 1. Get all *current* page filters
   const params = new URLSearchParams({
-    service: selectedService.value,
-    period: selectedPeriod.value, // RESTORED: Add period to export params
+    // CHANGE THIS LINE: Use props.filters.service instead of selectedService.value
+    service: props.filters.service,
+    period: selectedPeriod.value,
     export_type: exportType.value,
     year: exportYear.value,
+    // Add vehicle_type to ensure the export matches the current tab
+    vehicle_type: activeTab.value || '',
   });
 
   if (selectedDriver.value && selectedDriver.value !== 'all') {
     params.append('driver', selectedDriver.value);
+  }
+
+  // Add branch filter to the export as well
+  if (branchFilter.value && branchFilter.value !== 'all') {
+    params.append('branch_id', branchFilter.value);
   }
 
   // 2. Add months
@@ -156,6 +171,7 @@ function handleExport() {
   });
 
   // 3. Build URL and open in new tab (triggers download)
+  // Ensure the route helper is called correctly
   const url = `${owner.driverownerreport.export().url}?${params.toString()}`;
   window.open(url, '_blank');
 
@@ -183,13 +199,27 @@ const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
       header: 'Driver Name',
     },
     {
-      // Now explicitly show Franchise Name since the data is tied to one
       accessorKey: 'franchise_name',
-      header: 'Franchise',
+      header: 'Franchise / Branch',
+      cell: ({ row }) => {
+        const data = row.original;
+
+        const name = data.branch_name || 'Main Franchise';
+        const label = data.branch_id ? 'Branch' : 'Franchise';
+
+        return h('div', { class: 'flex flex-col' }, [
+          h('span', { class: 'text-sm font-medium' }, name),
+          h(
+            'span',
+            { class: 'text-[10px] text-muted-foreground uppercase' },
+            label,
+          ),
+        ]);
+      },
     },
     {
       accessorKey: 'payment_date',
-      header: isDaily ? 'Date' : 'Period', // RESTORED: Dynamic header
+      header: isDaily ? 'Date' : 'Period',
     },
     {
       accessorKey: 'amount',
@@ -219,7 +249,9 @@ const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
         key !== 'week_sort' && // RESTORED
         key !== 'month_sort' && // RESTORED
         key !== 'year_sort' &&
-        key !== 'driver_earning',
+        key !== 'driver_earning' &&
+        key !== 'branch_name' &&
+        key !== 'branch_id',
     );
 
     dynamicKeys = breakdownKeys;
@@ -253,34 +285,6 @@ const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
   // --- END: Dynamic breakdown columns logic ---
 
   // 3. Add the action button column
-  // columns.push({
-  //   accessorKey: 'action',
-  //   header: 'Action',
-  //   cell: (info) => {
-  //     const rowData = info.row.original as RevenueRow;
-
-  //     return h(
-  //       Button,
-  //       {
-  //         class: 'py-1 px-2 text-xs',
-  //         onClick: () => {
-  //           const queryParams: Record<string, string> = {
-  //             driver_id: String(rowData.driver_id),
-  //             payment_date: rowData.payment_date,
-  //             period: selectedPeriod.value,
-  //           };
-
-  //           router.get(owner.driverownerreport.details().url, queryParams, {
-  //             preserveScroll: true,
-  //             replace: false,
-  //           });
-  //         },
-  //       },
-  //       () => 'View Computation Details',
-  //     );
-  //   },
-  // });
-
   columns.push({
     id: 'actions',
     header: () => h('div', { class: 'text-center' }, 'Action'),
@@ -309,15 +313,12 @@ const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
                     driver_id: String(rowData.driver_id),
                     payment_date: rowData.payment_date,
                     period: selectedPeriod.value,
+                    vehicle_type: activeTab.value,
                   };
 
                   router.get(
                     owner.driverownerreport.details().url,
                     queryParams,
-                    {
-                      preserveScroll: true,
-                      replace: false,
-                    },
                   );
                 },
               },
@@ -334,27 +335,24 @@ const revenueColumns = computed<ColumnDef<RevenueRow>[]>(() => {
 
 // --- Watchers to Update URL ---
 const updateFilters = () => {
-  const queryParams: Record<string, string> = {
-    service: selectedService.value,
-    period: selectedPeriod.value, // RESTORED: Add period to URL
-  };
-
-  if (selectedDriver.value && selectedDriver.value !== 'all') {
-    queryParams.driver = selectedDriver.value;
-  }
-
-  router.get(owner.driverownerreport().url, queryParams, {
-    preserveScroll: true,
-    replace: true,
-  });
+  router.get(
+    owner.driverownerreport().url,
+    {
+      service: props.filters.service,
+      period: selectedPeriod.value,
+      driver: selectedDriver.value,
+      branch_id: branchFilter.value,
+      vehicle_type: activeTab.value,
+    },
+    {
+      preserveScroll: true,
+      replace: true,
+    },
+  );
 };
 
-// Watch all filters for changes (debounced)
 watch(
-  [
-    selectedPeriod, // RESTORED: Watch period changes
-    selectedDriver,
-  ],
+  [selectedPeriod, selectedDriver, branchFilter, activeTab],
   debounce(() => {
     updateFilters();
   }, 300),
@@ -368,6 +366,25 @@ watch(
     <div
       class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
     >
+      <Tabs
+        v-if="franchiseVehicleTypes.length > 0"
+        v-model="activeTab"
+        class="w-full"
+      >
+        <TabsList
+          class="w-full justify-start overflow-x-auto bg-muted/50 p-1.5"
+        >
+          <TabsTrigger
+            v-for="type in franchiseVehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="gap-2 px-4"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
@@ -393,6 +410,42 @@ watch(
                 </SelectItem>
               </SelectContent>
             </Select>
+
+            <div v-if="branches.length > 0">
+              <Select v-model="branchFilter">
+                <SelectTrigger class="w-full md:w-48">
+                  <SelectValue placeholder="Select Branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignments</SelectItem>
+                  <SelectGroup>
+                    <SelectLabel
+                      class="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase"
+                      >Franchise</SelectLabel
+                    >
+                    <SelectItem value="franchise"
+                      >Main Franchise (Unassigned)</SelectItem
+                    >
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel
+                      class="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase"
+                      >Branches</SelectLabel
+                    >
+                    <SelectItem v-if="branches.length > 1" value="only_branches"
+                      >All Branches</SelectItem
+                    >
+                    <SelectItem
+                      v-for="branch in branches"
+                      :key="branch.id"
+                      :value="branch.id.toString()"
+                    >
+                      {{ branch.name }}
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
 
             <Select v-model="selectedDriver">
               <SelectTrigger class="w-[200px] cursor-pointer">

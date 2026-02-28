@@ -7,140 +7,85 @@ import owner from '@/routes/owner';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { computed, h, ref } from 'vue'; // <-- Import 'ref'
+import { computed, h, ref } from 'vue';
 
-// --- Define Props (Matches DriverDetailsController@show return) ---
 const props = defineProps<{
-  // Driver Details (for header context)
   driver: { id: number; username: string };
-  periodLabel: string; // The formatted date string (e.g., "November 20, 2025")
-  breakdownTypes: string[]; // e.g., ['Tax', 'Bank Fee', 'Markup Fee'] (clean, capitalized names)
-
-  // Individual Revenue Records (The detailed data)
+  periodLabel: string;
+  breakdownTypes: string[];
   details: DetailedRevenueRow[];
-
-  // Filters used to generate the data (for context/back button)
   filters: {
     tab: 'franchise' | 'branch';
     franchise: string | null;
     branch: string | null;
     driver_id: string;
     period: 'daily' | 'weekly' | 'monthly';
+    vehicle_type: string; // Ensure this is passed from Controller
   };
 }>();
 
-// --- Define DetailedRevenueRow Interface (Remains the same) ---
 interface DetailedRevenueRow {
   id: number;
   invoice_no: string;
-  // NOTE: amount should be treated as a number in JS after parsing.
-  amount: number | string; // Total trip amount
+  amount: number | string;
   payment_date: string;
-  franchise?: { name: string } | null;
-  branch?: { name: string } | null;
-  driver?: { name: string } | null;
   revenue_breakdowns: Array<{
     total_earning: number | string;
-    percentage_type: {
-      name: string; // e.g., 'tax', 'bank_fee' (lowercase_snake_case)
-    };
+    percentage_type: { name: string };
   }>;
 }
 
-// --- 1. Export State (New) ---
-// Tracks which export type is currently loading. Null when not loading.
 const isExporting = ref<null | 'pdf' | 'excel' | 'csv'>(null);
 
-// --- 2. Setup Breadcrumbs (Remains the same) ---
+// --- Dynamic Title ---
+const pageTitle = computed(() => {
+  return `${props.filters.vehicle_type} Transaction Breakdown`;
+});
+
 const breadcrumbs: BreadcrumbItem[] = [
-  {
-    title: 'Earning Report',
-    href: owner.driverownerreport().url,
-  },
-  {
-    title: 'Details',
-    href: '#',
-  },
+  { title: 'Earning Report', href: owner.driverownerreport().url },
+  { title: 'Details', href: '#' },
 ];
 
-// --- 3. Export Logic: Updated with Loading State ---
 function handleExport(type: 'pdf' | 'excel' | 'csv') {
-  // Prevent starting a new export while one is already in progress
-  if (isExporting.value) {
-    return;
-  }
-
-  // 1. Set loading state
+  if (isExporting.value) return;
   isExporting.value = type;
 
-  // 2. Prepare base filters, ensuring no nulls are spread directly
-  const baseFilters: Record<string, string> = {};
-  for (const key in props.filters) {
-    const value = props.filters[key as keyof typeof props.filters];
-    if (value !== null && value !== undefined) {
-      baseFilters[key] = String(value);
-    }
-  }
-
-  // 3. Construct final query parameters
   const queryParams: Record<string, string> = {
-    ...baseFilters,
+    ...props.filters,
     driver_id: props.driver.id.toString(),
     payment_date: props.periodLabel,
     export_type: type,
   };
 
-  // 4. Construct the full URL
   const baseUrl = owner.driverownerreport_details.export().url;
   const url = new URL(baseUrl, window.location.origin);
-
   Object.keys(queryParams).forEach((key) => {
-    url.searchParams.append(key, encodeURIComponent(queryParams[key]));
+    if (queryParams[key]) url.searchParams.append(key, queryParams[key]);
   });
 
-  // 5. Force a direct browser download
-  // NOTE: For an actual backend file download, the browser will manage the download.
-  // The main challenge is knowing when the download *completes* (which is impossible
-  // with window.location.href). The best practice is to clear the loading state
-  // after a short delay (e.g., 2-5 seconds) to give the server time to respond and
-  // the download to initiate. The user will still see the loading indicator.
-
   window.location.href = url.toString();
-
-  // 6. Clear loading state after a brief delay
-  // This is a necessary compromise when using a direct file download link.
   setTimeout(() => {
     isExporting.value = null;
-  }, 3000); // 3-second timeout for the file download to start
+  }, 3000);
 }
-// --- End Export Logic ---
 
-// --- 4. Helper Functions (Remains the same) ---
 const formatCurrency = (amount: number): string => {
-  if (isNaN(amount) || amount === null) {
-    return '₱0.00';
-  }
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
     minimumFractionDigits: 2,
-  }).format(amount);
+  }).format(amount || 0);
 };
 
 const getBreakdownAmount = (
   row: DetailedRevenueRow,
   typeName: string,
 ): number => {
-  if (!row.revenue_breakdowns || row.revenue_breakdowns.length === 0) {
-    return 0;
-  }
-
   const dbKey = typeName.toLowerCase().replace(/\s/g, '_');
-
   const breakdown = row.revenue_breakdowns.find(
     (b) => b.percentage_type.name.toLowerCase() === dbKey,
   );
-
   return breakdown ? parseFloat(String(breakdown.total_earning)) : 0;
 };
 
@@ -149,30 +94,20 @@ const calculateDriverEarning = (row: DetailedRevenueRow): number => {
     (sum, b) => sum + parseFloat(String(b.total_earning)),
     0,
   );
-
-  const rowAmount = parseFloat(String(row.amount));
-
-  return Math.max(0, rowAmount - totalBreakdowns);
+  return Math.max(0, parseFloat(String(row.amount)) - totalBreakdowns);
 };
 
-// --- 5. Computed Properties for Grand Totals (Remains the same) ---
 const grandTotals = computed(() => {
-  let totalAmount = 0;
+  let totalAmount = 0,
+    totalDriverEarning = 0;
   let totalBreakdowns = {} as Record<string, number>;
-  let totalDriverEarning = 0;
-
-  props.breakdownTypes.forEach((type) => {
-    totalBreakdowns[type] = 0;
-  });
+  props.breakdownTypes.forEach((t) => (totalBreakdowns[t] = 0));
 
   props.details.forEach((row) => {
     totalAmount += parseFloat(String(row.amount));
-
-    props.breakdownTypes.forEach((type) => {
-      const breakdownValue = getBreakdownAmount(row, type);
-      totalBreakdowns[type] += breakdownValue;
-    });
-
+    props.breakdownTypes.forEach(
+      (t) => (totalBreakdowns[t] += getBreakdownAmount(row, t)),
+    );
     totalDriverEarning += calculateDriverEarning(row);
   });
 
@@ -186,104 +121,70 @@ const grandTotals = computed(() => {
   };
 });
 
-// --- 6. Define Columns for DataTable (Remains the same) ---
 const detailColumns = computed<ColumnDef<DetailedRevenueRow>[]>(() => {
-  const columns: ColumnDef<DetailedRevenueRow>[] = [
+  const cols: ColumnDef<DetailedRevenueRow>[] = [
     {
       accessorKey: 'invoice_no',
       header: 'Invoice No.',
-      minSize: 100,
-      cell: (info) => h(Badge, { variant: 'outline' }, () => info.getValue()),
+      cell: (i) => h(Badge, { variant: 'outline' }, () => i.getValue()),
     },
     {
       accessorKey: 'payment_date',
       header: 'Date/Time',
-      minSize: 150,
-      cell: (info) => {
-        const date = info.getValue() as string;
-        return new Date(date).toLocaleString('en-US', {
-          month: 'short',
-          day: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-      },
+      cell: (i) => new Date(i.getValue() as string).toLocaleString(),
     },
     {
       accessorKey: 'amount',
       header: 'Trip Amount',
-      minSize: 150,
-      cell: (info) => formatCurrency(parseFloat(String(info.getValue()))),
+      cell: (i) => formatCurrency(parseFloat(String(i.getValue()))),
     },
   ];
-
-  // Dynamically add breakdown columns
   props.breakdownTypes.forEach((type) => {
-    columns.push({
+    cols.push({
       accessorKey: type,
       header: type,
-      minSize: 100,
-      cell: ({ row }) => {
-        const amount = getBreakdownAmount(row.original, type);
-        return formatCurrency(amount);
-      },
+      cell: ({ row }) => formatCurrency(getBreakdownAmount(row.original, type)),
     });
   });
-
-  // Add Driver Earning column
-  columns.push({
+  cols.push({
     accessorKey: 'driver_earning',
     header: 'Driver Net',
-    minSize: 150,
-    cell: ({ row }) => {
-      const earning = calculateDriverEarning(row.original);
-      return formatCurrency(earning);
-    },
+    cell: ({ row }) => formatCurrency(calculateDriverEarning(row.original)),
   });
-
-  return columns;
+  return cols;
 });
 
-// --- 7. Go Back Function (Remains the same) ---
 const goBack = () => {
-  const queryParams: Record<string, string> = {
+  router.get(owner.driverownerreport().url, {
     tab: props.filters.tab,
     period: props.filters.period,
     driver: props.filters.driver_id || 'all',
-    service: 'Trips', // Assuming service is always 'Trips' for this report
-  };
-
-  if (props.filters.franchise) {
-    queryParams.franchise = props.filters.franchise;
-  } else if (props.filters.branch) {
-    queryParams.branch = props.filters.branch;
-  }
-
-  // Navigates back to the aggregated report index
-  router.get(owner.driverownerreport().url, queryParams);
+    vehicle_type: props.filters.vehicle_type, // Maintain the tab
+    service: 'Trips',
+  });
 };
 </script>
 
 <template>
-  <Head title="Transaction Breakdown" />
+  <Head :title="pageTitle" />
   <AppLayout :breadcrumbs="breadcrumbs">
     <div
       class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
     >
       <div
-        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
+        class="relative rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
       >
         <div
           class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <Button variant="outline" class="mb-4 sm:mb-0" @click="goBack">
-              ← Back
-            </Button>
-            <h2 class="mt-2 font-mono text-2xl font-bold">
-              Transaction Breakdown
+            <Button variant="outline" class="mb-4 sm:mb-0" @click="goBack"
+              >← Back</Button
+            >
+            <h2
+              class="mt-2 font-mono text-2xl font-bold tracking-tight uppercase"
+            >
+              {{ pageTitle }}
             </h2>
           </div>
           <div
@@ -299,45 +200,29 @@ const goBack = () => {
         </div>
 
         <div
-          class="mb-8 grid grid-cols-2 gap-4 rounded-lg bg-gray-50 p-4 shadow-inner sm:grid-cols-4 md:grid-cols-6 dark:bg-gray-900"
+          class="mb-8 grid grid-cols-2 gap-4 rounded-lg bg-muted/50 p-4 shadow-inner sm:grid-cols-4 md:grid-cols-6"
         >
-          <div class="col-span-2 border-r pr-4 sm:col-span-1 sm:pr-2">
-            <p
-              class="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-            >
+          <div class="col-span-2 border-r pr-4 sm:col-span-1">
+            <p class="text-xs font-medium text-muted-foreground uppercase">
               Total Trips
             </p>
-            <p class="text-xl font-bold text-gray-900 dark:text-gray-100">
-              {{ grandTotals.totalAmount }}
-            </p>
+            <p class="text-xl font-bold">{{ grandTotals.totalAmount }}</p>
           </div>
-
           <div
             v-for="(item, index) in grandTotals.breakdowns"
             :key="item.name"
-            class="col-span-2 sm:col-span-1"
-            :class="{
-              'border-r pr-4 sm:pr-2':
-                index < grandTotals.breakdowns.length - 1,
-            }"
+            class="col-span-2 border-r px-2 sm:col-span-1"
           >
-            <p
-              class="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-            >
+            <p class="text-xs font-medium text-muted-foreground uppercase">
               {{ item.name }}
             </p>
-            <p class="text-xl font-bold">
-              {{ item.value }}
-            </p>
+            <p class="text-xl font-bold">{{ item.value }}</p>
           </div>
-
-          <div class="col-span-2 sm:col-span-1">
-            <p
-              class="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-            >
-              Driver Earning
+          <div class="col-span-2 px-2 sm:col-span-1">
+            <p class="text-xs font-medium text-muted-foreground uppercase">
+              Driver Net
             </p>
-            <p class="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            <p class="text-xl font-bold text-green-600">
               {{ grandTotals.totalDriverEarning }}
             </p>
           </div>
@@ -349,19 +234,19 @@ const goBack = () => {
           search-placeholder="Search by Invoice No."
         >
           <template #custom-actions>
-            <Button @click="handleExport('pdf')" :disabled="!!isExporting">
-              <span v-if="isExporting === 'pdf'"> PDF to Exporting... </span>
-              <span v-else> Export PDF </span>
+            <Button
+              @click="handleExport('pdf')"
+              :disabled="!!isExporting"
+              variant="outline"
+            >
+              {{ isExporting === 'pdf' ? 'Exporting...' : 'PDF' }}
             </Button>
-            <Button @click="handleExport('excel')" :disabled="!!isExporting">
-              <span v-if="isExporting === 'excel'">
-                Excel to Exporting...
-              </span>
-              <span v-else> Export Excel </span>
-            </Button>
-            <Button @click="handleExport('csv')" :disabled="!!isExporting">
-              <span v-if="isExporting === 'csv'"> CSV to Exporting... </span>
-              <span v-else> Export CSV </span>
+            <Button
+              @click="handleExport('excel')"
+              :disabled="!!isExporting"
+              variant="outline"
+            >
+              {{ isExporting === 'excel' ? 'Exporting...' : 'Excel' }}
             </Button>
           </template>
         </DataTable>

@@ -57,9 +57,9 @@ class Revenue extends Model
     }
 
     // relationship to vehicleType, one to many
-    public function vehicleType(): BelongsTo
+    public function vehicleType()
     {
-        return $this->belongsTo(VehicleType::class);
+        return $this->belongsTo(VehicleType::class, 'vehicle_type_id');
     }
 
     // relationship to branch, one to many

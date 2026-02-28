@@ -54,8 +54,11 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         // export for driver
         Route::get('/earning', [ReportDriverController::class, 'index'])->name('driverownerreport');
         Route::get('/earning/export', [ReportDriverController::class, 'export'])->name('driverownerreport.export');
-        Route::get('/earning/details', [DetailsDriverController::class, 'show'])->name('driverownerreport.details');
-        Route::get('/earning/details/export', [DetailsDriverController::class, 'exportDetails'])->name('driverownerreport_details.export');
+        Route::get('/earning/details', [ReportDriverController::class, 'show'])->name('driverownerreport.details');
+        Route::get('/earning/details/export', [ReportDriverController::class, 'exportDetails'])->name('driverownerreport_details.export');
+
+        // Route::get('/earning/details', [DetailsDriverController::class, 'show'])->name('driverownerreport.details');
+        // Route::get('/earning/details/export', [DetailsDriverController::class, 'exportDetails'])->name('driverownerreport_details.export');
 
         Route::get('/payroll', [PayrollDriverController::class, 'index'])->name('driverownerpayroll');
         Route::get('/payroll/export', [PayrollDriverController::class, 'export'])->name('driverownerpayroll.export');
