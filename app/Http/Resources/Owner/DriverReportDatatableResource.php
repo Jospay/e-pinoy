@@ -22,10 +22,12 @@ class DriverReportDatatableResource extends JsonResource
                 'invoice_no' => $this->invoice_no,
                 'driver_id' => $this->driver_id,
                 'payment_date' => $this->payment_date ? date('F j, Y', strtotime($this->payment_date)) : null,
-                'amount' => (float) $this->amount, // Use the 'amount' column
+                'amount' => (float) $this->amount,
                 'service_type' => $this->service_type,
-                'franchise_name' => $this->whenLoaded('franchise', fn () => $this->franchise?->name),
-                'driver_username' => $this->whenLoaded('driver', fn () => $this->driverDetails?->name),
+                'franchise_name' => $this->franchise_name ?? null,
+                'driver_username' => $this->driver_username ?? null,
+                'branch_name' => $this->branch_name, // Ensure this exists
+                'branch_id' => $this->branch_id,     // Ensure this exists
             ];
         }
 
@@ -33,16 +35,19 @@ class DriverReportDatatableResource extends JsonResource
 
         // Base data for grouped
         $data = [
-            'id' => null, // No single ID
-            'invoice_no' => 'N/A', // Default to N/A for grouped data
-            'amount' => (float) $this->total_amount, // Use 'total_amount'
-            'driver_id' => $this->driver_id,
-            'service_type' => $this->service_type,
-            // Access the JOINed attributes directly.
-            'franchise_name' => $this->franchise_name ?? null,
-            'payment_date' => 'N/A', // Default
-            'driver_username' => $this->driver_username ?? null,
-        ];
+        'id' => null,
+        'invoice_no' => 'N/A',
+        'amount' => (float) $this->total_amount,
+        'driver_id' => $this->driver_id,
+        'service_type' => $this->service_type,
+        'franchise_name' => $this->franchise_name ?? null,
+        'driver_username' => $this->driver_username ?? null,
+        'payment_date' => 'N/A',
+
+        // ADD THESE TWO LINES:
+        'branch_name' => $this->branch_name ?? null,
+        'branch_id' => $this->branch_id ?? null,
+    ];
 
         // NEW: Dynamically add breakdown totals from the raw grouped query results (e.g., breakdown_tax -> tax)
         foreach ($this->resource->getAttributes() as $key => $value) {
