@@ -45,7 +45,6 @@ class EarningController extends Controller
             'branches' => $validated['branches'] ?? [],
             'period' => $validated['period'] ?? 'daily',
             'driver' => $validated['driver'] ?? [],
-            'period' => $validated['period'] ?? 'daily',
         ];
         
         // 3. Get Shared Data (Fee Types)

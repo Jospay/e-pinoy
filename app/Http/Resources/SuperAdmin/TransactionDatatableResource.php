@@ -28,6 +28,7 @@ class TransactionDatatableResource extends JsonResource
                 ? date('F j, Y', strtotime($this->payment_date))
                 : date('F j, Y', strtotime($this->created_at)),
             'franchise_name' => $this->whenLoaded('franchise', fn () => $this->franchise?->name),
+            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
         ];
 
         return $data;

@@ -27,13 +27,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { debounce } from 'lodash-es';
 import { AlertCircleIcon, MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
 
@@ -43,12 +43,16 @@ const props = defineProps<{
     data: TransactionRow[];
   };
   franchises: { id: number; name: string }[];
+  branches: { id: number; name: string }[];
+  vehicleTypes: { id: number; name: string }[];
   drivers: { id: number; username: string }[];
   filters: {
-    type: 'revenue' | 'expense';
-    franchise: string[];
+    tab: string;
+    type: 'franchise' | 'branch';
+    franchises: string[];
+    branches: string[];
     driver: string[];
-    service: 'Trips' | 'Boundary';
+    category: 'revenue' | 'expense';
   };
 }>();
 
@@ -56,6 +60,7 @@ const props = defineProps<{
 interface TransactionRow {
   id: number;
   franchise_name?: string;
+  branch_name?: string;
   type: string;
   invoice_no: string;
   amount: number;
@@ -74,31 +79,31 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
-const selectedType = ref(props.filters.type);
-const selectedFranchise = ref<string[]>(props.filters.franchise || []);
+const activeTab = ref(props.filters.tab);
+const selectedType = ref(props.filters.type || 'franchise');
+const selectedFranchises = ref<string[]>(props.filters.franchises || []);
+const selectedBranches = ref<string[]>(props.filters.branches || []);
+const selectedCategory = ref(props.filters.category || 'revenue');
 const selectedDriver = ref<string[]>(props.filters.driver || []);
-const selectedService = ref(props.filters.service);
 
-const selectedContext = computed({
-  get: () => selectedFranchise.value,
-  set: (val: string[]) => {
-    selectedFranchise.value = val;
-    selectedDriver.value = [];
-  },
-});
+// Options for MultiSelect
+const franchiseOptions = computed(() =>
+  props.franchises.map((f) => ({ id: f.id, label: f.name })),
+);
+const branchOptions = computed(() =>
+  props.branches.map((b) => ({ id: b.id, label: b.name })),
+);
 
 // Mapping options for the MultiSelect
 const driverOptions = computed(() =>
   props.drivers.map((d) => ({ id: d.id, label: d.username })),
 );
-const contextOptions = computed(() => {
-  const data = props.franchises;
-  return data.map((item) => ({ id: item.id, label: item.name }));
-});
 
 interface TransactionModal {
   id: number;
   franchise_name?: string;
+  branch_name?: string;
+  vehicle_type?: string;
   service_type: string;
   payment_option: string;
   invoice_no: string;
@@ -119,20 +124,24 @@ const transactionDetails = computed(() => {
   if (!data) return [];
 
   const amount = formatCurrency(data.amount);
-  const nameValue = data.franchise_name;
-  const nameLabel = 'Franchise';
+  const isFranchise = selectedType.value === 'franchise';
 
   const details = [
-    { label: nameLabel, value: nameValue, type: 'text' },
+    {
+      label: isFranchise ? 'Franchise' : 'Branch',
+      value: isFranchise ? data.franchise_name : data.branch_name,
+      type: 'text',
+    },
     { label: 'Service Type', value: data.service_type, type: 'text' },
     { label: 'Invoice #', value: data.invoice_no, type: 'text' },
     { label: 'Amount', value: amount, type: 'text' },
     { label: 'Payment Option', value: data.payment_option, type: 'text' },
     { label: 'Status', value: data.status_name, type: 'text' },
+    { label: 'Vehicle Type', value: data.vehicle_type, type: 'text' },
     { label: 'Transaction Date', value: data.created_at, type: 'text' },
   ];
 
-  if (props.filters.type === 'revenue') {
+  if (props.filters.category === 'revenue') {
     details.push({
       label: 'Driver',
       value: data.driver_username,
@@ -168,7 +177,7 @@ const transactionDetails = computed(() => {
 
 const openDetails = (id: number) => {
   transactionModal.open(id, {
-    params: { type: props.filters.type },
+    params: { category: props.filters.category },
   });
 };
 
@@ -187,7 +196,8 @@ const formatCurrency = (amount: number): string => {
 
 // Computed columns for the data table
 const transactionColumns = computed<ColumnDef<TransactionRow>[]>(() => {
-  const isRevenue = selectedType.value === 'revenue';
+  const isRevenue = selectedCategory.value === 'revenue';
+  const isFranchise = selectedType.value === 'franchise';
 
   const columns: ColumnDef<TransactionRow>[] = [
     {
@@ -195,8 +205,8 @@ const transactionColumns = computed<ColumnDef<TransactionRow>[]>(() => {
       header: 'Invoice #',
     },
     {
-      accessorKey: 'franchise_name',
-      header: 'Franchise',
+      accessorKey: isFranchise ? 'franchise_name' : 'branch_name',
+      header: isFranchise ? 'Franchise' : 'Branch',
     },
     ...(isRevenue
       ? [
@@ -281,11 +291,12 @@ const updateFilters = () => {
   router.get(
     superAdmin.transaction.index().url,
     {
+      tab: activeTab.value,
       type: selectedType.value,
-      service:
-        selectedType.value === 'revenue' ? selectedService.value : undefined,
-      driver: selectedType.value === 'revenue' ? selectedDriver.value : [],
-      franchise: selectedFranchise.value || [],
+      category: selectedCategory.value,
+      franchises: selectedFranchises.value || [],
+      branches: selectedBranches.value || [],
+      driver: selectedCategory.value === 'revenue' ? selectedDriver.value : [],
     },
     {
       preserveScroll: true,
@@ -294,13 +305,18 @@ const updateFilters = () => {
   );
 };
 
-// Watch all filters for changes (debounced)
-watch(
-  [selectedService, selectedType],
-  debounce(() => {
-    updateFilters();
-  }, 300),
-);
+watch([activeTab, selectedType, selectedCategory], () => {
+  selectedFranchises.value = [];
+  selectedBranches.value = [];
+  selectedDriver.value = [];
+  updateFilters();
+});
+
+watch(selectedFranchises, () => {
+  selectedBranches.value = [];
+  selectedDriver.value = [];
+  updateFilters();
+});
 </script>
 
 <template>
@@ -310,6 +326,20 @@ watch(
     <div
       class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
     >
+      <Tabs v-model="activeTab" class="w-full">
+        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
+          <TabsTrigger
+            v-for="type in vehicleTypes"
+            :key="type.id"
+            :value="type.name"
+            class="cursor-pointer px-8 py-2 font-semibold capitalize"
+            :class="{ 'pointer-events-none': activeTab === type.name }"
+          >
+            {{ type.name }}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
@@ -319,6 +349,20 @@ watch(
           </h2>
           <div class="flex gap-4">
             <Select v-model="selectedType">
+              <SelectTrigger class="w-[150px] cursor-pointer">
+                <SelectValue placeholder="Filter by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="franchise" class="cursor-pointer">
+                  Franchise
+                </SelectItem>
+                <SelectItem value="branch" class="cursor-pointer">
+                  Branch
+                </SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select v-model="selectedCategory">
               <SelectTrigger class="w-[150px]">
                 <SelectValue placeholder="Filter by..." />
               </SelectTrigger>
@@ -328,17 +372,8 @@ watch(
               </SelectContent>
             </Select>
 
-            <Select v-if="selectedType === 'revenue'" v-model="selectedService">
-              <SelectTrigger class="w-[150px]">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Trips"> Trips </SelectItem>
-                <SelectItem value="Boundary"> Boundary </SelectItem>
-              </SelectContent>
-            </Select>
-
             <MultiSelect
+              v-if="selectedCategory === 'revenue'"
               v-model="selectedDriver"
               :options="driverOptions"
               placeholder="Select Drivers"
@@ -347,13 +382,29 @@ watch(
             />
 
             <MultiSelect
-              v-model="selectedContext"
-              :options="contextOptions"
+              v-model="selectedFranchises"
+              :options="franchiseOptions"
               placeholder="Select Franchises"
               all-label="All Franchises"
               @change="
                 (val) => {
-                  selectedFranchise = val;
+                  selectedFranchises = val;
+
+                  updateFilters();
+                }
+              "
+            />
+
+            <MultiSelect
+              v-if="selectedType === 'branch'"
+              v-model="selectedBranches"
+              :options="branchOptions"
+              placeholder="Select Branches"
+              all-label="All Branches"
+              @change="
+                (val) => {
+                  selectedBranches = val;
+
                   updateFilters();
                 }
               "

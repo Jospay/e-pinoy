@@ -23,11 +23,14 @@ class TransactionResource extends JsonResource
             'invoice_no' => $this->invoice_no,
             'status_name' => $this->whenLoaded('status', $this->status->name),
             'service_type' => $isExpense ? 'Maintenance' : $this->service_type,
-            'payment_option' => $this->payment_option,
             'amount' => (float) $this->amount,
             'created_at' => $this->created_at ? date('M d, Y h:i A', strtotime($this->created_at)) : null,
             'payment_date' => $this->payment_date ? date('M d, Y h:i A', strtotime($this->payment_date)) : null,
             'franchise_name' => $this->whenLoaded('franchise', fn () => $this->franchise?->name),
+            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
+            'vehicle_type' => $isExpense 
+                ? $this->maintenance?->vehicle?->vehicleType?->name 
+                : $this->whenLoaded('vehicleType', fn() => $this->vehicleType->name),
             'payment_option' => $this->whenLoaded('paymentOption', $this->paymentOption->name),
             'notes' => $this->notes ?? null,
             // revenue data
