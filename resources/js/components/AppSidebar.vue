@@ -23,7 +23,6 @@ import {
   BanknoteArrowDown,
   Box,
   Bus,
-  BusFront,
   CarTaxiFront,
   ChartNoAxesCombined,
   DollarSign,
@@ -152,12 +151,6 @@ const navConfig: Record<string, NavItem[]> = {
       title: 'Allocation Management',
       href: superAdmin.allocation.index(),
       icon: HandCoins,
-      group: 'Finance',
-    },
-    {
-      title: 'Vehicle Type Management',
-      href: superAdmin.vehicleType.index(),
-      icon: BusFront,
       group: 'Finance',
     },
     {
