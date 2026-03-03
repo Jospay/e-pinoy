@@ -54,8 +54,8 @@ class BusStationController extends Controller
                         'vehicle_id' => $sched->reservation?->vehicle_id,
                         'day_schedule_ids' => $allDayIds,
                         'reservation_id' => $sched->station_reservation_id,
-                        'to_time' => date('h:i A', strtotime($sched->to_time)),
-                        'from_time' => date('h:i A', strtotime($sched->from_time)),
+                        'to_time' => date('H:i', strtotime($sched->to_time)),
+                        'from_time' => date('H:i', strtotime($sched->from_time)),
                         'order' => $sched->route_step ?? 0,
                     ];
                 })->toArray(),
