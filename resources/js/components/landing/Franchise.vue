@@ -29,7 +29,7 @@ const franchisee = userTypes.find((t) => t.name === 'owner');
         <div
           class="col-span-13 mb-5 rounded-2xl bg-brand-blue p-7 text-white md:col-span-5 md:mb-0"
         >
-          <p class="text-lg font-semibold">Mission</p>
+          <p class="text-lg font-semibold">Franchise Benefits</p>
           <ul class="list-disc ps-7 text-sm text-gray-200">
             <li>EMSi branding and operational support</li>
             <li>Access to digital transport systems</li>
@@ -41,7 +41,7 @@ const franchisee = userTypes.find((t) => t.name === 'owner');
         <div
           class="col-span-13 mb-5 rounded-2xl bg-brand-blue p-7 text-white md:col-span-4 md:mb-0"
         >
-          <p class="text-lg font-semibold">Mission</p>
+          <p class="text-lg font-semibold">Who Can Apply</p>
           <ul class="list-disc ps-7 text-sm text-gray-200">
             <li>Transport entrepreneurs</li>
             <li>Cooperatives and associations</li>
@@ -52,7 +52,7 @@ const franchisee = userTypes.find((t) => t.name === 'owner');
         <div
           class="col-span-13 rounded-2xl bg-brand-blue p-7 text-white md:col-span-4"
         >
-          <p class="text-lg font-semibold">Mission</p>
+          <p class="text-lg font-semibold">Franchise Process</p>
           <ul class="list-disc ps-7 text-sm text-gray-200">
             <li>Application submission</li>
             <li>Evaluation and review</li>
