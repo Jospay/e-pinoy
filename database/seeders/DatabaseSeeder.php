@@ -103,6 +103,9 @@ class DatabaseSeeder extends Seeder
 
         $this->call(BusStationSeeder::class);
 
+        $this->call(DaySeeder::class);
+
+
         $this->call(InventorySeeder::class);
         $this->call(MaintenanceSeeder::class);
 

@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\BusStation;
 use App\Models\StationAmount;
 use App\Models\StationSchedule;
+use App\Models\DaySchedule;
+use App\Models\Vehicle;
+use App\Models\DateSchedule;
+use App\Models\StationReservation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -14,7 +18,6 @@ class BusStationController extends Controller
 {
     public function index(Request $request)
     {
-        // 1. Get Franchise and Access Check
         $franchise = auth()->user()->ownerDetails?->franchises()->first();
         $franchiseId = $franchise?->id;
 
@@ -26,9 +29,8 @@ class BusStationController extends Controller
             return redirect()->route('owner.dashboard')->with('error', 'Access disabled.');
         }
 
-        // 2. Fetch Stations for the Franchise
         $stationsQuery = BusStation::where('franchise_id', $franchiseId)
-            ->with(['schedules', 'toAmounts'])
+            ->with(['schedules.reservation.dateSchedules', 'toAmounts'])
             ->orderBy('id', 'asc')
             ->get();
 
@@ -45,21 +47,24 @@ class BusStationController extends Controller
                 'amount' => $amountRecord?->amount ?? 0,
                 'station_amount_id' => $amountRecord?->id ?? null,
                 'schedules' => $s->schedules->map(function($sched) {
+                $allDayIds = $sched->reservation?->dateSchedules->pluck('day_schedule_id')->toArray() ?? [];
                     return [
                         'id' => $sched->id,
                         'bus_station_id' => $sched->bus_station_id,
-                        'to_time' => date('H:i', strtotime($sched->to_time)),
-                        'from_time' => date('H:i', strtotime($sched->from_time)),
+                        'vehicle_id' => $sched->reservation?->vehicle_id,
+                        'day_schedule_ids' => $allDayIds,
+                        'reservation_id' => $sched->station_reservation_id,
+                        'to_time' => date('h:i A', strtotime($sched->to_time)),
+                        'from_time' => date('h:i A', strtotime($sched->from_time)),
+                        'order' => $sched->route_step ?? 0,
                     ];
                 })->toArray(),
             ];
         });
 
-        // 3. Fetch Reservations for the Franchise
-        // We identify reservations belonging to this franchise via the from_bus_station_id
+        // ... Keep Transactions logic same as your current script ...
         $stationIds = $stationsQuery->pluck('id');
         $filter = $request->query('status', 'completed');
-
         $transactions = \App\Models\Reservation::with(['fromStation', 'toStation', 'status', 'passenger.user'])
             ->whereIn('from_bus_station_id', $stationIds)
             ->orderBy('created_at', 'desc')
@@ -67,12 +72,9 @@ class BusStationController extends Controller
             ->map(function ($item) {
                 $statusName = $item->status->name ?? 'Pending';
                 $lowerStatus = strtolower($statusName);
-
-                // Logic to categorize status for the frontend UI
                 $isCompleted = str_contains($lowerStatus, 'completed');
                 $isPaid = str_contains($lowerStatus, 'paid') && !$isCompleted;
                 $isPending = !$isPaid && !$isCompleted;
-
                 return [
                     'id' => $item->id,
                     'passenger_name' => $item->passenger?->user?->name ?? 'Guest User',
@@ -89,14 +91,67 @@ class BusStationController extends Controller
                 ];
             });
 
-        // 4. Return to Inertia
         return Inertia::render('owner/bus-station/Index', [
             'stations' => $stations,
             'franchise_id' => $franchiseId,
             'transactions' => $transactions,
             'initialFilter' => $filter,
-            'activeTab' => $request->query('tab', 'stations')
+            'activeTab' => $request->query('tab', 'stations'),
+            'vehicles' => Vehicle::where('franchise_id', $franchiseId)->get(),
+            'daySchedules' => DaySchedule::all(),
         ]);
+    }
+
+    public function storeBulkSchedule(Request $request)
+    {
+        $validated = $request->validate([
+            'vehicle_id' => 'required|exists:vehicles,id',
+            'day_schedule_ids' => 'required|array',
+            'day_schedule_ids.*' => 'exists:day_schedules,id',
+            'stations' => 'required|array',
+        ]);
+
+        DB::transaction(function () use ($validated) {
+            $existingReservations = StationReservation::where('vehicle_id', $validated['vehicle_id'])
+                ->whereHas('dateSchedules', function($q) use ($validated) {
+                    $q->whereIn('day_schedule_id', $validated['day_schedule_ids']);
+                })->get();
+
+            foreach($existingReservations as $res) {
+                // Delete old schedules and days to refresh the route
+                $res->schedules()->delete();
+                $res->dateSchedules()->delete();
+                $res->delete();
+            }
+
+            // 1. Create New Master Record
+            $reservation = StationReservation::create([
+                'vehicle_id' => $validated['vehicle_id']
+            ]);
+
+            // 2. Insert Operating Days
+            foreach ($validated['day_schedule_ids'] as $dayId) {
+                DateSchedule::create([
+                    'station_reservation_id' => $reservation->id,
+                    'day_schedule_id' => $dayId,
+                ]);
+            }
+
+            // 3. Insert Station Timings with the correct Sequence (order)
+            foreach ($validated['stations'] as $stationId => $data) {
+                if (!empty($data['from_time']) || !empty($data['to_time'])) {
+                    StationSchedule::create([
+                        'station_reservation_id' => $reservation->id,
+                        'bus_station_id' => $stationId,
+                        'route_step' => $data['order'] ?? 0,
+                        'from_time' => $data['from_time'] ?? '00:00',
+                        'to_time' => $data['to_time'] ?? '00:00',
+                    ]);
+                }
+            }
+        });
+
+        return redirect()->back()->with('message', 'Route schedule updated successfully');
     }
 
     public function storeSchedule(Request $request)
@@ -107,27 +162,11 @@ class BusStationController extends Controller
             'to_time' => 'required',
         ]);
 
-        // Native PHP comparison: Convert "HH:mm" to integer for easy comparison
-        $arrive = (int) str_replace(':', '', $validated['to_time']);
-        $depart = (int) str_replace(':', '', $validated['from_time']);
-
-        if ($arrive > $depart) {
-            return redirect()->back()->withErrors(['to_time' => 'Arrival must be before departure.']);
-        }
-
-        $exists = StationSchedule::where('bus_station_id', $validated['bus_station_id'])
-            ->where(function($query) use ($validated) {
-                $query->where('from_time', '<', $validated['from_time'])
-                      ->where('to_time', '>', $validated['to_time']);
-            })->exists();
-
-        if ($exists) {
-            return redirect()->back()->withErrors(['from_time' => 'This time slot overlaps with an existing schedule.']);
-        }
-
+        // Logic for single schedule (Note: may need StationReservation update if you still use this)
         StationSchedule::create($validated);
         return redirect()->back()->with('success', 'Station time added.');
     }
+
 
     public function updateSchedule(Request $request, StationSchedule $schedule)
     {
@@ -135,24 +174,6 @@ class BusStationController extends Controller
             'from_time' => 'required',
             'to_time' => 'required',
         ]);
-
-        $arrive = (int) str_replace(':', '', $validated['to_time']);
-        $depart = (int) str_replace(':', '', $validated['from_time']);
-
-        if ($arrive > $depart) {
-            return redirect()->back()->withErrors(['to_time' => 'Arrival must be before departure.']);
-        }
-
-        $exists = StationSchedule::where('bus_station_id', $schedule->bus_station_id)
-            ->where('id', '!=', $schedule->id)
-            ->where(function($query) use ($validated) {
-                $query->where('from_time', '<', $validated['from_time'])
-                      ->where('to_time', '>', $validated['to_time']);
-            })->exists();
-
-        if ($exists) {
-            return redirect()->back()->withErrors(['from_time' => 'This time slot overlaps with another.']);
-        }
 
         $schedule->update($validated);
         return redirect()->back()->with('success', 'Station time updated.');
@@ -206,14 +227,12 @@ class BusStationController extends Controller
             'amount' => 'required|numeric|min:0',
         ]);
 
-        $newStatus = $busStation->status_id == 1 ? 1 : 6;
-
         $busStation->update([
             'name' => $validated['name'],
             'code_no' => $validated['code_no'],
             'latitude' => $validated['latitude'],
             'longitude' => $validated['longitude'],
-            'status_id' => $newStatus,
+            'status_id' => $busStation->status_id == 1 ? 1 : 6,
         ]);
 
         $hasPrevious = StationAmount::where('to_bus_station_id', $busStation->id)->first();

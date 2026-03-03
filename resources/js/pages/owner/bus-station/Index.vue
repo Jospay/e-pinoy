@@ -11,8 +11,8 @@ import {
   Lock,
   MapPin,
   Pencil,
-  Plus,
-  Trash2,
+  Bus,
+  Loader2,
 } from 'lucide-vue-next';
 import { computed, onMounted, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -43,6 +43,25 @@ import { Label } from '@/components/ui/label';
 // Map Logic
 import LocationMap, { type MarkerData } from '@/components/LocationMap.vue';
 
+// --- TYPES FOR TS RESOLUTION ---
+interface Stop {
+  id: number;
+  station_name: string;
+  station_id: number;
+  from_time: string;
+  to_time: string;
+  order: number;
+}
+
+interface GroupedRoute {
+  vehicle_name: string;
+  all_days: string[];
+  vehicle_id: number;
+  reservation_id: number;
+  day_id?: number;
+  stops: Stop[];
+}
+
 const props = defineProps<{
   stations: Array<{
     id: number;
@@ -53,9 +72,22 @@ const props = defineProps<{
     amount: number;
     status_id: number;
     station_amount_id: number | null;
-    schedules: Array<{ id: number; from_time: string; to_time: string }>;
+    schedules: Array<{
+      id: number;
+      from_time: string;
+      to_time: string;
+      vehicle_id?: number;
+      reservation_id: number;
+      day_schedule_id?: number;
+      day_schedule_ids?: number[];
+      vehicle_name?: string;
+      day_name?: string;
+      order?: number;
+    }>;
   }>;
   franchise_id: number;
+  vehicles: Array<{ id: number; plate_number: string; model: string }>;
+  daySchedules: Array<{ id: number; name: string }>;
   transactions: Array<{
     id: number;
     passenger_name: string;
@@ -91,6 +123,67 @@ watch(activeTab, (newTab) => {
   window.history.replaceState({}, '', url);
 });
 
+// --- GROUPED SCHEDULES LOGIC ---
+const groupedSchedules = computed<any[]>(() => {
+  const routes: Record<string, any> = {};
+  const activeStations = props.stations.filter((s) => s.status_id === 1);
+  const activeStationIds = activeStations.map((s) => s.id);
+
+  activeStations.forEach((station) => {
+    station.schedules.forEach((sched) => {
+      // FIX: Group by reservation_id. This links all days and stations together.
+      const groupKey = `res-${sched.reservation_id}`;
+
+      if (!routes[groupKey]) {
+        const vehicle = props.vehicles.find((v) => v.id === sched.vehicle_id);
+
+        // Map the IDs we got from the controller to their actual names
+        const dayNames = (sched.day_schedule_ids || [])
+          .map((id) => {
+            const dayDoc = props.daySchedules.find((d) => d.id === id);
+            return dayDoc ? dayDoc.name : '';
+          })
+          .filter((name) => name !== '');
+
+        routes[groupKey] = {
+          vehicle_name: vehicle
+            ? `${vehicle.plate_number} (${vehicle.model})`
+            : 'Assigned Vehicle',
+          vehicle_id: sched.vehicle_id,
+          reservation_id: sched.reservation_id,
+          day_ids: sched.day_schedule_ids || [],
+          all_days: dayNames,
+          stops: [],
+        };
+      }
+
+      // Avoid duplicate stops in the array
+      if (!routes[groupKey].stops.find((s) => s.station_id === station.id)) {
+        routes[groupKey].stops.push({
+          id: sched.id,
+          station_name: station.name,
+          station_id: station.id,
+          from_time: sched.from_time,
+          to_time: sched.to_time,
+          order: sched.order || 0,
+        });
+      }
+    });
+  });
+
+  return Object.values(routes)
+    .map((route: GroupedRoute) => {
+      route.stops = route.stops.filter((stop: Stop) =>
+        activeStationIds.includes(stop.station_id),
+      );
+
+      route.stops.sort((a: Stop, b: Stop) => a.order - b.order);
+
+      return route;
+    })
+    .filter((route: GroupedRoute) => route.stops.length > 0);
+});
+
 // --- RESERVATION LOGIC ---
 const filteredTransactions = computed(() => {
   if (props.initialFilter === 'completed') {
@@ -109,7 +202,7 @@ const updateFilter = (status: string) => {
   );
 };
 
-// --- SCHEDULE LOGIC (STATION-SPECIFIC TIMES) ---
+// --- SCHEDULE LOGIC ---
 const isScheduleDialogOpen = ref(false);
 const isDeleteDialogOpen = ref(false);
 const scheduleToDeleteId = ref<number | null>(null);
@@ -117,49 +210,167 @@ const editingScheduleId = ref<number | null>(null);
 const selectedStationForSchedule = ref<any>(null);
 
 const scheduleForm = useForm({
-  bus_station_id: null as number | null,
-  from_time: '', // Departure from this station
-  to_time: '', // Arrival at this station
+  vehicle_id: null as number | null,
+  day_schedule_ids: [] as number[],
+  stations: {} as Record<
+    number,
+    {
+      selected: boolean;
+      from_time: string;
+      to_time: string;
+      order: number | null;
+    }
+  >,
 });
 
-const openAddSchedule = (station: any) => {
+const handleStationToggle = (stationId: number) => {
+  const station = scheduleForm.stations[stationId];
+
+  if (station.selected) {
+    const currentOrders = Object.values(scheduleForm.stations)
+      .map((s) => s.order)
+      .filter((o): o is number => o !== null);
+
+    station.order =
+      currentOrders.length > 0 ? Math.max(...currentOrders) + 1 : 1;
+  } else {
+    const removedOrder = station.order;
+    station.order = null;
+    station.from_time = '';
+    station.to_time = '';
+
+    Object.values(scheduleForm.stations).forEach((s) => {
+      if (s.order && removedOrder && s.order > removedOrder) {
+        s.order -= 1;
+      }
+    });
+  }
+};
+
+const getOrdinal = (n: number | null) => {
+  return n ? n.toString() : '';
+};
+
+const openAddSchedule = (station?: any) => {
   editingScheduleId.value = null;
-  selectedStationForSchedule.value = station;
+  selectedStationForSchedule.value = station || null;
+
+  const stationInit: Record<number, any> = {};
+  // ONLY iterate through active stations to avoid scheduling issues
+  props.stations
+    .filter((s) => s.status_id === 1)
+    .forEach((s) => {
+      stationInit[s.id] = {
+        selected: station ? s.id === station.id : false,
+        from_time: '',
+        to_time: '',
+        order: station && s.id === station.id ? 1 : null,
+      };
+    });
+
   scheduleForm.reset();
-  scheduleForm.bus_station_id = station.id;
+  scheduleForm.stations = stationInit;
+  scheduleForm.day_schedule_ids = [];
   isScheduleDialogOpen.value = true;
 };
 
-const openEditSchedule = (station: any, schedule: any) => {
-  editingScheduleId.value = schedule.id;
-  selectedStationForSchedule.value = station;
-  scheduleForm.bus_station_id = station.id;
-  scheduleForm.from_time = schedule.from_time;
-  scheduleForm.to_time = schedule.to_time;
+const editFullRoute = (route: GroupedRoute) => {
+  editingScheduleId.value = 999;
+  scheduleForm.vehicle_id = route.vehicle_id;
+
+  let foundDayIds: number[] = [];
+
+  for (const s of props.stations) {
+    const match = s.schedules.find(
+      (sched) => sched.reservation_id === route.reservation_id,
+    );
+    if (match && match.day_schedule_ids) {
+      foundDayIds = match.day_schedule_ids;
+      break;
+    }
+  }
+
+  // Assign the days to the form
+  scheduleForm.day_schedule_ids = foundDayIds.length > 0 ? foundDayIds : [];
+
+  const stationInit: Record<number, any> = {};
+  props.stations
+    .filter((s) => s.status_id === 1)
+    .forEach((s) => {
+      const existingStop = route.stops.find(
+        (stop: any) => stop.station_id === s.id,
+      );
+
+      stationInit[s.id] = {
+        selected: !!existingStop,
+        from_time: existingStop ? existingStop.from_time : '',
+        to_time: existingStop ? existingStop.to_time : '',
+        order: existingStop ? existingStop.order : null,
+      };
+    });
+
+  scheduleForm.stations = stationInit;
   isScheduleDialogOpen.value = true;
+};
+
+const toggleDay = (dayId: number) => {
+  const index = scheduleForm.day_schedule_ids.indexOf(dayId);
+  if (index > -1) {
+    scheduleForm.day_schedule_ids.splice(index, 1);
+  } else {
+    scheduleForm.day_schedule_ids.push(dayId);
+  }
 };
 
 const submitSchedule = () => {
-  const url = editingScheduleId.value
-    ? `/owner/bus-station/schedule/${editingScheduleId.value}`
-    : '/owner/bus-station/schedule';
+  const payloadStations: Record<number, any> = {};
+  let hasSelection = false;
 
-  const method = editingScheduleId.value ? 'put' : 'post';
-
-  scheduleForm[method](url, {
-    preserveScroll: true,
-    onSuccess: () => {
-      isScheduleDialogOpen.value = false;
-      scheduleForm.reset();
-      toast.success(editingScheduleId.value ? 'Time updated' : 'Time added');
-    },
-    onError: () => toast.error('Please check the time format'),
+  Object.keys(scheduleForm.stations).forEach((id) => {
+    const stationId = parseInt(id);
+    const data = scheduleForm.stations[stationId];
+    if (data && data.selected) {
+      payloadStations[stationId] = {
+        from_time: data.from_time,
+        to_time: data.to_time,
+        order: data.order,
+      };
+      hasSelection = true;
+    }
   });
-};
 
-const confirmDeleteSchedule = (id: number) => {
-  scheduleToDeleteId.value = id;
-  isDeleteDialogOpen.value = true;
+  if (!hasSelection) {
+    toast.error('Please select at least one station');
+    return;
+  }
+
+  if (scheduleForm.day_schedule_ids.length === 0) {
+    toast.error('Please select at least one operation day');
+    return;
+  }
+
+  scheduleForm
+    .transform((data) => ({
+      ...data,
+      stations: payloadStations,
+    }))
+    .post('/owner/bus-station/bulk-schedule', {
+      preserveScroll: true,
+      preserveState: true, // Keep state to avoid flickering
+      onSuccess: () => {
+        isScheduleDialogOpen.value = false;
+        toast.success('Route schedule updated successfully');
+        scheduleForm.reset();
+      },
+      onError: (errors) => {
+        console.error('Submission errors:', errors);
+        toast.error('Could not save schedule. Check your time formats.');
+      },
+      onFinish: () => {
+        // This ensures the button stops loading even if onSuccess fails
+        scheduleForm.processing = false;
+      },
+    });
 };
 
 const executeDeleteSchedule = () => {
@@ -460,81 +671,139 @@ const hasPendingOrDenied = computed(() =>
       </div>
 
       <div v-else-if="activeTab === 'schedules'" class="space-y-6">
-        <div>
-          <h1 class="text-3xl font-bold tracking-tight">Station Schedules</h1>
-          <p class="text-gray-600">
-            Manage arrival and departure times for each station
-          </p>
-        </div>
         <div
-          v-for="(station, index) in props.stations"
-          :key="'sched-' + station.id"
-          class="rounded-2xl border-2 border-slate-100 bg-white p-6 transition-all hover:border-blue-100"
+          class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
         >
-          <div class="mb-6 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div
-                class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white"
-              >
-                {{ String.fromCharCode(65 + index) }}
-              </div>
-              <h3 class="text-lg font-bold text-slate-800">
-                {{ station.name }}
-              </h3>
-            </div>
-            <Button
-              v-if="station.status_id === 1"
-              size="sm"
-              @click="openAddSchedule(station)"
-            >
-              <Plus class="mr-2 h-4 w-4" /> Add Time Slot
-            </Button>
-          </div>
-
-          <div class="flex flex-wrap gap-3">
-            <div
-              v-for="sched in station.schedules"
-              :key="sched.id"
-              class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2"
-            >
-              <div class="flex flex-col">
-                <span class="text-[9px] font-bold text-slate-400 uppercase"
-                  >Arrive</span
-                >
-                <span class="font-mono font-bold text-slate-700">{{
-                  sched.to_time
-                }}</span>
-              </div>
-              <div class="mx-2 h-6 w-px bg-slate-200"></div>
-              <div class="flex flex-col">
-                <span class="text-[9px] font-bold text-brand-blue uppercase"
-                  >Depart</span
-                >
-                <span class="font-mono font-bold text-brand-blue">{{
-                  sched.from_time
-                }}</span>
-              </div>
-              <div class="ml-4 flex gap-1 border-l pl-2">
-                <button
-                  @click="openEditSchedule(station, sched)"
-                  class="text-slate-400 hover:text-blue-600"
-                >
-                  <Pencil class="h-3.5 w-3.5" />
-                </button>
-                <button
-                  @click="confirmDeleteSchedule(sched.id)"
-                  class="text-slate-400 hover:text-red-600"
-                >
-                  <Trash2 class="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-            <p
-              v-if="station.schedules.length === 0"
-              class="text-sm text-slate-400 italic"
-            >
-              No times set for this station.
+          <div>
+            <h1 class="text-3xl font-bold tracking-tight text-slate-900">
+              Route Schedules
+            </h1>
+            <p class="text-slate-500">
+              View and manage complete journeys across all stations
             </p>
+          </div>
+          <Button
+            variant="outline"
+            class="border-2 font-bold hover:bg-slate-50"
+            @click="openAddSchedule()"
+          >
+            <Clock class="mr-2 h-4 w-4 text-brand-blue" />
+            Assign Full Route
+          </Button>
+        </div>
+
+        <div v-if="groupedSchedules.length > 0" class="space-y-8">
+          <div
+            v-for="(route, rIndex) in groupedSchedules"
+            :key="'route-' + rIndex"
+            class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md"
+          >
+            <div
+              class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4"
+            >
+              <div class="flex items-center gap-4">
+                <div
+                  class="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-blue text-white shadow-lg shadow-brand-blue/20"
+                >
+                  <Bus class="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 class="text-lg font-bold text-slate-900">
+                    {{ route.vehicle_name }}
+                  </h3>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="mt-1 flex flex-wrap gap-1.5">
+                      <span
+                        v-for="day in route.all_days"
+                        :key="day"
+                        class="rounded-md border border-blue-100 bg-blue-50 px-2 py-0.5 text-[9px] font-black tracking-widest text-brand-blue uppercase"
+                      >
+                        {{ day }}
+                      </span>
+                    </div>
+                    <span class="h-1 w-1 rounded-full bg-slate-300"></span>
+                    <span
+                      class="text-[10px] font-bold text-brand-blue uppercase"
+                    >
+                      {{ route.stops.length }} Stops
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                @click="editFullRoute(route)"
+                class="rounded-xl text-slate-500 hover:bg-white hover:text-brand-blue"
+              >
+                <Pencil class="mr-1.5 h-4 w-4" /> Edit Route
+              </Button>
+            </div>
+
+            <div class="overflow-x-auto p-8">
+              <div class="flex min-w-max items-start pb-6">
+                <div
+                  v-for="(step, sIndex) in route.stops"
+                  :key="step.id"
+                  class="flex items-start"
+                >
+                  <div
+                    class="relative flex w-56 flex-col items-center text-center"
+                  >
+                    <div
+                      class="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-4 border-white bg-brand-blue text-xs font-black text-white shadow-md ring-2 ring-brand-blue/10"
+                    >
+                      {{ sIndex + 1 }}
+                    </div>
+
+                    <div class="mt-4 w-full space-y-3 px-4">
+                      <p
+                        class="text-sm leading-tight font-bold break-words whitespace-normal text-slate-900"
+                      >
+                        {{ step.station_name }}
+                      </p>
+
+                      <div
+                        class="flex flex-col gap-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-3 shadow-inner"
+                      >
+                        <div class="flex flex-col items-center">
+                          <span
+                            class="text-[8px] font-black tracking-tighter text-slate-400 uppercase"
+                            >Arrive</span
+                          >
+                          <span
+                            class="font-mono text-xs font-bold text-slate-700"
+                          >
+                            {{ step.to_time || '--:--' }}
+                          </span>
+                        </div>
+                        <div class="h-px w-full bg-slate-200/50"></div>
+                        <div class="flex flex-col items-center">
+                          <span
+                            class="text-[8px] font-black tracking-tighter text-brand-blue uppercase"
+                            >Depart</span
+                          >
+                          <span
+                            class="font-mono text-xs font-bold text-brand-blue"
+                          >
+                            {{ step.from_time || '--:--' }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="sIndex < route.stops.length - 1"
+                    class="relative mt-5 h-[2px] w-16 bg-slate-200"
+                  >
+                    <div
+                      class="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-slate-200"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -764,35 +1033,177 @@ const hasPendingOrDenied = computed(() =>
       :open="isScheduleDialogOpen"
       @update:open="isScheduleDialogOpen = $event"
     >
-      <DialogContent class="max-w-sm">
-        <DialogHeader>
-          <DialogTitle
-            >{{ editingScheduleId ? 'Edit' : 'Add' }} Station Time</DialogTitle
-          >
-          <DialogDescription
-            >Set specific times for
-            {{ selectedStationForSchedule?.name }}</DialogDescription
-          >
+      <DialogContent class="max-w-md overflow-hidden p-0">
+        <DialogHeader class="border p-3 pb-4">
+          <DialogTitle class="text-2xl font-bold text-slate-900">
+            {{ editingScheduleId ? 'Edit' : 'Assign' }} Full Route
+          </DialogTitle>
+          <DialogDescription class="text-slate-500">
+            Define the vehicle's journey, sequence of stops, and timing.
+          </DialogDescription>
         </DialogHeader>
-        <div class="space-y-4 py-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="space-y-2">
-              <Label>Arrival Time</Label>
-              <Input type="time" v-model="scheduleForm.to_time" />
+
+        <div class="flex-1 space-y-8 overflow-y-auto px-5">
+          <div class="space-y-3">
+            <Label
+              class="text-[10px] font-black tracking-widest text-slate-400 uppercase"
+            >
+              1. Select Vehicle
+            </Label>
+            <select
+              v-model="scheduleForm.vehicle_id"
+              class="flex h-12 w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-2 text-sm font-medium transition-all focus:border-brand-blue focus:bg-white focus:ring-4 focus:ring-brand-blue/10 focus:outline-none"
+            >
+              <option :value="null" disabled>
+                Choose a bus from your fleet...
+              </option>
+              <option v-for="v in props.vehicles" :key="v.id" :value="v.id">
+                {{ v.plate_number }} — {{ v.model }}
+              </option>
+            </select>
+          </div>
+
+          <div class="space-y-3">
+            <Label
+              class="text-[10px] font-black tracking-widest text-slate-400 uppercase"
+            >
+              2. Operation Days
+            </Label>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div
+                v-for="d in props.daySchedules"
+                :key="d.id"
+                @click="toggleDay(d.id)"
+                class="flex cursor-pointer items-center space-x-1 rounded-xl border p-2 transition-all"
+                :class="
+                  scheduleForm.day_schedule_ids.includes(d.id)
+                    ? 'border-brand-blue bg-blue-50/50 ring-1 ring-brand-blue'
+                    : 'border-slate-100 bg-white hover:border-slate-300'
+                "
+              >
+                <div class="relative flex h-5 w-5 items-center justify-center">
+                  <input
+                    type="checkbox"
+                    :value="d.id"
+                    v-model="scheduleForm.day_schedule_ids"
+                    class="h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
+                  />
+                </div>
+                <span class="text-xs font-bold text-slate-700">{{
+                  d.name
+                }}</span>
+              </div>
             </div>
-            <div class="space-y-2">
-              <Label>Departure Time</Label>
-              <Input type="time" v-model="scheduleForm.from_time" />
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <Label
+                class="text-[10px] font-black tracking-widest text-slate-400 uppercase"
+              >
+                3. Route Sequence & Timings
+              </Label>
+              <span class="text-[10px] font-medium text-slate-400 italic"
+                >Click stops in order</span
+              >
+            </div>
+
+            <div class="grid gap-3 pb-6">
+              <div
+                v-for="station in props.stations.filter(
+                  (s) => s.status_id === 1,
+                )"
+                :key="'form-st-' + station.id"
+                class="group relative flex flex-col gap-4 rounded-2xl border p-4 transition-all duration-300"
+                :class="
+                  scheduleForm.stations[station.id]?.selected
+                    ? 'border-brand-blue bg-blue-50/10 shadow-sm'
+                    : 'border-slate-100 bg-white opacity-60 hover:opacity-100'
+                "
+              >
+                <div class="flex items-center gap-4">
+                  <div class="flex h-8 w-8 items-center justify-center">
+                    <input
+                      v-if="scheduleForm.stations[station.id]"
+                      type="checkbox"
+                      v-model="scheduleForm.stations[station.id].selected"
+                      @change="handleStationToggle(station.id)"
+                      class="h-6 w-6 rounded-lg border-slate-300 text-brand-blue transition-all focus:ring-brand-blue"
+                    />
+                  </div>
+
+                  <div class="flex-grow">
+                    <div class="flex items-center gap-3">
+                      <p class="font-bold text-slate-900">{{ station.name }}</p>
+                      <span
+                        v-if="scheduleForm.stations[station.id]?.selected"
+                        class="rounded-full bg-brand-blue px-2 py-0.5 text-[9px] font-black text-white uppercase"
+                      >
+                        {{
+                          getOrdinal(scheduleForm.stations[station.id]?.order)
+                        }}
+                        Stop
+                      </span>
+                    </div>
+                    <p
+                      class="font-mono text-[10px] font-bold text-slate-400 uppercase"
+                    >
+                      {{ station.code_no }}
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  v-if="scheduleForm.stations[station.id]?.selected"
+                  class="ml-10 grid grid-cols-2 gap-4 border-t border-blue-100/50 pt-4"
+                >
+                  <div class="space-y-1.5">
+                    <label
+                      class="text-[9px] font-black tracking-tight text-slate-400 uppercase"
+                      >Arrival</label
+                    >
+                    <Input
+                      type="time"
+                      v-model="scheduleForm.stations[station.id].to_time"
+                      class="h-10 rounded-xl border-slate-200 bg-white font-mono text-sm"
+                    />
+                  </div>
+                  <div class="space-y-1.5">
+                    <label
+                      class="text-[9px] font-black tracking-tight text-brand-blue uppercase"
+                      >Departure</label
+                    >
+                    <Input
+                      type="time"
+                      v-model="scheduleForm.stations[station.id].from_time"
+                      class="h-10 rounded-xl border-brand-blue/30 bg-white font-mono text-sm font-bold text-brand-blue"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" @click="isScheduleDialogOpen = false"
-            >Cancel</Button
+
+        <DialogFooter class="border-t bg-slate-50/80 p-6">
+          <Button
+            variant="ghost"
+            class="font-bold text-slate-500 hover:bg-slate-100"
+            @click="isScheduleDialogOpen = false"
           >
-          <Button @click="submitSchedule" :disabled="scheduleForm.processing"
-            >Save Times</Button
+            Cancel
+          </Button>
+          <Button
+            @click="submitSchedule"
+            class="min-w-[160px] rounded-xl bg-brand-blue px-8 font-bold shadow-lg shadow-brand-blue/20 hover:bg-brand-blue/90"
+            :disabled="scheduleForm.processing"
           >
+            <Loader2
+              v-if="scheduleForm.processing"
+              class="mr-2 h-4 w-4 animate-spin"
+            />
+            {{ scheduleForm.processing ? 'Saving...' : 'Confirm Full Route' }}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -68,4 +68,14 @@ class Vehicle extends Model
     {
         return $this->belongsTo(Branch::class);
     }
+
+    public function stationSchedules(): HasMany
+    {
+        return $this->hasMany(StationSchedule::class);
+    }
+
+    public function dateSchedules(): HasMany
+    {
+        return $this->hasMany(DateSchedule::class);
+    }
 }

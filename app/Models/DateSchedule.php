@@ -5,14 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class StationSchedule extends Model
+class DateSchedule extends Model
 {
     protected $fillable = [
         'station_reservation_id',
-        'bus_station_id',
-        'route_step',
-        'from_time',
-        'to_time',
+        'day_schedule_id'
     ];
 
     public function reservation(): BelongsTo
@@ -20,8 +17,8 @@ class StationSchedule extends Model
         return $this->belongsTo(StationReservation::class, 'station_reservation_id');
     }
 
-    public function busStation(): BelongsTo
+    public function daySchedule(): BelongsTo
     {
-        return $this->belongsTo(BusStation::class, 'bus_station_id');
+        return $this->belongsTo(DaySchedule::class);
     }
 }

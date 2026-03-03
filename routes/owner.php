@@ -16,6 +16,7 @@ use App\Http\Controllers\Owner\NotificationController;
 use App\Http\Controllers\Owner\PayOutController;
 use App\Http\Controllers\Owner\ReportAndAnalyticController;
 use App\Http\Controllers\Owner\RevenueManagementController;
+use App\Http\Controllers\Owner\Sample;
 use App\Http\Controllers\Owner\SupportCenterController;
 use App\Http\Controllers\Owner\VehicleController;
 use App\Http\Controllers\Owner\VehicleDriverController;
@@ -36,6 +37,8 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
         Route::get('/payout', [PayOutController::class, 'index'])->name('payout');
 
+        Route::get('/sample', [Sample::class, 'index'])->name('index');
+
         Route::resource('drivers', DriverManagementController::class);
         Route::resource('drivers-application', DriverApplicationController::class);
         Route::resource('vehicles', VehicleController::class);
@@ -50,6 +53,7 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::post('bus-station/schedule', [BusStationController::class, 'storeSchedule'])->name('bus-station.schedule.store');
         Route::put('bus-station/schedule/{schedule}', [BusStationController::class, 'updateSchedule'])->name('bus-station.schedule.update');
         Route::delete('bus-station/schedule/{schedule}', [BusStationController::class, 'deleteSchedule'])->name('bus-station.schedule.delete');
+        Route::post('bus-station/bulk-schedule', [BusStationController::class, 'storeBulkSchedule'])->name('bus-station.bulk-schedule');
 
         // export for driver
         Route::get('/earning', [ReportDriverController::class, 'index'])->name('driverownerreport');
@@ -73,6 +77,5 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::get('/branch', [BranchController::class, 'index'])->name('branch.index');
         Route::get('/branch/create', [BranchController::class, 'create'])->name('branch.create');
         Route::get('/branch/{branch}', [BranchController::class, 'show'])->name('branch.show');
-        Route::post('/branch', [BranchController::class, 'store'])->name('branch.store');
     });
 });
