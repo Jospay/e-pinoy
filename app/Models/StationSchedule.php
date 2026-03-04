@@ -20,6 +20,12 @@ class StationSchedule extends Model
         return $this->belongsTo(StationReservation::class, 'station_reservation_id');
     }
 
+    public function stationReservation()
+{
+    // Adjust 'station_reservation_id' if your foreign key column has a different name
+    return $this->belongsTo(StationReservation::class, 'station_reservation_id');
+}
+
     public function busStation(): BelongsTo
     {
         return $this->belongsTo(BusStation::class, 'bus_station_id');

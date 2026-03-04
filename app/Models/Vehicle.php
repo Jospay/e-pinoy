@@ -74,6 +74,11 @@ class Vehicle extends Model
         return $this->hasMany(StationSchedule::class);
     }
 
+    public function reservations(): HasMany
+    {
+        return $this->hasMany(Reservation::class);
+    }
+
     public function dateSchedules(): HasMany
     {
         return $this->hasMany(DateSchedule::class);

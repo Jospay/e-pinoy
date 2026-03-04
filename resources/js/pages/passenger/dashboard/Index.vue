@@ -1,197 +1,290 @@
 <script setup lang="ts">
-import LocationMap from '@/components/ReservedMap.vue';
-import { Button } from '@/components/ui/button';
+import LocationMap from '@/components/ReservedMap.vue'; // Using your existing map component
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import {
-  ArrowRight,
+  Bus,
   MapPin,
-  MapPinOff,
+  ArrowRight,
+  Info,
   Navigation,
-  Search,
-  XCircle,
+  Calendar,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+
+interface RouteData {
+  id: number;
+  vehicle_info: any;
+  origin: any;
+  destination_name: string;
+  start_time: string;
+  days: string[];
+  stops: any[];
+}
 
 const props = defineProps<{
-  stations: Array<{
-    id: number;
-    name: string;
-    code: string;
-    lat: number;
-    lng: number;
-    address: string;
-  }>;
+  availableRoutes: RouteData[];
 }>();
 
-const breadcrumbs = [{ title: 'Select Terminal', href: '#' }];
+console.log('Routes loaded:', props.availableRoutes.length);
 
-// Search State
-const searchQuery = ref('');
+const selectedRoute = ref<any>(null);
+const isRouteModalOpen = ref(false);
 
-// Filtered Stations Logic
-const filteredStations = computed(() => {
-  return props.stations.filter((station) => {
-    const term = searchQuery.value.toLowerCase();
-    return (
-      station.name.toLowerCase().includes(term) ||
-      station.code.toLowerCase().includes(term) ||
-      station.address.toLowerCase().includes(term)
-    );
+const viewRouteDetails = (route: any) => {
+  selectedRoute.value = route;
+  isRouteModalOpen.value = true;
+};
+
+const bookFromRoute = (route: any) => {
+  router.get(`/passenger/dashboard/Reserve`, {
+    station_reservation_id: route.id,
+    from_id: route.origin.id,
   });
-});
-
-const goToReservation = (stationId: number) => {
-  router.get(`/passenger/dashboard/Reserve?from_id=${stationId}`);
 };
 </script>
 
 <template>
-  <Head title="Available Terminals" />
+  <Head title="Available Bus Trips" />
+  <AppLayout>
+    <div class="mx-auto max-w-6xl px-3 py-8 sm:px-8">
+      <header class="mb-10">
+        <h1 class="text-4xl font-black tracking-tight text-slate-900">
+          Where to next?
+        </h1>
+        <p class="text-lg text-slate-500">
+          Explore active bus routes and real-time schedules.
+        </p>
+      </header>
 
-  <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="mx-auto max-w-5xl p-3 sm:p-6">
-      <div
-        class="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between"
-      >
-        <div class="flex-1">
-          <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
-            Available Terminals
-          </h1>
-          <p class="mt-1 text-slate-500">
-            Select your starting point to view available destinations and fares.
-          </p>
-        </div>
-
-        <div class="relative w-full md:w-80">
-          <div
-            class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3"
-          >
-            <Search class="h-4 w-4 text-slate-400" />
-          </div>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search terminal or address..."
-            class="block w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm transition-all focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 focus:outline-none"
-          />
-        </div>
-      </div>
-
-      <div v-if="filteredStations.length > 0" class="flex flex-col gap-6">
+      <div class="grid gap-8">
         <div
-          v-for="station in filteredStations"
-          :key="station.id"
-          class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:border-slate-300 hover:shadow-md md:flex-row"
+          v-for="route in availableRoutes"
+          :key="route.id"
+          class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:border-blue-200 hover:shadow-xl lg:flex-row"
         >
           <div
-            class="relative z-0 h-48 w-full shrink-0 border-b border-slate-100 bg-slate-50 md:h-auto md:w-72 md:border-r md:border-b-0 lg:w-80"
+            class="relative z-0 h-48 shrink-0 border-b border-slate-100 bg-slate-100 lg:h-auto lg:w-80 lg:border-r lg:border-b-0"
           >
             <LocationMap
               :locations="[
                 {
-                  id: station.id,
-                  latitude: station.lat,
-                  longitude: station.lng,
+                  id: route.id,
+                  latitude: route.origin.lat,
+                  longitude: route.origin.lng,
                   type: 'Pin',
-                  name: station.name,
+                  name: route.origin.name,
                 },
               ]"
-              :zoom="15"
-              :center="[station.lat, station.lng]"
+              :zoom="14"
+              :center="[route.origin.lat, route.origin.lng]"
               :selectable="false"
             />
-            <div class="absolute bottom-3 left-3 z-[1000]">
+            <div class="absolute top-4 left-4 z-[50]">
               <span
-                class="rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-[10px] font-bold text-slate-900 uppercase shadow-sm backdrop-blur-sm"
+                class="rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold tracking-widest text-brand-blue uppercase shadow-sm backdrop-blur"
               >
-                GPS: {{ station.lat.toFixed(3) }}, {{ station.lng.toFixed(3) }}
+                Origin View
               </span>
             </div>
           </div>
 
-          <div class="flex flex-1 flex-col p-6">
-            <div class="flex items-start justify-between">
-              <div>
-                <div
-                  class="mb-2 inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold tracking-wide text-blue-700 uppercase"
-                >
-                  {{ station.code }}
+          <div class="flex flex-1 flex-col p-3 sm:p-8">
+            <div
+              class="mb-6 flex flex-col justify-between gap-6 bg-white md:flex-row md:items-center"
+            >
+              <!-- LEFT CONTENT -->
+              <div class="flex-1 space-y-3">
+                <!-- Vehicle Info -->
+                <div class="flex items-center gap-2 text-brand-blue">
+                  <Bus class="h-5 w-5" />
+                  <span class="text-sm font-semibold tracking-tight">
+                    {{ route.vehicle_info.name }} •
+                    {{ route.vehicle_info.plate }}
+                  </span>
                 </div>
-                <h3
-                  class="text-xl font-bold text-slate-900 transition-colors group-hover:text-blue-600"
-                >
-                  {{ station.name }}
-                </h3>
-              </div>
-              <div class="hidden sm:block">
-                <div class="rounded-xl border border-slate-100 bg-slate-50 p-2">
-                  <MapPin class="h-5 w-5 text-slate-400" />
+
+                <!-- Route -->
+                <div class="flex items-center gap-3">
+                  <p class="text-xl font-bold text-slate-800">
+                    {{ route.origin.name }}
+                  </p>
+
+                  <div
+                    class="flex items-center justify-center rounded-full bg-slate-100 p-2"
+                  >
+                    <ArrowRight class="h-4 w-4 text-slate-500" />
+                  </div>
+
+                  <p class="text-xl font-bold text-slate-800">
+                    {{ route.destination_name }}
+                  </p>
+                </div>
+
+                <!-- Address -->
+                <div class="flex items-start gap-2 text-sm text-slate-500">
+                  <Navigation class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                  <p class="italic">
+                    {{ route.origin.address }}
+                  </p>
                 </div>
               </div>
-            </div>
 
-            <div class="mt-3 flex items-start gap-2 text-slate-600">
-              <Navigation class="mt-1 h-4 w-4 shrink-0 text-slate-400" />
-              <p class="max-w-md text-sm leading-relaxed">
-                {{ station.address }}
-              </p>
-            </div>
-
-            <div class="mt-auto flex items-center justify-between pt-6">
-              <div class="flex items-center gap-1 text-xs text-slate-400">
-                <span class="h-2 w-2 rounded-full bg-green-500"></span>
-                Active
-              </div>
-              <Button
-                @click="goToReservation(station.id)"
-                class="group/btn flex items-center gap-2 rounded-xl bg-slate-900 px-6 text-white transition-all hover:bg-blue-700"
+              <!-- RIGHT TIME CARD -->
+              <div
+                class="flex min-w-[130px] flex-col items-center justify-center rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 text-center"
               >
-                <span>Book From Terminal</span>
-                <ArrowRight
-                  class="h-4 w-4 transition-transform group-hover/btn:translate-x-1"
-                />
-              </Button>
+                <p
+                  class="text-[10px] font-semibold tracking-widest text-slate-400 uppercase"
+                >
+                  Leaves at
+                </p>
+                <p class="text-2xl font-extrabold text-brand-blue">
+                  {{ route.start_time }}
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="mt-auto flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-6"
+            >
+              <div class="flex flex-wrap gap-1.5">
+                <div
+                  v-for="day in route.days"
+                  :key="day"
+                  class="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700"
+                >
+                  <Calendar class="h-3 w-3" />
+                  {{ day }}
+                </div>
+              </div>
+
+              <div class="grid w-full gap-3 sm:flex sm:w-auto">
+                <Button
+                  variant="outline"
+                  @click="viewRouteDetails(route)"
+                  class="flex-1 rounded-xl border-slate-200 font-bold hover:bg-slate-50 sm:flex-none"
+                >
+                  <Info class="mr-2 h-4 w-4" />
+                  Full Schedule
+                </Button>
+                <Button
+                  @click="bookFromRoute(route)"
+                  class="flex-1 rounded-xl bg-slate-900 px-8 font-bold shadow-lg shadow-slate-200 hover:bg-brand-blue sm:flex-none"
+                >
+                  Book Seat
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div
-        v-else
-        class="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50/50 py-24 text-center"
-      >
-        <div
-          class="mb-4 rounded-full border border-slate-100 bg-white p-5 shadow-sm"
-        >
-          <component
-            :is="searchQuery ? XCircle : MapPinOff"
-            class="h-10 w-10 text-slate-300"
-          />
-        </div>
-        <h2 class="text-xl font-bold text-slate-900">
-          {{
-            searchQuery
-              ? 'No terminals match your search'
-              : 'No Terminals Available'
-          }}
-        </h2>
-        <p class="mt-2 max-w-xs text-sm text-slate-500">
-          {{
-            searchQuery
-              ? 'Try searching for a different terminal name, station code, or address.'
-              : "We couldn't find enough active terminals. Please check back later."
-          }}
-        </p>
-        <Button
-          v-if="searchQuery"
-          variant="outline"
-          @click="searchQuery = ''"
-          class="mt-6 rounded-xl"
-        >
-          Clear Search
-        </Button>
-      </div>
+      <Dialog :open="isRouteModalOpen" @update:open="isRouteModalOpen = $event">
+        <DialogContent class="max-w-lg overflow-hidden p-0">
+          <DialogHeader class="border p-3 pb-4">
+            <DialogTitle class="text-2xl font-bold text-slate-900">
+              Journey Timeline
+            </DialogTitle>
+            <DialogDescription class="text-slate-500">
+              Sequence of stops and estimated timings.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div class="max-h-[60vh] overflow-y-auto bg-white p-4">
+            <div class="relative space-y-0">
+              <div
+                v-for="(stop, index) in selectedRoute?.stops"
+                :key="index"
+                class="relative pb-10 pl-10 last:pb-0"
+              >
+                <div
+                  v-if="index !== selectedRoute.stops.length - 1"
+                  class="absolute top-8 left-[15px] h-full w-[3px] bg-slate-100"
+                ></div>
+
+                <div
+                  class="absolute top-1.5 left-0 z-10 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-brand-blue shadow-md"
+                >
+                  <MapPin
+                    v-if="
+                      index === 0 || index === selectedRoute.stops.length - 1
+                    "
+                    class="h-3 w-3 text-white"
+                  />
+                  <div v-else class="h-2 w-2 rounded-full bg-white"></div>
+                </div>
+
+                <div class="flex flex-col">
+                  <p
+                    class="mb-1 text-lg leading-none font-black text-slate-900"
+                  >
+                    {{ stop.station_name }}
+                  </p>
+                  <p
+                    class="mb-3 flex items-center gap-1 text-xs text-slate-400 italic"
+                  >
+                    <Navigation class="h-3 w-3" /> {{ stop.address }}
+                  </p>
+
+                  <div class="flex gap-3">
+                    <div
+                      v-if="index !== 0"
+                      class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"
+                    >
+                      <p
+                        class="text-[9px] font-bold tracking-tighter text-slate-400 uppercase"
+                      >
+                        Arrival
+                      </p>
+                      <p class="text-sm font-bold text-slate-700">
+                        {{ stop.arrival }}
+                      </p>
+                    </div>
+                    <div
+                      v-if="index !== selectedRoute.stops.length - 1"
+                      class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5"
+                    >
+                      <p
+                        class="text-[9px] font-bold tracking-tighter text-blue-400 uppercase"
+                      >
+                        Departure
+                      </p>
+                      <p class="text-sm font-bold text-blue-700">
+                        {{ stop.departure }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter class="border-t bg-slate-50/80 p-6">
+            <Button
+              class="bg-slate-200 font-bold text-slate-500 hover:bg-slate-100"
+              @click="isRouteModalOpen = false"
+            >
+              Cancel
+            </Button>
+            <Button
+              class="min-w-[160px] rounded-xl bg-brand-blue px-8 font-bold shadow-lg shadow-brand-blue/20 hover:bg-brand-blue/90"
+              @click="bookFromRoute(selectedRoute)"
+            >
+              Proceed to Booking
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   </AppLayout>
 </template>

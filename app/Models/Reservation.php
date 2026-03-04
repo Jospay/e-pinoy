@@ -11,6 +11,7 @@ class Reservation extends Model
     use HasFactory;
 
     protected $fillable = [
+        'vehicle_id',
         'from_bus_station_id',
         'to_bus_station_id',
         'passenger_id',
@@ -22,6 +23,11 @@ class Reservation extends Model
         'qrcode_name',
         'paymongo_checkout_session_id',
     ];
+
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
 
     public function status(): BelongsTo
     {

@@ -13,10 +13,12 @@ return new class extends Migration
     {
         Schema::create('reservations', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('vehicle_id')->constrained('vehicles')->onDelete('restrict');
             $table->foreignId('from_bus_station_id')->constrained('bus_stations')->onDelete('cascade');
             $table->foreignId('to_bus_station_id')->constrained('bus_stations')->onDelete('cascade');
             $table->foreignId('passenger_id')->constrained('user_passengers')->onDelete('restrict');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
+            $table->integer('passenger_count');
             $table->decimal('amount', 10, 2);
             $table->time('reserve_from_time');
             $table->time('reserve_to_time');

@@ -8,6 +8,7 @@ use App\Models\StationAmount;
 use App\Models\StationSchedule;
 use App\Models\DaySchedule;
 use App\Models\Vehicle;
+use App\Models\Reservation;
 use App\Models\DateSchedule;
 use App\Models\StationReservation;
 use Illuminate\Http\Request;
@@ -65,7 +66,7 @@ class BusStationController extends Controller
         // ... Keep Transactions logic same as your current script ...
         $stationIds = $stationsQuery->pluck('id');
         $filter = $request->query('status', 'completed');
-        $transactions = \App\Models\Reservation::with(['fromStation', 'toStation', 'status', 'passenger.user'])
+        $transactions = Reservation::with(['fromStation', 'toStation', 'status', 'passenger.user'])
             ->whereIn('from_bus_station_id', $stationIds)
             ->orderBy('created_at', 'desc')
             ->get()
