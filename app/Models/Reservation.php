@@ -12,10 +12,11 @@ class Reservation extends Model
 
     protected $fillable = [
         'vehicle_id',
+        'passenger_id',
         'from_bus_station_id',
         'to_bus_station_id',
-        'passenger_id',
         'status_id',
+        'passenger_count',
         'amount',
         'reserve_from_time',
         'reserve_to_time',

@@ -58,7 +58,7 @@ interface GroupedRoute {
   all_days: string[];
   vehicle_id: number;
   reservation_id: number;
-  day_id?: number;
+  day_ids: number[];
   stops: Stop[];
 }
 
@@ -210,17 +210,10 @@ const editingScheduleId = ref<number | null>(null);
 const selectedStationForSchedule = ref<any>(null);
 
 const scheduleForm = useForm({
+  reservation_id: null as number | null, // Add this
   vehicle_id: null as number | null,
   day_schedule_ids: [] as number[],
-  stations: {} as Record<
-    number,
-    {
-      selected: boolean;
-      from_time: string;
-      to_time: string;
-      order: number | null;
-    }
-  >,
+  stations: {} as Record<number, any>,
 });
 
 const handleStationToggle = (stationId: number) => {
@@ -253,6 +246,7 @@ const getOrdinal = (n: number | null) => {
 
 const openAddSchedule = (station?: any) => {
   editingScheduleId.value = null;
+  scheduleForm.reset();
   selectedStationForSchedule.value = station || null;
 
   const stationInit: Record<number, any> = {};
@@ -275,30 +269,22 @@ const openAddSchedule = (station?: any) => {
 };
 
 const editFullRoute = (route: GroupedRoute) => {
-  editingScheduleId.value = 999;
+  // 1. Set the IDs to identify this specific route for the Controller
+  editingScheduleId.value = route.reservation_id;
+  scheduleForm.reservation_id = route.reservation_id;
   scheduleForm.vehicle_id = route.vehicle_id;
 
-  let foundDayIds: number[] = [];
+  // 2. Set the operating days directly from the route data
+  scheduleForm.day_schedule_ids = route.day_ids ? [...route.day_ids] : [];
 
-  for (const s of props.stations) {
-    const match = s.schedules.find(
-      (sched) => sched.reservation_id === route.reservation_id,
-    );
-    if (match && match.day_schedule_ids) {
-      foundDayIds = match.day_schedule_ids;
-      break;
-    }
-  }
-
-  // Assign the days to the form
-  scheduleForm.day_schedule_ids = foundDayIds.length > 0 ? foundDayIds : [];
-
+  // 3. Initialize the station checklist
   const stationInit: Record<number, any> = {};
+
   props.stations
     .filter((s) => s.status_id === 1)
     .forEach((s) => {
       const existingStop = route.stops.find(
-        (stop: any) => stop.station_id === s.id,
+        (stop: Stop) => stop.station_id === s.id,
       );
 
       stationInit[s.id] = {
@@ -309,6 +295,7 @@ const editFullRoute = (route: GroupedRoute) => {
       };
     });
 
+  // 4. Update form state and open UI
   scheduleForm.stations = stationInit;
   isScheduleDialogOpen.value = true;
 };
@@ -331,8 +318,8 @@ const submitSchedule = () => {
     const data = scheduleForm.stations[stationId];
     if (data && data.selected) {
       payloadStations[stationId] = {
-        from_time: data.from_time,
         to_time: data.to_time,
+        from_time: data.order === 1 ? data.from_time : data.to_time,
         order: data.order,
       };
       hasSelection = true;
@@ -711,8 +698,8 @@ const hasPendingOrDenied = computed(() =>
                   <h3 class="text-lg font-bold text-slate-900">
                     {{ route.vehicle_name }}
                   </h3>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <div class="mt-1 flex flex-wrap gap-1.5">
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <div class="flex flex-wrap gap-1.5">
                       <span
                         v-for="day in route.all_days"
                         :key="day"
@@ -723,9 +710,9 @@ const hasPendingOrDenied = computed(() =>
                     </div>
                     <span class="h-1 w-1 rounded-full bg-slate-300"></span>
                     <span
-                      class="text-[10px] font-bold text-brand-blue uppercase"
+                      class="text-[10px] font-extrabold text-brand-blue uppercase"
                     >
-                      {{ route.stops.length }} Stops
+                      {{ route.stops.length }} Route
                     </span>
                   </div>
                 </div>
@@ -758,35 +745,38 @@ const hasPendingOrDenied = computed(() =>
 
                     <div class="mt-4 w-full space-y-3 px-4">
                       <p
-                        class="text-sm leading-tight font-bold break-words whitespace-normal text-slate-900"
+                        class="text-md leading-tight font-bold break-words whitespace-normal text-slate-900"
                       >
                         {{ step.station_name }}
                       </p>
 
                       <div
-                        class="flex flex-col gap-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-3 shadow-inner"
+                        v-if="step.order === 1"
+                        class="flex items-center justify-evenly gap-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-3 shadow-inner"
                       >
                         <div class="flex flex-col items-center">
                           <span
-                            class="text-[8px] font-black tracking-tighter text-slate-400 uppercase"
+                            class="text-[12px] font-black tracking-tighter text-slate-400 uppercase"
                             >Arrive</span
                           >
                           <span
-                            class="font-mono text-xs font-bold text-slate-700"
+                            class="font-mono text-sm font-bold text-slate-700"
                           >
-                            {{ step.to_time || '--:--' }}
+                            {{ step.from_time || '--:--' }}
                           </span>
                         </div>
-                        <div class="h-px w-full bg-slate-200/50"></div>
+
+                        <div class="h-8 w-px bg-slate-200"></div>
+
                         <div class="flex flex-col items-center">
                           <span
-                            class="text-[8px] font-black tracking-tighter text-brand-blue uppercase"
+                            class="text-[12px] font-black tracking-tighter text-brand-blue uppercase"
                             >Depart</span
                           >
                           <span
-                            class="font-mono text-xs font-bold text-brand-blue"
+                            class="font-mono text-sm font-bold text-brand-blue"
                           >
-                            {{ step.from_time || '--:--' }}
+                            {{ step.to_time || '--:--' }}
                           </span>
                         </div>
                       </div>
@@ -1058,7 +1048,7 @@ const hasPendingOrDenied = computed(() =>
                 Choose a bus from your fleet...
               </option>
               <option v-for="v in props.vehicles" :key="v.id" :value="v.id">
-                {{ v.plate_number }} — {{ v.model }}
+                {{ v.plate_number }} - {{ v.model }}
               </option>
             </select>
           </div>
@@ -1104,7 +1094,7 @@ const hasPendingOrDenied = computed(() =>
                 3. Route Sequence & Timings
               </Label>
               <span class="text-[10px] font-medium text-slate-400 italic"
-                >Click stops in order</span
+                >Click routes in order</span
               >
             </div>
 
@@ -1142,7 +1132,7 @@ const hasPendingOrDenied = computed(() =>
                         {{
                           getOrdinal(scheduleForm.stations[station.id]?.order)
                         }}
-                        Stop
+                        Route
                       </span>
                     </div>
                     <p
@@ -1155,30 +1145,45 @@ const hasPendingOrDenied = computed(() =>
 
                 <div
                   v-if="scheduleForm.stations[station.id]?.selected"
-                  class="ml-10 grid grid-cols-2 gap-4 border-t border-blue-100/50 pt-4"
+                  class="ml-10 border-t border-blue-100/50 pt-4"
                 >
-                  <div class="space-y-1.5">
-                    <label
-                      class="text-[9px] font-black tracking-tight text-slate-400 uppercase"
-                      >Arrival</label
-                    >
-                    <Input
-                      type="time"
-                      v-model="scheduleForm.stations[station.id].to_time"
-                      class="h-10 rounded-xl border-slate-200 bg-white font-mono text-sm"
-                    />
+                  <div
+                    v-if="scheduleForm.stations[station.id].order === 1"
+                    class="grid grid-cols-2 gap-4"
+                  >
+                    <div class="space-y-1.5">
+                      <label
+                        class="text-[9px] font-black tracking-tight text-slate-400 uppercase"
+                      >
+                        Arrival
+                      </label>
+                      <Input
+                        type="time"
+                        v-model="scheduleForm.stations[station.id].from_time"
+                        class="h-10 rounded-xl border-brand-blue/30 bg-white font-mono text-sm font-bold text-brand-blue"
+                      />
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <label
+                        class="text-[9px] font-black tracking-tight text-brand-blue uppercase"
+                      >
+                        Departure
+                      </label>
+                      <Input
+                        type="time"
+                        v-model="scheduleForm.stations[station.id].to_time"
+                        class="h-10 rounded-xl border-slate-200 bg-white font-mono text-sm"
+                      />
+                    </div>
                   </div>
-                  <div class="space-y-1.5">
-                    <label
-                      class="text-[9px] font-black tracking-tight text-brand-blue uppercase"
-                      >Departure</label
-                    >
-                    <Input
-                      type="time"
-                      v-model="scheduleForm.stations[station.id].from_time"
-                      class="h-10 rounded-xl border-brand-blue/30 bg-white font-mono text-sm font-bold text-brand-blue"
-                    />
-                  </div>
+
+                  <!-- <div v-else class="flex items-center gap-2 py-1">
+                    <div class="h-1.5 w-1.5 rounded-full bg-slate-300"></div>
+                    <span class="text-[10px] font-medium text-slate-400 italic">
+                      Follows the sequence after Stop 1
+                    </span>
+                  </div> -->
                 </div>
               </div>
             </div>

@@ -27,6 +27,7 @@ interface RouteData {
   origin: any;
   destination_name: string;
   start_time: string;
+  end_time: string;
   days: string[];
   stops: any[];
 }
@@ -140,17 +141,31 @@ const bookFromRoute = (route: any) => {
               </div>
 
               <!-- RIGHT TIME CARD -->
+
               <div
-                class="flex min-w-[130px] flex-col items-center justify-center rounded-xl border border-blue-100 bg-blue-50 px-5 py-4 text-center"
+                class="grid min-w-[130px] items-center justify-evenly gap-1 rounded-2xl border border-slate-100 bg-slate-50/50 p-3 shadow-md"
               >
-                <p
-                  class="text-[10px] font-semibold tracking-widest text-slate-400 uppercase"
-                >
-                  Leaves at
-                </p>
-                <p class="text-2xl font-extrabold text-brand-blue">
-                  {{ route.start_time }}
-                </p>
+                <div class="flex flex-col items-center">
+                  <span
+                    class="text-[12px] font-black tracking-tighter text-slate-400 uppercase"
+                    >Arrive</span
+                  >
+                  <span class="font-mono text-sm font-bold text-slate-700">
+                    {{ route.start_time }}
+                  </span>
+                </div>
+
+                <div class="h-px w-full bg-slate-200"></div>
+
+                <div class="flex flex-col items-center">
+                  <span
+                    class="text-[12px] font-black tracking-tighter text-brand-blue uppercase"
+                    >Depart</span
+                  >
+                  <span class="font-mono text-sm font-bold text-brand-blue">
+                    {{ route.end_time }}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -174,8 +189,8 @@ const bookFromRoute = (route: any) => {
                   @click="viewRouteDetails(route)"
                   class="flex-1 rounded-xl border-slate-200 font-bold hover:bg-slate-50 sm:flex-none"
                 >
-                  <Info class="mr-2 h-4 w-4" />
-                  Full Schedule
+                  <Info class="h-4 w-4" />
+                  View Full Route
                 </Button>
                 <Button
                   @click="bookFromRoute(route)"
@@ -193,10 +208,11 @@ const bookFromRoute = (route: any) => {
         <DialogContent class="max-w-lg overflow-hidden p-0">
           <DialogHeader class="border p-3 pb-4">
             <DialogTitle class="text-2xl font-bold text-slate-900">
-              Journey Timeline
+              Bus Route
             </DialogTitle>
             <DialogDescription class="text-slate-500">
-              Sequence of stops and estimated timings.
+              This shows the complete route of the bus, including all stop
+              locations.
             </DialogDescription>
           </DialogHeader>
 
@@ -236,9 +252,8 @@ const bookFromRoute = (route: any) => {
                     <Navigation class="h-3 w-3" /> {{ stop.address }}
                   </p>
 
-                  <div class="flex gap-3">
+                  <div v-if="stop.order === 1" class="flex gap-3">
                     <div
-                      v-if="index !== 0"
                       class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5"
                     >
                       <p
@@ -251,7 +266,6 @@ const bookFromRoute = (route: any) => {
                       </p>
                     </div>
                     <div
-                      v-if="index !== selectedRoute.stops.length - 1"
                       class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5"
                     >
                       <p

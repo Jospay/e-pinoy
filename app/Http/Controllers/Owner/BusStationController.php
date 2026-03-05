@@ -106,6 +106,7 @@ class BusStationController extends Controller
     public function storeBulkSchedule(Request $request)
     {
         $validated = $request->validate([
+            'reservation_id' => 'nullable|exists:station_reservations,id',
             'vehicle_id' => 'required|exists:vehicles,id',
             'day_schedule_ids' => 'required|array',
             'day_schedule_ids.*' => 'exists:day_schedules,id',
@@ -113,24 +114,21 @@ class BusStationController extends Controller
         ]);
 
         DB::transaction(function () use ($validated) {
-            $existingReservations = StationReservation::where('vehicle_id', $validated['vehicle_id'])
-                ->whereHas('dateSchedules', function($q) use ($validated) {
-                    $q->whereIn('day_schedule_id', $validated['day_schedule_ids']);
-                })->get();
-
-            foreach($existingReservations as $res) {
-                // Delete old schedules and days to refresh the route
-                $res->schedules()->delete();
-                $res->dateSchedules()->delete();
-                $res->delete();
+            if (!empty($validated['reservation_id'])) {
+                $oldRes = StationReservation::find($validated['reservation_id']);
+                if ($oldRes) {
+                    $oldRes->schedules()->delete();
+                    $oldRes->dateSchedules()->delete();
+                    $oldRes->delete();
+                }
             }
 
-            // 1. Create New Master Record
+            // Create the specific instance for THIS journey
             $reservation = StationReservation::create([
                 'vehicle_id' => $validated['vehicle_id']
             ]);
 
-            // 2. Insert Operating Days
+            // Insert Operating Days
             foreach ($validated['day_schedule_ids'] as $dayId) {
                 DateSchedule::create([
                     'station_reservation_id' => $reservation->id,
@@ -138,17 +136,15 @@ class BusStationController extends Controller
                 ]);
             }
 
-            // 3. Insert Station Timings with the correct Sequence (order)
+            // Insert Station Stops
             foreach ($validated['stations'] as $stationId => $data) {
-                if (!empty($data['from_time']) || !empty($data['to_time'])) {
-                    StationSchedule::create([
-                        'station_reservation_id' => $reservation->id,
-                        'bus_station_id' => $stationId,
-                        'route_step' => $data['order'] ?? 0,
-                        'from_time' => $data['from_time'] ?? '00:00',
-                        'to_time' => $data['to_time'] ?? '00:00',
-                    ]);
-                }
+                StationSchedule::create([
+                    'station_reservation_id' => $reservation->id,
+                    'bus_station_id' => $stationId,
+                    'route_step' => $data['order'] ?? 0,
+                    'from_time' => $data['from_time'] ?? '00:00',
+                    'to_time' => $data['to_time'] ?? '00:00',
+                ]);
             }
         });
 

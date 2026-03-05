@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Passenger;
 use App\Http\Controllers\Controller;
 use App\Models\BusStation;
 use App\Models\Reservation;
+use App\Models\StationAmount;
+use App\Models\StationReservation;
 use App\Models\StationSchedule;
 use App\Models\Status;
+use App\Models\Vehicle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
@@ -22,9 +25,31 @@ class ReservationController extends Controller
         return Status::where('name', 'LIKE', "%{$word}%")->first()?->id;
     }
 
+    /**
+     * UPDATED: Added method to handle real-time seat checking
+     */
+    public function getAvailability(Request $request)
+    {
+        $request->validate([
+            'vehicle_id'   => 'required|exists:vehicles,id',
+            'reserve_date' => 'required|date',
+        ]);
+
+        $paidStatusId = $this->getStatusIdByWord('Paid');
+
+        $bookedSeats = Reservation::where('vehicle_id', $request->vehicle_id)
+            ->whereDate('reserve_date', $request->reserve_date)
+            ->whereIn('status_id', array_filter([$paidStatusId]))
+            ->sum('passenger_count');
+
+        return response()->json([
+            'booked' => (int)$bookedSeats,
+        ]);
+    }
+
     public function index(Request $request)
     {
-        $routes = \App\Models\StationReservation::with([
+        $routes = StationReservation::with([
             'vehicle',
             'dateSchedules.daySchedule',
             'schedules.busStation'
@@ -49,10 +74,11 @@ class ReservationController extends Controller
                 ],
                 'destination_name' => $destinationStation?->name ?? 'N/A',
                 'start_time' => $stops->first() ? date('h:i A', strtotime($stops->first()->from_time)) : 'N/A',
+                'end_time' => $stops->first() ? date('h:i A', strtotime($stops->first()->to_time)) : 'N/A',
                 'stops' => $stops->map(fn($s) => [
                     'station_name' => $s->busStation->name,
-                    'arrival' => $s->to_time ? date('h:i A', strtotime($s->to_time)) : '--:--',
-                    'departure' => $s->from_time ? date('h:i A', strtotime($s->from_time)) : '--:--',
+                    'arrival' => $s->from_time ? date('h:i A', strtotime($s->from_time)) : '--:--',
+                    'departure' => $s->to_time ? date('h:i A', strtotime($s->to_time)) : '--:--',
                     'order' => $s->route_step,
                     'station_id' => $s->bus_station_id,
                     'address' => $this->getReverseGeocode($s->busStation->latitude, $s->busStation->longitude),
@@ -96,63 +122,52 @@ class ReservationController extends Controller
     {
         $stationReservationId = $request->query('station_reservation_id');
         $fromStationId = $request->query('from_id');
-
-        $trip = \App\Models\StationReservation::with([
+        $trip = StationReservation::with([
             'vehicle',
             'schedules.busStation.toAmounts',
             'dateSchedules.daySchedule'
         ])->findOrFail($stationReservationId);
 
-        // 1. Get all schedules for this trip, sorted by their sequence
         $allSchedules = $trip->schedules->sortBy('route_step')->values();
-
-        // 2. Identify the Origin
         $originSchedule = $allSchedules->where('bus_station_id', $fromStationId)->first();
 
         if (!$originSchedule) {
             return redirect()->back()->with('error', 'Origin station not found.');
         }
 
-
         $originIndex = $allSchedules->search(fn($s) => $s->id === $originSchedule->id);
 
-        // 4. Destinations are only stations that appear AFTER the origin in the sorted sequence
         $availableDestinations = $allSchedules->slice($originIndex + 1)
-    ->map(function($s) use ($allSchedules, $originIndex) {
+            ->map(function($s) use ($allSchedules, $originIndex) {
+                $path = $allSchedules->slice($originIndex + 1, $allSchedules->search(fn($item) => $item->id === $s->id) - $originIndex);
 
-        // Identify the path of stations between the user's start and this specific destination
-        $path = $allSchedules->slice($originIndex + 1, $allSchedules->search(fn($item) => $item->id === $s->id) - $originIndex);
+                $fareSum = $path->map(function($step) use ($allSchedules) {
+                    $currentIndexInAll = $allSchedules->search(fn($item) => $item->id === $step->id);
+                    $previousStationInJourney = $allSchedules[$currentIndexInAll - 1]->busStation;
+                    $currentStationInJourney = $step->busStation;
 
-        $fareSum = $path->map(function($step, $key) use ($allSchedules, $originIndex, $path) {
-            // Find the station immediately before this one in the CURRENT journey
-            $currentIndexInAll = $allSchedules->search(fn($item) => $item->id === $step->id);
-            $previousStationInJourney = $allSchedules[$currentIndexInAll - 1]->busStation;
-            $currentStationInJourney = $step->busStation;
+                    return StationAmount::where(function($q) use ($previousStationInJourney, $currentStationInJourney) {
+                            $q->where('from_bus_station_id', $previousStationInJourney->id)
+                              ->where('to_bus_station_id', $currentStationInJourney->id);
+                        })
+                        ->orWhere(function($q) use ($previousStationInJourney, $currentStationInJourney) {
+                            $q->where('from_bus_station_id', $currentStationInJourney->id)
+                              ->where('to_bus_station_id', $previousStationInJourney->id);
+                        })
+                        ->first()?->amount ?? 0;
+                })->sum();
 
-            // LOOKUP FARE: Check both directions in the database (A->B or B->A)
-            return \App\Models\StationAmount::where(function($q) use ($previousStationInJourney, $currentStationInJourney) {
-                    $q->where('from_bus_station_id', $previousStationInJourney->id)
-                      ->where('to_bus_station_id', $currentStationInJourney->id);
-                })
-                ->orWhere(function($q) use ($previousStationInJourney, $currentStationInJourney) {
-                    $q->where('from_bus_station_id', $currentStationInJourney->id)
-                      ->where('to_bus_station_id', $previousStationInJourney->id);
-                })
-                ->first()?->amount ?? 0;
-        })->sum();
+                return [
+                    'id' => $s->busStation->id,
+                    'name' => $s->busStation->name,
+                    'calculated_fare' => (float)$fareSum,
+                ];
+            })->values();
 
-        return [
-            'id' => $s->busStation->id,
-            'name' => $s->busStation->name,
-            'calculated_fare' => (float)$fareSum,
-        ];
-    })->values();
-
-        // 5. Timeline for Sidebar (Always matches the physical path of the bus)
         $fullTimeline = $allSchedules->map(fn($s) => [
             'name' => $s->busStation->name,
-            'arrival' => $s->to_time ? date('h:i A', strtotime($s->to_time)) : '--:--',
-            'departure' => $s->from_time ? date('h:i A', strtotime($s->from_time)) : '--:--',
+            'arrival' => $s->to_time ? date('h:i A', strtotime($s->from_time)) : '--:--',
+            'departure' => $s->from_time ? date('h:i A', strtotime($s->to_time)) : '--:--',
             'address' => $this->getReverseGeocode($s->busStation->latitude, $s->busStation->longitude),
         ])->values();
 
@@ -172,6 +187,7 @@ class ReservationController extends Controller
                 'id' => $trip->vehicle->id,
                 'name' => $trip->vehicle->model,
                 'plate' => $trip->vehicle->plate_number,
+                'capacity' => $trip->vehicle->capacity,
             ]
         ]);
     }
@@ -183,27 +199,61 @@ class ReservationController extends Controller
             'from_bus_station_id' => 'required|exists:bus_stations,id',
             'to_bus_station_id'   => 'required|exists:bus_stations,id',
             'station_schedule_id' => 'required|exists:station_schedules,id',
-            'passenger_count'     => 'required|integer|min:1|max:20',
+            'passenger_count'     => 'required|integer|min:1',
             'reserve_date'        => 'required|date|after_or_equal:today',
             'amount'              => 'required|numeric',
         ]);
 
+        $vehicle = Vehicle::findOrFail($validated['vehicle_id']);
+
+        // 1. Operational Day Check
+        $reserveDay = \Carbon\Carbon::parse($validated['reserve_date'])->format('l');
+
+        // Use relationship check for allowed days
+        $trip = StationReservation::where('vehicle_id', $vehicle->id)->with('dateSchedules.daySchedule')->first();
+        if ($trip) {
+            $allowedDays = $trip->dateSchedules->map(fn($ds) => strtolower($ds->daySchedule->name));
+            if (!$allowedDays->contains(strtolower($reserveDay))) {
+                return back()->withErrors([
+                    'reserve_date' => "This vehicle does not operate on {$reserveDay}s."
+                ]);
+            }
+        }
+
+        // 2. Capacity Check (Final check before payment)
+        $paidStatusId = $this->getStatusIdByWord('Paid');
+        $pendingStatusId = $this->getStatusIdByWord('Pending');
+
+        $bookedSeats = Reservation::where('vehicle_id', $validated['vehicle_id'])
+            ->whereDate('reserve_date', $validated['reserve_date'])
+            ->whereIn('status_id', array_filter([$paidStatusId]))
+            ->sum('passenger_count');
+
+        $availableSeats = $vehicle->capacity - $bookedSeats;
+
+        if ($validated['passenger_count'] > $availableSeats) {
+            return back()->withErrors([
+                'passenger_count' => "Sorry, only $availableSeats seats left for this date."
+            ]);
+        }
+
+        // 3. Process Reservation
         $user = auth()->user();
         $sched = StationSchedule::findOrFail($validated['station_schedule_id']);
         $origin = BusStation::findOrFail($validated['from_bus_station_id']);
         $destination = BusStation::findOrFail($validated['to_bus_station_id']);
 
-        $pendingId = $this->getStatusIdByWord('Pending') ?? 6;
-
         try {
             DB::beginTransaction();
+
             $qrName = 'QR-' . strtoupper(Str::random(12));
+
             $reservation = Reservation::create([
                 'vehicle_id'          => $validated['vehicle_id'],
                 'passenger_id'        => $user->id,
                 'from_bus_station_id' => $validated['from_bus_station_id'],
                 'to_bus_station_id'   => $validated['to_bus_station_id'],
-                'status_id'           => $pendingId,
+                'status_id'           => $pendingStatusId,
                 'passenger_count'     => $validated['passenger_count'],
                 'amount'              => $validated['amount'],
                 'reserve_from_time'   => $sched->from_time,
@@ -220,6 +270,7 @@ class ReservationController extends Controller
 
             DB::commit();
             return Inertia::location($paymongoSession['attributes']['checkout_url']);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Reservation Store Error: " . $e->getMessage());
@@ -227,33 +278,57 @@ class ReservationController extends Controller
         }
     }
 
-    public function success(Request $request, $qrcode_name)
+    public function success(Request $request, Reservation $reservation)
     {
         try {
             DB::beginTransaction();
-            $reservation = Reservation::where('qrcode_name', $qrcode_name)->lockForUpdate()->firstOrFail();
+
+            // Use the $reservation provided by the route binding
+            $reservation->lockForUpdate();
             $paidStatusId = $this->getStatusIdByWord('Paid') ?? 1;
 
-            if ($reservation->status_id == $paidStatusId) {
+            // Check if already processed
+            if ((int)$reservation->status_id === (int)$paidStatusId) {
                 DB::commit();
                 return $this->renderSuccess($reservation);
             }
 
             $sessionId = $reservation->paymongo_checkout_session_id;
+
             $response = Http::withBasicAuth(env('PAYMONGO_SECRET_KEY'), '')
                 ->get("https://api.paymongo.com/v1/checkout_sessions/{$sessionId}");
 
-            if ($response->failed()) throw new \Exception('Failed to fetch PayMongo session.');
+            if ($response->failed()) {
+                throw new \Exception('Failed to fetch PayMongo session.');
+            }
 
-            $data = $response->json()['data']['attributes'];
-            if (($data['status'] ?? 'open') === 'completed') {
-                $reservation->update(['status_id' => $paidStatusId]);
+            $attributes = $response->json()['data']['attributes'];
+            $paymongoStatus = $attributes['status'] ?? 'open';
+            $payments = $attributes['payments'] ?? [];
+
+            $isPaid = ($paymongoStatus === 'completed');
+
+            if (!$isPaid && !empty($payments)) {
+                foreach ($payments as $payment) {
+                    if (($payment['attributes']['status'] ?? '') === 'paid') {
+                        $isPaid = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($isPaid) {
+                $reservation->status_id = $paidStatusId;
+                $reservation->save();
+
                 DB::commit();
-                return $this->renderSuccess($reservation->refresh());
+                // Load all necessary data for the receipt
+                return $this->renderSuccess($reservation->fresh(['fromStation', 'toStation', 'vehicle', 'status']));
             }
 
             DB::rollBack();
             return redirect()->route('passenger.dashboard')->with('error', 'Payment not confirmed.');
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Payment Verification Error: " . $e->getMessage());
