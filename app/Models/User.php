@@ -64,19 +64,6 @@ class User extends Authenticatable
             'two_factor_confirmed_at' => 'datetime',
         ];
     }
-
-    /**
-     * Get the options for generating the slug.
-     */
-    // public function getSlugOptions() : SlugOptions
-    // {
-    //     return SlugOptions::create()
-    //         ->generateSlugsFrom('name')
-    //         ->saveSlugsTo('username')
-    //         ->slugsShouldBeNoLongerThan(20)
-    //         ->usingSeparator('_');
-    // }
-
     // relationship to user type, one to many
     public function userType(): BelongsTo
     {
@@ -131,5 +118,10 @@ class User extends Authenticatable
     public function supportTickets()
     {
         return $this->hasMany(SupportTicket::class);
+    }
+
+    public function eWallet()
+    {
+        return $this->hasOne(EWallet::class);
     }
 }

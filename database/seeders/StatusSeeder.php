@@ -34,6 +34,7 @@ class StatusSeeder extends Seeder
             ['id' => 18, 'name' => 'deny'],
             ['id' => 19, 'name' => 'for approval'],
             ['id' => 20, 'name' => 'approved'],
+            ['id' => 21, 'name' => 'refund'],
         ]);
     }
 }
