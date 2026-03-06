@@ -8,8 +8,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Users,
   Lock,
-  MapPin,
+  Calendar,
   Pencil,
   Bus,
   Loader2,
@@ -93,12 +94,14 @@ const props = defineProps<{
     passenger_name: string;
     origin: string;
     destination: string;
+    passenger_count: string;
     amount: string;
     date: string;
     time_window: string;
     status_text: string;
     is_paid: boolean;
     is_pending: boolean;
+    is_refund: boolean;
     is_completed: boolean;
     booked_at: string;
   }>;
@@ -190,6 +193,8 @@ const filteredTransactions = computed(() => {
     return props.transactions.filter((t) => t.is_completed);
   } else if (props.initialFilter === 'paid') {
     return props.transactions.filter((t) => t.is_paid);
+  } else if (props.initialFilter === 'refund') {
+    return props.transactions.filter((t) => t.is_refund);
   }
   return props.transactions.filter((t) => t.is_pending);
 });
@@ -832,8 +837,21 @@ const hasPendingOrDenied = computed(() =>
             ]"
             class="rounded-xl px-6 py-2 text-xs font-bold transition-all"
           >
-            Paid Trips
+            Paid
           </button>
+
+          <button
+            @click="updateFilter('refund')"
+            :class="[
+              initialFilter === 'refund'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700',
+            ]"
+            class="rounded-xl px-6 py-2 text-xs font-bold transition-all"
+          >
+            Refund
+          </button>
+
           <button
             @click="updateFilter('pending')"
             :class="[
@@ -961,29 +979,65 @@ const hasPendingOrDenied = computed(() =>
                   </div>
                 </div>
 
-                <div
-                  class="mb-4 flex flex-wrap items-center gap-4 rounded-2xl bg-slate-50 p-4"
-                >
-                  <div class="flex items-center gap-2">
-                    <Clock class="h-4 w-4 text-slate-400" />
+                <div class="mb-6 grid grid-cols-2 gap-3">
+                  <div
+                    class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
+                  >
+                    <Bus class="h-4 w-4 text-slate-400" />
                     <div>
-                      <p class="text-[9px] font-bold text-slate-400 uppercase">
-                        Schedule Time
+                      <p
+                        class="text-[9px] font-bold tracking-wider text-slate-400 uppercase"
+                      >
+                        Vehicle
                       </p>
-                      <p class="text-xs font-bold text-slate-700">
-                        {{ tx.time_window }}
+                      <p class="max-w-[100px] truncate text-xs font-bold">
+                        {{ tx.vehicle_name }}
                       </p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <MapPin class="h-4 w-4 text-slate-400" />
+
+                  <div
+                    class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
+                  >
+                    <Users class="h-4 w-4 text-slate-400" />
                     <div>
-                      <p class="text-[9px] font-bold text-slate-400 uppercase">
-                        Departure Date
+                      <p
+                        class="text-[9px] font-bold tracking-wider text-slate-400 uppercase"
+                      >
+                        Passengers
                       </p>
-                      <p class="text-xs font-bold text-slate-700">
-                        {{ tx.date }}
+                      <p class="max-w-[100px] truncate text-xs font-bold">
+                        {{ tx.passenger_count }}
+                        {{ tx.passenger_count > 1 ? 'Seats' : 'Seat' }}
                       </p>
+                    </div>
+                  </div>
+
+                  <div
+                    class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
+                  >
+                    <Calendar class="h-4 w-4 text-slate-400" />
+                    <div>
+                      <p
+                        class="text-[9px] font-bold tracking-wider text-slate-400 uppercase"
+                      >
+                        Travel Date
+                      </p>
+                      <p class="text-xs font-bold">{{ tx.date }}</p>
+                    </div>
+                  </div>
+
+                  <div
+                    class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
+                  >
+                    <Clock class="h-4 w-4 text-slate-400" />
+                    <div>
+                      <p
+                        class="text-[9px] font-bold tracking-wider text-slate-400 uppercase"
+                      >
+                        Departure
+                      </p>
+                      <p class="text-xs font-bold">{{ tx.time_window }}</p>
                     </div>
                   </div>
                 </div>
@@ -1004,13 +1058,6 @@ const hasPendingOrDenied = computed(() =>
                     <CheckCircle2 class="h-4 w-4" />
                     Ticket Active & Paid
                   </div>
-                </div>
-
-                <div
-                  v-else
-                  class="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-4 text-xs font-bold tracking-widest text-slate-400 uppercase"
-                >
-                  Awaiting Passenger Payment
                 </div>
               </div>
             </div>

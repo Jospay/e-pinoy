@@ -11,6 +11,7 @@ use App\Models\Vehicle;
 use App\Models\Reservation;
 use App\Models\DateSchedule;
 use App\Models\StationReservation;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -76,19 +77,24 @@ class BusStationController extends Controller
                 $isCompleted = str_contains($lowerStatus, 'completed');
                 $isPaid = str_contains($lowerStatus, 'paid') && !$isCompleted;
                 $isPending = !$isPaid && !$isCompleted;
+                $isRefunded = str_contains($lowerStatus, 'refund');
+                $isPending = !$isPaid && !$isCompleted && !$isRefunded;
                 return [
                     'id' => $item->id,
                     'passenger_name' => $item->passengerOwner?->user?->name ?? 'Guest User',
                     'origin' => $item->fromStation->name ?? 'N/A',
                     'destination' => $item->toStation->name ?? 'N/A',
+                    'passenger_count' => $item->passenger_count ?? 'N/A',
                     'amount' => number_format($item->amount, 2),
-                    'date' => $item->reserve_date,
+                    'date' => Carbon::parse($item->reserve_date)->format('M d, Y'),
                     'time_window' => date('h:i A', strtotime($item->reserve_from_time)) . ' - ' . date('h:i A', strtotime($item->reserve_to_time)),
                     'status_text' => $statusName,
                     'is_paid' => $isPaid,
                     'is_pending' => $isPending,
+                    'is_refund' => $isRefunded,
                     'is_completed' => $isCompleted,
                     'booked_at' => $item->created_at->format('M d, Y'),
+                    'vehicle_name' => $item->vehicle ? ($item->vehicle->model . ' (' . $item->vehicle->plate_number . ')') : 'N/A',
                 ];
             });
 
