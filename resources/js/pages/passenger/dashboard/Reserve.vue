@@ -30,28 +30,24 @@ const props = defineProps<{
   vehicle_info: any;
   route_stations: any[];
   available_days: string[];
+  walletBalance: number | string;
+  station_reservation_id: string;
 }>();
 
-// --- Time & Date Validation Logic ---
+// --- Time & Date Validation ---
 const now = new Date();
 const todayDateStr = now.toISOString().split('T')[0];
 
-// Check if the bus has already departed today
 const hasDepartedToday = computed(() => {
   const [time, modifier] = props.origin.departure_time.split(' ');
   let [hours, minutes] = time.split(':').map(Number);
-
   if (modifier === 'PM' && hours < 12) hours += 12;
   if (modifier === 'AM' && hours === 12) hours = 0;
-
   const departureTime = new Date();
   departureTime.setHours(hours, minutes, 0, 0);
-
   return now > departureTime;
 });
 
-// Set the minimum selectable date
-// If bus already departed today, the min date is tomorrow
 const minSelectableDate = computed(() => {
   if (hasDepartedToday.value) {
     const tomorrow = new Date();
@@ -61,50 +57,48 @@ const minSelectableDate = computed(() => {
   return todayDateStr;
 });
 
+// --- Form ---
 const form = useForm({
   vehicle_id: props.vehicle_info.id,
   from_bus_station_id: props.origin.id,
   to_bus_station_id: '',
   station_schedule_id: props.origin.schedule_id,
+  station_reservation_id: props.station_reservation_id || '',
   amount: 0,
   passenger_count: 1,
   reserve_date: '',
+  payment_method: '',
 });
 
+// --- Destination & Operational Logic ---
 const selectedDest = computed(() =>
   props.destinations.find((d) => d.id.toString() === form.to_bus_station_id),
 );
 
-// --- Operational Logic ---
 const isOperationalDay = computed(() => {
   if (!form.reserve_date) return true;
-
   const [year, month, day] = form.reserve_date.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-
   const dayMatch = props.available_days
     .map((d) => d.toLowerCase())
     .includes(dayName.toLowerCase());
-
-  // Valid if it's an operational day AND (it's not today OR it's today but hasn't departed)
   const isNotPast =
     form.reserve_date === todayDateStr ? !hasDepartedToday.value : true;
-
   return dayMatch && isNotPast;
 });
 
 const formattedAllowedDays = computed(() => props.available_days.join(', '));
 
-// --- Seat Availability Logic ---
+// --- Seat Availability ---
 const bookedSeats = ref(0);
 const isCheckingSeats = ref(false);
 
-const availableSeats = computed(() => {
-  return props.vehicle_info.capacity - bookedSeats.value;
-});
+const availableSeats = computed(
+  () => props.vehicle_info.capacity - bookedSeats.value,
+);
 
-// Watchers
+// --- Watchers ---
 watch([() => form.to_bus_station_id, () => form.passenger_count], () => {
   if (selectedDest.value) {
     form.amount = selectedDest.value.calculated_fare * form.passenger_count;
@@ -117,12 +111,8 @@ watch(
     if (newDate && isOperationalDay.value) {
       isCheckingSeats.value = true;
       try {
-        // UPDATED: Using the passenger route prefix since api.php is not used
         const response = await axios.get('/passenger/vehicle-availability', {
-          params: {
-            vehicle_id: props.vehicle_info.id,
-            reserve_date: newDate,
-          },
+          params: { vehicle_id: props.vehicle_info.id, reserve_date: newDate },
         });
         bookedSeats.value = response.data.booked;
       } catch {
@@ -136,9 +126,34 @@ watch(
   },
 );
 
+// --- Wallet ---
+const walletBalanceNum = computed(() => Number(props.walletBalance || 0)); // convert string to number
+
+const canSubmit = computed(() => {
+  return (
+    form.to_bus_station_id &&
+    form.reserve_date &&
+    isOperationalDay.value &&
+    availableSeats.value > 0 &&
+    !form.processing &&
+    !(form.payment_method === 'Wallet' && walletBalanceNum.value < form.amount)
+  );
+});
+
+// --- Submit ---
 const submit = () => {
   if (!isOperationalDay.value) {
     alert(`This trip is unavailable for the selected time/date.`);
+    return;
+  }
+
+  if (
+    form.payment_method === 'Wallet' &&
+    walletBalanceNum.value < form.amount
+  ) {
+    alert(
+      `Insufficient wallet balance. Your balance: ₱${walletBalanceNum.value}`,
+    );
     return;
   }
 
@@ -149,17 +164,19 @@ const submit = () => {
   });
 };
 
+// --- Go Back ---
 const goBack = () => window.history.back();
 </script>
-
 <template>
   <Head title="Confirm Reservation" />
   <AppLayout>
     <div class="min-h-screen bg-slate-50/50 px-2 py-10">
       <div class="mx-auto max-w-4xl">
+        <!-- Card -->
         <div
           class="rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-200/60"
         >
+          <!-- Header -->
           <div class="items-center justify-between border-b p-4 sm:flex">
             <button
               @click="goBack"
@@ -182,7 +199,8 @@ const goBack = () => window.history.back();
             </div>
           </div>
 
-          <div class="relative h-64 w-full px-3 pt-3">
+          <!-- Map -->
+          <div class="relative z-0 h-64 w-full px-3 pt-3">
             <LocationMap
               :locations="[
                 {
@@ -193,7 +211,7 @@ const goBack = () => window.history.back();
                   type: 'Pin',
                 },
               ]"
-              :zoom="15"
+              :zoom="18"
               :center="[origin.lat, origin.lng]"
             />
             <div
@@ -219,8 +237,10 @@ const goBack = () => window.history.back();
             </div>
           </div>
 
+          <!-- Form -->
           <div class="p-3 sm:p-5 lg:p-8">
             <div class="grid grid-cols-1 gap-9 lg:grid-cols-12 lg:gap-12">
+              <!-- Route Column -->
               <div class="lg:col-span-5">
                 <div class="mb-8 flex items-center gap-3 pt-3 sm:pt-0">
                   <div class="h-1 w-8 rounded-full bg-brand-blue"></div>
@@ -309,7 +329,7 @@ const goBack = () => window.history.back();
                           >
                             Departure
                           </p>
-                          <p class="text-xs font-bold text-blue-700">
+                          <p class="text-xs font-bold text-brand-blue">
                             {{ stop.departure }}
                           </p>
                         </div>
@@ -319,10 +339,12 @@ const goBack = () => window.history.back();
                 </div>
               </div>
 
+              <!-- Form Column -->
               <div class="space-y-8 lg:col-span-7">
                 <div
                   class="space-y-6 rounded-2xl border border-slate-100 bg-slate-50/80 p-5"
                 >
+                  <!-- Drop-off -->
                   <div class="space-y-3">
                     <Label
                       class="ml-1 text-[10px] font-black tracking-widest text-slate-400 uppercase"
@@ -352,6 +374,7 @@ const goBack = () => window.history.back();
                     </p>
                   </div>
 
+                  <!-- Travel Date & Passenger -->
                   <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div class="space-y-3">
                       <Label
@@ -394,6 +417,12 @@ const goBack = () => window.history.back();
                             : `Only operates on: ${formattedAllowedDays}`
                         }}
                       </p>
+                      <p
+                        v-else
+                        class="flex items-center gap-1 px-1 text-[10px] font-bold text-green-600 uppercase"
+                      >
+                        {{ `Operates on: ${formattedAllowedDays}` }}
+                      </p>
                     </div>
 
                     <div class="space-y-3">
@@ -433,6 +462,12 @@ const goBack = () => window.history.back();
                           >Checking seats...</span
                         >
                         <span
+                          v-else-if="form.passenger_count > availableSeats"
+                          class="text-red-600"
+                          >Only {{ availableSeats }} seats available (You
+                          requested {{ form.passenger_count }})</span
+                        >
+                        <span
                           v-else-if="availableSeats > 0"
                           class="text-emerald-600"
                           >{{ availableSeats }} seats available</span
@@ -444,13 +479,53 @@ const goBack = () => window.history.back();
                     </div>
                   </div>
 
+                  <!-- Payment -->
+                  <div class="space-y-3">
+                    <Label
+                      class="ml-1 text-[10px] font-black tracking-widest text-slate-400 uppercase"
+                      >Payment</Label
+                    >
+                    <Select v-model="form.payment_method">
+                      <SelectTrigger
+                        class="h-12 rounded-xl border-slate-200 bg-white px-4 text-base font-bold shadow-sm focus:ring-4 focus:ring-blue-100"
+                      >
+                        <SelectValue
+                          :value="form.payment_method"
+                          placeholder="Choose payment method"
+                        />
+                      </SelectTrigger>
+                      <SelectContent position="popper" class="z-50 rounded-xl">
+                        <SelectItem
+                          value="Online Payment"
+                          class="py-4 font-bold"
+                          >Online Payment</SelectItem
+                        >
+                        <SelectItem value="Wallet" class="py-4 font-bold"
+                          >Wallet</SelectItem
+                        >
+                      </SelectContent>
+                    </Select>
+                    <p
+                      v-if="
+                        form.payment_method === 'Wallet' &&
+                        walletBalanceNum < form.amount
+                      "
+                      class="text-xs text-red-600"
+                    >
+                      Insufficient balance. Current wallet: ₱{{
+                        walletBalanceNum
+                      }}
+                    </p>
+                  </div>
+
+                  <!-- Total & Confirm -->
                   <div class="border-t border-slate-200/60 pt-4">
                     <div
                       class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
                         <p
-                          class="text-xs font-extrabold tracking-widest text-blue-400 uppercase"
+                          class="text-xs font-extrabold tracking-widest text-brand-blue uppercase"
                         >
                           Total Payable
                         </p>
@@ -464,13 +539,7 @@ const goBack = () => window.history.back();
 
                       <Button
                         @click="submit"
-                        :disabled="
-                          !form.to_bus_station_id ||
-                          !form.reserve_date ||
-                          !isOperationalDay ||
-                          availableSeats <= 0 ||
-                          form.processing
-                        "
+                        :disabled="!canSubmit"
                         class="h-12 min-w-[200px] rounded-xl bg-brand-blue text-lg font-black shadow-lg shadow-blue-200 transition-all hover:scale-[1.02] hover:bg-blue-600 active:scale-95 disabled:bg-slate-400 disabled:shadow-none"
                       >
                         <span v-if="form.processing">Processing...</span>

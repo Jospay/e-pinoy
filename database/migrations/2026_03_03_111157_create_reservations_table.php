@@ -24,7 +24,8 @@ return new class extends Migration
             $table->time('reserve_to_time');
             $table->date('reserve_date');
             $table->string('qrcode_name');
-            $table->string('paymongo_checkout_session_id');
+            $table->string('payment_options');
+            $table->string('paymongo_checkout_session_id')->nullable();
             $table->timestamps();
         });
     }

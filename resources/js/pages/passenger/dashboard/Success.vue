@@ -83,7 +83,7 @@ const formatTime = (time: string) => {
             <div class="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
               <div>
                 <p class="text-[10px] font-bold text-gray-500 uppercase">
-                  Date
+                  Travel Date
                 </p>
                 <p class="text-sm font-bold">{{ reservation.reserve_date }}</p>
               </div>
@@ -97,18 +97,21 @@ const formatTime = (time: string) => {
               </div>
               <div>
                 <p class="text-[10px] font-bold text-gray-500 uppercase">
-                  Passenger
+                  Name
                 </p>
                 <p class="text-sm font-bold">
-                  {{ reservation.user?.name || 'Guest' }}
+                  {{ reservation.passenger?.name || 'Guest' }}
                 </p>
               </div>
               <div>
                 <p class="text-[10px] font-bold text-gray-500 uppercase">
-                  Seats
+                  Passengers
                 </p>
-                <p class="text-sm font-bold">
+                <p class="text-sm font-bold"></p>
+
+                <p class="max-w-[100px] truncate text-xs font-bold">
                   {{ reservation.passenger_count }}
+                  {{ reservation.passenger_count > 1 ? 'Seats' : 'Seat' }}
                 </p>
               </div>
             </div>

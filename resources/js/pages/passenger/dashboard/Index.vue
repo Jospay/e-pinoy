@@ -86,17 +86,10 @@ const bookFromRoute = (route: any) => {
                   name: route.origin.name,
                 },
               ]"
-              :zoom="14"
+              :zoom="18"
               :center="[route.origin.lat, route.origin.lng]"
               :selectable="false"
             />
-            <div class="absolute top-4 left-4 z-[50]">
-              <span
-                class="rounded-full bg-white/90 px-3 py-1 text-[10px] font-bold tracking-widest text-brand-blue uppercase shadow-sm backdrop-blur"
-              >
-                Origin View
-              </span>
-            </div>
           </div>
 
           <div class="flex flex-1 flex-col p-3 sm:p-8">

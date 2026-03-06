@@ -22,6 +22,7 @@ class Reservation extends Model
         'reserve_to_time',
         'reserve_date',
         'qrcode_name',
+        'payment_options',
         'paymongo_checkout_session_id',
     ];
 
@@ -37,9 +38,14 @@ class Reservation extends Model
 
     public function passenger(): BelongsTo
     {
-        // Adjust 'passenger_id' if your actual FK is different
+        return $this->belongsTo(User::class, 'passenger_id');
+    }
+
+    public function passengerOwner(): BelongsTo
+    {
         return $this->belongsTo(UserPassenger::class, 'passenger_id');
     }
+
 
     public function fromStation(): BelongsTo
     {

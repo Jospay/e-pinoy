@@ -54,7 +54,7 @@ class TransactionHistoryController extends Controller
                     'destination' => $item->toStation->name ?? 'N/A',
                     'amount' => $item->amount,
                     'formatted_amount' => number_format($item->amount, 2),
-                    'date' => Carbon::parse($item->reserve_date)->format('M d, Y'),
+                    'book_at' => Carbon::parse($item->reserve_date)->format('M d, Y'),
                     'time_window' => date('h:i A', strtotime($item->reserve_from_time)) . ' - ' . date('h:i A', strtotime($item->reserve_to_time)),
                     'status_text' => $statusName,
                     'is_paid' => $isPaid,
@@ -64,7 +64,7 @@ class TransactionHistoryController extends Controller
                     'can_refund' => $canRefund,
                     'is_expired' => $isExpired,
                     'is_too_early' => $isTooEarly,
-                    'booked_at' => $item->created_at->format('M d, Y'),
+                    'date_at' => $item->created_at->format('M d, Y'),
                     'passenger_count' => $item->passenger_count,
                     'vehicle_name' => $item->vehicle ? ($item->vehicle->model . ' (' . $item->vehicle->plate_number . ')') : 'N/A',
                 ];
@@ -77,77 +77,59 @@ class TransactionHistoryController extends Controller
     }
 
     public function refund(Request $request, Reservation $reservation)
-    {
-        $user = auth()->user();
+{
+    $user = auth()->user();
 
-        $now = Carbon::now('Asia/Manila');
+    // 1. Get the specific status from your seeder
+    $refundStatus = Status::where('name', 'refund')->first();
 
-        // 1. Improved Status lookup
-        $refundStatus = Status::where('name', 'Refunded')
-                        ->orWhere('name', 'Refund')
-                        ->first();
-
-        if (!$refundStatus) {
-            return back()->with('error', 'Refund status not found in database. Please contact admin.');
-        }
-
-        // 2. Validate ticket ownership and eligibility
-        if ($reservation->passenger_id !== $user->id) {
-            return back()->with('error', 'Unauthorized refund attempt.');
-        }
-
-        // 3. Time validation
-        $departureDateTime = Carbon::parse($reservation->reserve_date . ' ' . $reservation->reserve_from_time, 'Asia/Manila');
-        $arrivalDateTime = Carbon::parse($reservation->reserve_date . ' ' . $reservation->reserve_to_time, 'Asia/Manila');
-        if ($arrivalDateTime->lessThan($departureDateTime)) $arrivalDateTime->addDay();
-
-        $tenMinsPastDept = $departureDateTime->copy()->addMinutes(10);
-        $twoHrsPastArrival = $arrivalDateTime->copy()->addHours(2);
-
-        if ($now->lessThan($tenMinsPastDept)) {
-            return back()->with('error', 'Refund window is not yet open.');
-        }
-
-        if ($now->greaterThan($twoHrsPastArrival)) {
-            return back()->with('error', 'Refund window has already expired.');
-        }
-
-        try {
-            DB::beginTransaction();
-
-            // 4. Update Reservation Status
-            $reservation->update(['status_id' => $refundStatus->id]);
-
-            // 5. Update or Create E-Wallet
-            $wallet = EWallet::firstOrCreate(
-                ['user_id' => $user->id],
-                ['amount' => 0]
-            );
-
-            $oldAmount = $wallet->amount;
-            $refundAmount = $reservation->amount;
-            $newAmount = $oldAmount + $refundAmount;
-
-            $wallet->update(['amount' => $newAmount]);
-
-            // 6. Log the transaction history
-            TransactionHistory::create([
-                'e_wallet_id' => $wallet->id,
-                'old_amount' => $oldAmount,
-                'new_amount' => $newAmount,
-                'type' => 'credit'
-            ]);
-
-            DB::commit();
-            return back()->with('success', '₱' . number_format($refundAmount, 2) . ' has been refunded to your E-Wallet.');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            // Log the actual error for the developer
-            Log::error('Refund Error: ' . $e->getMessage());
-
-            // Return specific error to frontend so you know why it failed
-            return back()->with('error', 'Refund failed: ' . $e->getMessage());
-        }
+    if (!$refundStatus) {
+        return back()->with('error', 'Refund status configuration missing.');
     }
+
+    // 2. Authorization
+    if ($reservation->passenger_id !== $user->id) {
+        return back()->with('error', 'Unauthorized.');
+    }
+
+    try {
+        DB::beginTransaction();
+
+        // 3. Update Status
+        $reservation->status_id = $refundStatus->id;
+        $reservation->save();
+
+        // 4. Update E-Wallet
+        $wallet = EWallet::firstOrCreate(
+            ['user_id' => $user->id],
+            ['amount' => 0]
+        );
+
+        // Lock to prevent race conditions
+        $wallet = EWallet::where('id', $wallet->id)->lockForUpdate()->first();
+
+        $oldBalance = (float) $wallet->amount;
+        $refundValue = (float) $reservation->amount;
+        $newBalance = $oldBalance + $refundValue;
+
+        $wallet->amount = $newBalance;
+        $wallet->save();
+
+        // 5. Log History
+        TransactionHistory::create([
+            'e_wallet_id' => $wallet->id,
+            'old_amount' => $oldBalance,
+            'new_amount' => $newBalance,
+            'type' => 'credit'
+        ]);
+
+        DB::commit();
+        return back();
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Refund Error: ' . $e->getMessage());
+        return back()->with('error', 'Process failed: ' . $e->getMessage());
+    }
+}
 }

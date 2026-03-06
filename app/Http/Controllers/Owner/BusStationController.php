@@ -66,7 +66,7 @@ class BusStationController extends Controller
         // ... Keep Transactions logic same as your current script ...
         $stationIds = $stationsQuery->pluck('id');
         $filter = $request->query('status', 'completed');
-        $transactions = Reservation::with(['fromStation', 'toStation', 'status', 'passenger.user'])
+        $transactions = Reservation::with(['fromStation', 'toStation', 'status', 'passengerOwner.user'])
             ->whereIn('from_bus_station_id', $stationIds)
             ->orderBy('created_at', 'desc')
             ->get()
@@ -78,7 +78,7 @@ class BusStationController extends Controller
                 $isPending = !$isPaid && !$isCompleted;
                 return [
                     'id' => $item->id,
-                    'passenger_name' => $item->passenger?->user?->name ?? 'Guest User',
+                    'passenger_name' => $item->passengerOwner?->user?->name ?? 'Guest User',
                     'origin' => $item->fromStation->name ?? 'N/A',
                     'destination' => $item->toStation->name ?? 'N/A',
                     'amount' => number_format($item->amount, 2),

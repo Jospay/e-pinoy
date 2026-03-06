@@ -13,6 +13,10 @@ class EWallet extends Model
         'amount'
     ];
 
+    protected $casts = [
+    'amount' => 'decimal:2',
+];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
