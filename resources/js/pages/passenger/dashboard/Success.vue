@@ -2,9 +2,9 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { toPng } from 'html-to-image'; // FIXED: Removed the extra characters
-import { Download, ArrowRight, Home } from 'lucide-vue-next';
+import { Download, ArrowRight, CarFront, Home } from 'lucide-vue-next';
 import QrcodeVue from 'qrcode.vue';
 import { ref } from 'vue';
 
@@ -39,6 +39,10 @@ const formatTime = (time: string) => {
     minute: '2-digit',
     hour12: true,
   });
+};
+
+const goToTaxiBooking = () => {
+  router.get(`/passenger/reservation/taxi/Reserve/${props.reservation.id}`);
 };
 </script>
 
@@ -158,6 +162,14 @@ const formatTime = (time: string) => {
             class="h-12 w-full rounded-none bg-black text-xs font-bold tracking-widest text-white uppercase hover:bg-gray-800"
           >
             <Download class="mr-2 h-4 w-4" /> Save as Image
+          </Button>
+
+          <Button
+            @click="goToTaxiBooking"
+            class="h-12 w-full rounded-none bg-black ..."
+          >
+            <CarFront class="mr-2 h-4 w-4" />
+            Book Taxi for your Last Route
           </Button>
 
           <Link

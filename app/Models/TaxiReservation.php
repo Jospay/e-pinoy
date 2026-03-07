@@ -6,26 +6,37 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Reservation extends Model
+class TaxiReservation extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'station_reservation_id',
+        'reservation_id',
         'vehicle_id',
         'passenger_id',
-        'from_bus_station_id',
-        'to_bus_station_id',
         'status_id',
         'passenger_count',
         'amount',
-        'reserve_from_time',
-        'reserve_to_time',
+        'pickup_loc_name',
+        'destination_loc_name',
+        'start_lat',
+        'start_lng',
+        'end_lat',
+        'end_lng',
+        'distance_km',
+        'average_speed_kmh',
+        'max_speed_kmh',
+        'route_path',
         'reserve_date',
         'qrcode_name',
         'payment_options',
         'paymongo_checkout_session_id',
     ];
+
+    public function reservation(): BelongsTo
+    {
+        return $this->belongsTo(Reservation::class);
+    }
 
     public function vehicle(): BelongsTo
     {
@@ -39,28 +50,7 @@ class Reservation extends Model
 
     public function passenger(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'passenger_id');
-    }
-
-    public function passengerOwner(): BelongsTo
-    {
+        // Based on your migration: constrained('user_passengers')
         return $this->belongsTo(UserPassenger::class, 'passenger_id');
-    }
-
-
-    public function fromStation(): BelongsTo
-    {
-        return $this->belongsTo(BusStation::class, 'from_bus_station_id');
-    }
-
-    public function toStation(): BelongsTo
-    {
-        return $this->belongsTo(BusStation::class, 'to_bus_station_id');
-    }
-
-    public function taxiReservation()
-    {
-        // This assumes taxi_reservations table has a 'reservation_id' column
-        return $this->hasOne(TaxiReservation::class, 'reservation_id');
     }
 }

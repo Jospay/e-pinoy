@@ -10,11 +10,12 @@ import {
   AlertTriangle,
   Users,
   Calendar,
+  CarFront, // Added for taxi icon
+  ChevronRight,
 } from 'lucide-vue-next';
 import { computed, watch, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
-// Shadcn UI Components
 import {
   Dialog,
   DialogContent,
@@ -31,23 +32,14 @@ const props = defineProps<{
 }>();
 
 const page = usePage();
-
-// State for Shadcn Dialog
 const isConfirmOpen = ref(false);
 const selectedTx = ref<any>(null);
 
-/**
- * 1. TOAST LOGIC
- */
 watch(
   () => page.props.flash,
   (flash: any) => {
-    if (flash?.success) {
-      toast.success(flash.success);
-    }
-    if (flash?.error) {
-      toast.error(flash.error);
-    }
+    if (flash?.success) toast.success(flash.success);
+    if (flash?.error) toast.error(flash.error);
   },
   { deep: true },
 );
@@ -72,6 +64,11 @@ const updateFilter = (status: string) => {
 
 const goToTicket = (qrName: string) =>
   router.get(`/passenger/reservation/success/${qrName}`);
+
+const goToTaxiTicket = (id: number) => {
+  router.get(`/passenger/reservation/taxi/success/${id}`);
+};
+
 const bookAgain = (tx: any) => {
   router.get(`/passenger/dashboard/Reserve`, {
     station_reservation_id: tx.id,
@@ -79,9 +76,6 @@ const bookAgain = (tx: any) => {
   });
 };
 
-/**
- * 2. REFUND ACTIONS
- */
 const openRefundModal = (tx: any) => {
   selectedTx.value = tx;
   isConfirmOpen.value = true;
@@ -89,7 +83,6 @@ const openRefundModal = (tx: any) => {
 
 const confirmRefund = () => {
   if (!selectedTx.value) return;
-
   router.post(
     `/passenger/transaction-history/refund/${selectedTx.value.id}`,
     {},
@@ -101,18 +94,12 @@ const confirmRefund = () => {
       onSuccess: () => {
         updateFilter('refund');
         toast.dismiss('refund-toast');
-        toast.success('Refund successful!', {
-          description: `₱${selectedTx.value.amount} has been credited to your E-Wallet.`,
-        });
-
+        toast.success('Refund successful!');
         selectedTx.value = null;
       },
-      onError: (errors) => {
+      onError: () => {
         toast.dismiss('refund-toast');
-        toast.error('Refund failed', {
-          description: 'Please try again later or contact support.',
-        });
-        console.error(errors);
+        toast.error('Refund failed');
       },
     },
   );
@@ -126,11 +113,10 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="min-h-[calc(100vh-64px)] bg-slate-50/50 px-3 py-8">
       <div class="mx-auto max-w-2xl">
-        <div class="mb-8 sm:px-0 sm:px-4">
+        <div class="mb-8 sm:px-4">
           <h1 class="text-2xl font-extrabold text-slate-900 sm:text-3xl">
             Activity
           </h1>
-
           <div class="mt-6 overflow-x-auto pb-2 sm:overflow-visible">
             <div
               class="flex w-max min-w-full rounded-2xl bg-slate-200/50 p-1 sm:w-fit"
@@ -224,10 +210,65 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                   </div>
                 </div>
                 <div class="text-right">
-                  <p class="text-2xl font-black">₱{{ tx.amount }}</p>
+                  <p class="text-2xl font-black">₱{{ tx.bus_amount }}</p>
                   <p class="text-[10px] font-bold text-slate-400 uppercase">
-                    Total Paid
+                    Bus Fare
                   </p>
+                </div>
+              </div>
+
+              <div
+                v-if="tx.has_taxi"
+                class="mb-6 rounded-2xl border border-blue-100 bg-blue-50/50 p-4"
+              >
+                <div class="mb-2 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <CarFront class="h-4 w-4 text-blue-600" />
+                    <span
+                      class="text-[11px] font-black tracking-wider text-blue-900 uppercase"
+                    >
+                      Connected Taxi Booking
+                    </span>
+                  </div>
+
+                  <div class="text-right">
+                    <p class="text-sm font-black text-blue-700">
+                      ₱{{ tx.taxi_details.amount }}
+                    </p>
+                    <p class="text-[8px] font-bold text-blue-400 uppercase">
+                      Taxi Fare
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  class="flex items-center justify-between border-t border-blue-100 pt-3"
+                >
+                  <div class="text-[11px] text-slate-600">
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-bold text-blue-700 uppercase"
+                      >
+                        {{ tx.taxi_details.status }}
+                      </span>
+                      <p class="font-mono text-[9px] text-slate-400">
+                        Ref: {{ tx.taxi_details.qrcode_name }}
+                      </p>
+                    </div>
+                    <p class="mt-1">
+                      Drop-off:
+                      <span class="font-bold text-slate-900">{{
+                        tx.taxi_details.destination
+                      }}</span>
+                    </p>
+                  </div>
+
+                  <button
+                    @click="goToTaxiTicket(tx.taxi_details.id)"
+                    class="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline"
+                  >
+                    View Taxi Ticket <ChevronRight class="h-3 w-3" />
+                  </button>
                 </div>
               </div>
 
@@ -247,7 +288,6 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                     </p>
                   </div>
                 </div>
-
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
@@ -264,7 +304,6 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                     </p>
                   </div>
                 </div>
-
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
@@ -278,7 +317,6 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                     <p class="text-xs font-bold">{{ tx.book_at }}</p>
                   </div>
                 </div>
-
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
@@ -302,7 +340,6 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                 >
                   <Undo2 class="h-4 w-4" /> Refund to E-Wallet
                 </button>
-
                 <div class="flex gap-3">
                   <button
                     v-if="tx.is_completed"
@@ -311,7 +348,6 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                   >
                     <RotateCcw class="mr-1 inline h-4 w-4" /> Book Again
                   </button>
-
                   <button
                     v-if="tx.is_paid && !tx.can_refund"
                     @click="goToTicket(tx.qrcode_name)"
@@ -344,20 +380,18 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
             will be added back to your E-Wallet.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter class="flex flex-col gap-2 sm:flex-col sm:justify-center">
+        <DialogFooter class="flex flex-col gap-2">
           <Button
             variant="destructive"
             class="h-12 w-full rounded-xl font-bold"
             @click="confirmRefund"
+            >Yes, Refund Now</Button
           >
-            Yes, Refund Now
-          </Button>
           <Button
             class="h-12 w-full rounded-xl bg-slate-200 font-bold text-slate-500 hover:bg-slate-300"
             @click="isConfirmOpen = false"
+            >Cancel</Button
           >
-            Cancel
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
