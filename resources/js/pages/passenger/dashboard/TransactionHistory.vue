@@ -387,11 +387,6 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
             @click="confirmRefund"
             >Yes, Refund Now</Button
           >
-          <Button
-            class="h-12 w-full rounded-xl bg-slate-200 font-bold text-slate-500 hover:bg-slate-300"
-            @click="isConfirmOpen = false"
-            >Cancel</Button
-          >
         </DialogFooter>
       </DialogContent>
     </Dialog>
