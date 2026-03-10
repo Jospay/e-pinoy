@@ -10,12 +10,15 @@ import {
   CreditCard,
   Loader2,
   CalendarDays,
+  Clock,
 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 
 const props = defineProps<{
   busReservation: any;
-  pickupStation: string;
+  bookingType: 'before' | 'after';
+  defaultPickup: string;
+  defaultDest: string;
   passengerCount: number;
   walletBalance: number;
 }>();
@@ -27,92 +30,96 @@ const routeDetails = ref({
   seconds: 0,
 });
 
-const stationData = computed(
-  () => props.busReservation?.to_station || props.busReservation?.toStation,
+const stationData = computed(() =>
+  props.bookingType === 'before'
+    ? props.busReservation?.from_station
+    : props.busReservation?.to_station,
 );
+
 const isMapReady = computed(
   () => !!(stationData.value?.latitude && stationData.value?.longitude),
 );
 
-const mapCenter = computed(() => ({
+const stationCoords = computed(() => ({
   lat: Number(stationData.value?.latitude || 14.5995),
   lng: Number(stationData.value?.longitude || 120.9842),
 }));
 
 const form = useForm({
   reservation_id: props.busReservation.id,
+  booking_type: props.bookingType,
+  time_pickup: '',
   passenger_count: props.passengerCount,
   amount: 0,
-  pickup_loc_name: props.pickupStation,
-  destination_loc_name: '',
-  start_lat: 0,
-  start_lng: 0,
-  end_lat: null as number | null,
-  end_lng: null as number | null,
+  pickup_loc_name: props.defaultPickup,
+  destination_loc_name: props.defaultDest,
+  start_lat: props.bookingType === 'after' ? stationCoords.value.lat : 0,
+  start_lng: props.bookingType === 'after' ? stationCoords.value.lng : 0,
+  end_lat:
+    props.bookingType === 'before'
+      ? stationCoords.value.lat
+      : (null as number | null),
+  end_lng:
+    props.bookingType === 'before'
+      ? stationCoords.value.lng
+      : (null as number | null),
   distance_km: 0,
   payment_options: 'Wallet',
 });
 
 const handleLocationSelected = (data: any) => {
-  form.end_lat = data.lat;
-  form.end_lng = data.lng;
-  form.destination_loc_name = data.address;
-  form.start_lat = mapCenter.value.lat;
-  form.start_lng = mapCenter.value.lng;
+  if (props.bookingType === 'before') {
+    form.start_lat = data.lat;
+    form.start_lng = data.lng;
+    form.pickup_loc_name = data.address;
+  } else {
+    form.end_lat = data.lat;
+    form.end_lng = data.lng;
+    form.destination_loc_name = data.address;
+  }
 };
 
 const handleRouteFound = (data: any) => {
   const meters = Number(data.distanceValue) || 0;
   const seconds = Number(data.durationValue) || 0;
+  const minutes = Math.round(seconds / 60);
 
   routeDetails.value = {
     distance: data.distanceText || '0 km',
-    duration: data.durationText || '0 mins',
+    duration: minutes + ' mins', // This matches the template variable
     meters: meters,
     seconds: seconds,
   };
 
+  // Fare Calculation
   const farePerMinute = 2;
   const farePerKm = 13.5;
   const flagDown = 50;
-
   const distKm = meters / 1000;
-  const minutes = seconds / 60;
 
-  let distFare = 0;
-  if (distKm > 1) {
-    distFare = (distKm - 1) * farePerKm;
-  }
-
-  const timeFare = minutes * farePerMinute;
+  let distFare = distKm > 1 ? (distKm - 1) * farePerKm : 0;
+  const timeFare = (seconds / 60) * farePerMinute;
   const total = flagDown + distFare + timeFare;
 
-  form.amount = isNaN(total) ? flagDown : total;
+  form.amount = isNaN(total) ? flagDown : total < 50 ? 50 : total;
   form.distance_km = isNaN(distKm) ? 0 : distKm;
 };
 
 const canSubmit = computed(() => {
-  const hasLocation = !!form.end_lat;
+  const hasRoute = !!form.start_lat && !!form.end_lat;
+  const timeValid = props.bookingType === 'before' ? !!form.time_pickup : true;
   const isNotProcessing = !form.processing;
   const validFare = form.amount >= 50;
+  const balanceValid =
+    form.payment_options === 'Wallet'
+      ? props.walletBalance >= form.amount
+      : true;
 
-  if (form.payment_options === 'Wallet') {
-    return (
-      hasLocation &&
-      isNotProcessing &&
-      validFare &&
-      props.walletBalance >= form.amount
-    );
-  }
-  return hasLocation && isNotProcessing && validFare;
+  return hasRoute && timeValid && isNotProcessing && validFare && balanceValid;
 });
 
 const submit = () => {
-  form.post('/passenger/reservation/taxi/reservation', {
-    onError: (errors) => {
-      console.log('Validation errors from server:', errors);
-    },
-  });
+  form.post('/passenger/reservation/taxi/reservation');
 };
 </script>
 
@@ -123,15 +130,12 @@ const submit = () => {
       <div class="mx-auto max-w-5xl">
         <div class="overflow-hidden rounded-2xl border bg-white shadow-xl">
           <div class="grid grid-cols-1 lg:grid-cols-12">
-            <div class="relative h-[400px] lg:col-span-7 lg:h-[600px]">
+            <div class="relative h-[400px] lg:col-span-7 lg:h-auto">
               <LocationMap
                 v-if="isMapReady"
-                :center="mapCenter"
-                :pickup="{
-                  lat: mapCenter.lat,
-                  lng: mapCenter.lng,
-                  name: pickupStation,
-                }"
+                :center="stationCoords"
+                :station-name="stationData?.name || 'Bus Station'"
+                :mode="bookingType"
                 @location-selected="handleLocationSelected"
                 @route-found="handleRouteFound"
               />
@@ -145,9 +149,17 @@ const submit = () => {
 
             <div class="flex flex-col justify-between p-6 lg:col-span-5">
               <div>
-                <h2 class="mb-1 text-2xl font-black">Taxi Booking</h2>
-                <p class="mb-4 text-sm text-slate-500">
-                  Select drop-off point on the map
+                <h2
+                  class="mb-1 text-2xl font-black tracking-tighter uppercase italic"
+                >
+                  Taxi Booking
+                </h2>
+                <p class="mb-4 text-xs font-bold text-slate-500 uppercase">
+                  {{
+                    bookingType === 'before'
+                      ? 'Select pickup point from your location'
+                      : 'Select drop-off point on the map'
+                  }}
                 </p>
 
                 <div class="mb-5 flex items-center gap-3">
@@ -158,11 +170,11 @@ const submit = () => {
                   </div>
                   <div>
                     <p
-                      class="text-[10px] font-bold tracking-wider text-blue-500/80 uppercase"
+                      class="text-[10px] font-bold tracking-wider text-brand-blue/80 uppercase"
                     >
-                      Scheduled Travel Date
+                      Travel Date
                     </p>
-                    <p class="text-sm font-black text-blue-900">
+                    <p class="text-sm font-black text-brand-blue">
                       {{ busReservation.reserve_date }}
                     </p>
                   </div>
@@ -170,31 +182,44 @@ const submit = () => {
 
                 <div class="mb-6 space-y-4 rounded-xl border bg-slate-50 p-4">
                   <div class="flex items-start gap-3">
-                    <div class="mt-1.5 h-2 w-2 rounded-full bg-blue-500"></div>
+                    <div>
+                      <div
+                        class="mt-1.5 h-2 w-2 rounded-full bg-brand-blue"
+                      ></div>
+                    </div>
                     <div>
                       <p class="text-[10px] font-bold text-slate-400 uppercase">
                         Pickup
                       </p>
-                      <p class="text-sm font-bold">{{ pickupStation }}</p>
+                      <p
+                        class="text-sm font-bold"
+                        :class="
+                          !form.pickup_loc_name
+                            ? 'animate-pulse text-brand-blue'
+                            : ''
+                        "
+                      >
+                        {{ form.pickup_loc_name || 'Select on map' }}
+                      </p>
                     </div>
                   </div>
                   <div class="flex items-start gap-3">
-                    <div class="mt-1.5 h-2 w-2 rounded-full bg-red-500"></div>
+                    <div>
+                      <div class="mt-1.5 h-2 w-2 rounded-full bg-red-500"></div>
+                    </div>
                     <div>
                       <p class="text-[10px] font-bold text-slate-400 uppercase">
                         Drop-off
                       </p>
                       <p
                         class="text-sm font-bold"
-                        v-if="form.destination_loc_name"
+                        :class="
+                          !form.destination_loc_name
+                            ? 'animate-pulse text-red-500'
+                            : ''
+                        "
                       >
-                        {{ form.destination_loc_name }}
-                      </p>
-                      <p
-                        class="animate-pulse text-sm font-bold text-red-500"
-                        v-else
-                      >
-                        Please select on map
+                        {{ form.destination_loc_name || 'Select on map' }}
                       </p>
                     </div>
                   </div>
@@ -203,7 +228,25 @@ const submit = () => {
                 <div
                   class="mb-6 flex justify-between rounded-xl border bg-white p-4 shadow-sm"
                 >
-                  <div>
+                  <div class="flex gap-4">
+                    <div>
+                      <p class="text-[8px] font-bold text-slate-400 uppercase">
+                        Distance
+                      </p>
+                      <p class="text-[14px] font-bold text-slate-700">
+                        {{ routeDetails.distance }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-[8px] font-bold text-slate-400 uppercase">
+                        Duration
+                      </p>
+                      <p class="text-[14px] font-bold text-slate-700">
+                        {{ routeDetails.duration }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="text-right">
                     <p class="text-[10px] font-bold text-slate-400 uppercase">
                       Taxi Fare
                     </p>
@@ -211,18 +254,30 @@ const submit = () => {
                       ₱{{ form.amount.toFixed(2) }}
                     </p>
                   </div>
-                  <div class="text-right">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase">
-                      Distance
-                    </p>
-                    <p class="font-bold text-slate-700">
-                      {{ routeDetails.distance }}
-                    </p>
+                </div>
+
+                <div v-if="bookingType === 'before'" class="mb-6 space-y-2">
+                  <Label
+                    class="ml-1 text-[10px] font-black tracking-widest text-slate-400 uppercase"
+                    >Preferred Pickup Time</Label
+                  >
+
+                  <div class="relative">
+                    <Clock
+                      class="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2"
+                    />
+                    <input
+                      type="time"
+                      v-model="form.time_pickup"
+                      class="h-12 w-full rounded-xl border px-4 pl-12 text-sm font-bold shadow-sm transition-all focus:ring-4"
+                      required
+                    />
                   </div>
                 </div>
 
                 <div class="mb-6 space-y-3">
-                  <Label class="text-[10px] font-bold text-slate-400 uppercase"
+                  <Label
+                    class="ml-1 text-[10px] font-black tracking-widest text-slate-400 uppercase"
                     >Payment Method</Label
                   >
                   <div class="grid grid-cols-2 gap-2">
@@ -253,7 +308,6 @@ const submit = () => {
                       <span class="text-xs font-bold">Online</span>
                     </button>
                   </div>
-
                   <div
                     v-if="form.payment_options === 'Wallet'"
                     class="text-center"
@@ -266,7 +320,7 @@ const submit = () => {
                           : 'text-slate-500'
                       "
                     >
-                      Wallet Balance: ₱{{ props.walletBalance.toFixed(2) }}
+                      Balance: ₱{{ props.walletBalance.toFixed(2) }}
                     </p>
                   </div>
                 </div>
@@ -275,11 +329,12 @@ const submit = () => {
               <Button
                 @click="submit"
                 :disabled="!canSubmit"
-                class="h-14 w-full rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                class="h-14 w-full rounded-xl bg-brand-blue font-bold text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                <span v-if="form.processing" class="flex items-center gap-2">
-                  <Loader2 class="h-4 w-4 animate-spin" /> Processing...
-                </span>
+                <Loader2
+                  v-if="form.processing"
+                  class="mr-2 h-4 w-4 animate-spin"
+                />
                 <span v-else class="flex items-center gap-2">
                   Confirm Booking <CarFront class="h-5 w-5" />
                 </span>

@@ -15,6 +15,8 @@ class TaxiReservation extends Model
         'vehicle_id',
         'passenger_id',
         'status_id',
+        'booking_type',
+        'time_pickup',
         'passenger_count',
         'amount',
         'pickup_loc_name',
@@ -47,6 +49,11 @@ class TaxiReservation extends Model
     {
         return $this->belongsTo(Status::class);
     }
+
+    public function busReservation(): BelongsTo // Rename this from 'reservation'
+{
+    return $this->belongsTo(Reservation::class, 'reservation_id');
+}
 
     public function passenger(): BelongsTo
     {

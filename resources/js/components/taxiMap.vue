@@ -11,12 +11,13 @@ import {
 import L, { type Icon, latLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { debounce } from 'lodash';
-import { Loader2, MapPin, Search } from 'lucide-vue-next';
+import { Loader2, MapPin, Search, MapPinOff } from 'lucide-vue-next';
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 
 const props = defineProps<{
   center: { lat: number; lng: number };
-  pickup: { lat: number; lng: number; name: string };
+  stationName: string;
+  mode: 'before' | 'after';
   zoom?: number;
 }>();
 
@@ -32,7 +33,8 @@ const map = ref<any>(null);
 const selectedLocation = ref<{ lat: number; lng: number } | null>(null);
 const routePoints = ref<[number, number][]>([]);
 
-// Decodes OSRM polyline string into coordinates
+// ... (Keep your decodePolyline, calculateRoute, performSearch, selectResult functions exactly as they are) ...
+
 function decodePolyline(str: string, precision: number = 5) {
   let index = 0,
     lat = 0,
@@ -68,20 +70,25 @@ function decodePolyline(str: string, precision: number = 5) {
 
 async function calculateRoute(destLat: number, destLng: number) {
   try {
-    // Note: Changed overview=full to get the actual road path geometry
+    const start =
+      props.mode === 'after'
+        ? `${props.center.lng},${props.center.lat}`
+        : `${destLng},${destLat}`;
+    const end =
+      props.mode === 'after'
+        ? `${destLng},${destLat}`
+        : `${props.center.lng},${props.center.lat}`;
     const response = await fetch(
-      `https://router.project-osrm.org/route/v1/driving/${props.pickup.lng},${props.pickup.lat};${destLng},${destLat}?overview=full`,
+      `https://router.project-osrm.org/route/v1/driving/${start};${end}?overview=full`,
     );
     const data = await response.json();
-
     if (data.code === 'Ok') {
       const route = data.routes[0];
       routePoints.value = decodePolyline(route.geometry) as [number, number][];
-
       emit('route-found', {
         distanceText: (route.distance / 1000).toFixed(2) + ' km',
         distanceValue: route.distance,
-        duration: Math.round(route.duration / 60) + ' mins',
+        durationValue: route.duration,
       });
     }
   } catch (error) {
@@ -89,7 +96,6 @@ async function calculateRoute(destLat: number, destLng: number) {
   }
 }
 
-// ... (Search Logic remains the same as your provided sample) ...
 async function performSearch(query: string) {
   if (query.trim().length < 3) return;
   isSearching.value = true;
@@ -105,6 +111,7 @@ async function performSearch(query: string) {
     isSearching.value = false;
   }
 }
+
 const debouncedSearch = debounce((val: string) => performSearch(val), 500);
 watch(searchQuery, (newVal) => {
   if (newVal.trim().length >= 3) debouncedSearch(newVal);
@@ -115,13 +122,16 @@ function selectResult(result: any) {
   const lat = parseFloat(result.lat);
   const lng = parseFloat(result.lon);
   selectedLocation.value = { lat, lng };
-  map.value.leafletObject.setView([lat, lng], 15);
+  if (map.value?.leafletObject) {
+    map.value.leafletObject.setView([lat, lng], 14);
+  }
   emit('location-selected', { lat, lng, address: result.display_name });
   calculateRoute(lat, lng);
   searchQuery.value = result.display_name;
   showResults.value = false;
 }
 
+// ICON GENERATION
 const createCustomIcon = (color: string): Icon => {
   const svgIcon = `<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg"><path d="M12.5 0C5.596 0 0 5.596 0 12.5c0 9.375 12.5 28.5 12.5 28.5S25 21.875 25 12.5C25 5.596 19.404 0 12.5 0z" fill="${color}" stroke="#fff" stroke-width="1"/><circle cx="12.5" cy="12.5" r="4" fill="#fff"/></svg>`;
   return L.icon({
@@ -131,27 +141,32 @@ const createCustomIcon = (color: string): Icon => {
   });
 };
 
-const startIcon = createCustomIcon('#16a34a');
-const endIcon = createCustomIcon('#dc2626');
+const pickupIcon = createCustomIcon('#16419D'); // Blue for Pickup
+const dropoffIcon = createCustomIcon('#ef4444'); // Red for Drop-off
 
 const markers = computed(() => {
-  const list = [
-    {
-      id: 'pk',
-      lat: props.pickup.lat,
-      lng: props.pickup.lng,
-      type: 'Start',
-      name: 'Pickup',
-    },
-  ];
-  if (selectedLocation.value)
+  const list = [];
+
+  // 1. Define the Station Marker
+  list.push({
+    id: 'station',
+    lat: props.center.lat,
+    lng: props.center.lng,
+    name: props.stationName,
+    icon: props.mode === 'after' ? pickupIcon : dropoffIcon,
+  });
+
+  // 2. Define the User Selected Location Marker
+  if (selectedLocation.value) {
     list.push({
-      id: 'ds',
+      id: 'user-loc',
       lat: selectedLocation.value.lat,
       lng: selectedLocation.value.lng,
-      type: 'End',
-      name: 'Drop-off',
+      name: props.mode === 'before' ? 'My Location (Pick-Up)' : 'Destination',
+      icon: props.mode === 'before' ? pickupIcon : dropoffIcon,
     });
+  }
+
   return list;
 });
 
@@ -180,7 +195,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside));
         >
           <Input
             v-model="searchQuery"
-            placeholder="Where to?"
+            :placeholder="mode === 'before' ? 'Where are you?' : 'Where to?'"
             class="border-none font-bold shadow-none focus-visible:ring-0"
           />
           <Button
@@ -191,7 +206,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside));
           >
             <Loader2
               v-if="isSearching"
-              class="h-5 w-5 animate-spin text-brand-blue"
+              class="h-5 w-5 animate-spin text-blue-600"
             />
             <Search v-else class="h-5 w-5" />
           </Button>
@@ -221,6 +236,20 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside));
               </div>
             </li>
           </ul>
+
+          <div
+            v-else-if="!isSearching"
+            class="flex flex-col items-center justify-center p-6 text-center"
+          >
+            <div class="mb-2 rounded-full bg-blue-50 p-3">
+              <MapPinOff class="h-6 w-6 text-blue-300" />
+            </div>
+            <p class="text-sm font-semibold text-slate-700">No results found</p>
+            <p class="px-4 text-[10px] text-slate-500">
+              We couldn't find "{{ searchQuery }}". Try checking the spelling or
+              use a more general location.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -235,25 +264,23 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside));
       class="z-0"
     >
       <l-tile-layer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
       <l-polyline
         v-if="routePoints.length > 0"
         :lat-lngs="routePoints"
-        color="#3b82f6"
-        :weight="5"
-        :opacity="0.7"
+        color="#155DFC"
+        :weight="6"
+        :opacity="0.6"
       />
-
       <l-marker
         v-for="m in markers"
         :key="m.id"
         :lat-lng="[m.lat, m.lng]"
-        :icon="m.type === 'Start' ? startIcon : endIcon"
+        :icon="m.icon"
       >
         <l-tooltip
           :options="{ permanent: true, direction: 'top', offset: [0, -32] }"
         >
-          <span class="font-bold">{{ m.name }}</span>
+          <span>{{ m.name }}</span>
         </l-tooltip>
       </l-marker>
     </l-map>

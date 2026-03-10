@@ -4,7 +4,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { toPng } from 'html-to-image'; // FIXED: Removed the extra characters
-import { Download, ArrowRight, CarFront, Home } from 'lucide-vue-next';
+import { Download, ArrowRight, Home } from 'lucide-vue-next';
 import QrcodeVue from 'qrcode.vue';
 import { ref } from 'vue';
 
@@ -41,8 +41,16 @@ const formatTime = (time: string) => {
   });
 };
 
-const goToTaxiBooking = () => {
-  router.get(`/passenger/reservation/taxi/Reserve/${props.reservation.id}`);
+const beforeTaxiBooking = () => {
+  router.get(
+    `/passenger/reservation/taxi/Reserve/${props.reservation.id}?type=before`,
+  );
+};
+
+const afterTaxiBooking = () => {
+  router.get(
+    `/passenger/reservation/taxi/Reserve/${props.reservation.id}?type=after`,
+  );
 };
 </script>
 
@@ -96,7 +104,8 @@ const goToTaxiBooking = () => {
                   Departure
                 </p>
                 <p class="text-sm font-bold">
-                  {{ formatTime(reservation.reserve_from_time) }}
+                  {{ formatTime(reservation.reserve_from_time) }} -
+                  {{ formatTime(reservation.reserve_to_time) }}
                 </p>
               </div>
               <div>
@@ -165,11 +174,18 @@ const goToTaxiBooking = () => {
           </Button>
 
           <Button
-            @click="goToTaxiBooking"
-            class="h-12 w-full rounded-none bg-black ..."
+            @click="beforeTaxiBooking"
+            class="text-warp w-full rounded-none bg-black px-5 py-8 font-bold whitespace-normal text-white uppercase hover:bg-gray-800"
           >
-            <CarFront class="mr-2 h-4 w-4" />
-            Book Taxi for your Last Route
+            Book Taxi from Your Location to
+            {{ reservation.from_station.name }}
+          </Button>
+
+          <Button
+            @click="afterTaxiBooking"
+            class="text-warp w-full rounded-none bg-black px-5 py-8 font-bold whitespace-normal text-white uppercase hover:bg-gray-800"
+          >
+            Book Taxi from {{ reservation.to_station.name }} to Your Destination
           </Button>
 
           <Link

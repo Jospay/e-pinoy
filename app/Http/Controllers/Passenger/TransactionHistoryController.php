@@ -19,131 +19,143 @@ class TransactionHistoryController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $filter = $request->query('status', 'completed');
+        $statusFilter = $request->query('status', 'completed');
+        $typeFilter = $request->query('type', 'all'); // 'all', 'bus', 'taxi'
         $now = Carbon::now('Asia/Manila');
 
-        $transactions = Reservation::with(['fromStation', 'toStation', 'status', 'vehicle', 'taxiReservation.status'])
+        $reservations = Reservation::with(['fromStation', 'toStation', 'status', 'vehicle', 'taxiReservation.status'])
             ->where('passenger_id', $user->id)
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($item) use ($now) {
-                $statusName = $item->status->name ?? 'Pending';
-                $lowerStatus = strtolower($statusName);
+            ->get();
 
-                $isCompleted = str_contains($lowerStatus, 'completed');
-                $isPaid = str_contains($lowerStatus, 'paid') && !$isCompleted;
-                $isRefunded = str_contains($lowerStatus, 'refund');
-                $isPending = !$isPaid && !$isCompleted && !$isRefunded;
+        $allTransactions = collect();
 
-                $departureDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_from_time, 'Asia/Manila');
-                $arrivalDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_to_time, 'Asia/Manila');
-                if ($arrivalDateTime->lessThan($departureDateTime)) $arrivalDateTime->addDay();
+        foreach ($reservations as $item) {
+            // --- 1. PROCESS BUS TRANSACTION ---
+            $statusName = $item->status->name ?? 'Pending';
+            $lowerStatus = strtolower($statusName);
 
-                $tenMinsPastDept = $departureDateTime->copy()->addMinutes(10);
-                $twoHrsPastArrival = $arrivalDateTime->copy()->addHours(2);
+            $isCompleted = str_contains($lowerStatus, 'completed');
+            $isPaid = str_contains($lowerStatus, 'paid') && !$isCompleted;
+            $isRefunded = str_contains($lowerStatus, 'refund');
+            $isPending = !$isPaid && !$isCompleted && !$isRefunded;
 
-                $canRefund = $isPaid && $now->greaterThanOrEqualTo($tenMinsPastDept) && $now->lessThanOrEqualTo($twoHrsPastArrival);
+            $departureDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_from_time, 'Asia/Manila');
+            $arrivalDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_to_time, 'Asia/Manila');
+            if ($arrivalDateTime->lessThan($departureDateTime)) $arrivalDateTime->addDay();
 
-                // Calculate total amount (Bus + Taxi) for the UI display
-                $totalAmount = (float) $item->amount;
-                if ($item->taxiReservation) {
-                    $totalAmount += (float) $item->taxiReservation->amount;
-                }
+            $tenMinsPastDept = $departureDateTime->copy()->addMinutes(10);
+            $twoHrsPastArrival = $arrivalDateTime->copy()->addHours(2);
 
-                return [
-                    'id' => $item->id,
-                    'from_bus_station_id' => $item->from_bus_station_id,
-                    'qrcode_name' => $item->qrcode_name,
-                    'origin' => $item->fromStation->name ?? 'N/A',
-                    'destination' => $item->toStation->name ?? 'N/A',
-                    'amount' => $totalAmount, // Showing total for refund context
-                    'bus_amount' => $item->amount,
-                    'formatted_amount' => number_format($totalAmount, 2),
+            // Logic: Can refund only if Paid AND (Current time is between 10m post-dept and 2h post-arrival)
+            $canRefund = $isPaid && $now->greaterThanOrEqualTo($tenMinsPastDept) && $now->lessThanOrEqualTo($twoHrsPastArrival);
+            $isExpired = $now->greaterThan($twoHrsPastArrival) && ($isPaid || $isPending);
+
+            $allTransactions->push([
+                'id' => $item->id,
+                'type' => 'bus',
+                'qrcode_name' => $item->qrcode_name,
+                'origin' => $item->fromStation->name ?? 'N/A',
+                'destination' => $item->toStation->name ?? 'N/A',
+                'amount' => (float)$item->amount,
+                'book_at' => Carbon::parse($item->reserve_date)->format('M d, Y'),
+                'time_window' => date('h:i A', strtotime($item->reserve_from_time)) . ' - ' . date('h:i A', strtotime($item->reserve_to_time)),
+                'status_text' => $statusName,
+                'is_paid' => $isPaid,
+                'is_pending' => $isPending,
+                'is_completed' => $isCompleted,
+                'is_refunded' => $isRefunded,
+                'can_refund' => $canRefund,
+                'is_expired' => $isExpired,
+                'date_at' => $item->created_at->format('M d, Y'),
+                'vehicle_name' => $item->vehicle ? ($item->vehicle->model . ' (' . $item->vehicle->plate_number . ')') : 'N/A',
+                'passenger_count' => $item->passenger_count,
+                'from_bus_station_id' => $item->from_bus_station_id,
+            ]);
+
+            // --- 2. PROCESS TAXI TRANSACTION (If exists) ---
+            if ($item->taxiReservation) {
+                $taxi = $item->taxiReservation;
+                $tStatus = $taxi->status->name ?? 'Pending';
+                $tLower = strtolower($tStatus);
+
+                $allTransactions->push([
+                    'id' => $taxi->id,
+                    'parent_res_id' => $item->id,
+                    'type' => 'taxi',
+                    'qrcode_name' => $taxi->qrcode_name,
+                    'origin' => $item->toStation->name ?? 'Bus Terminal',
+                    'destination' => $taxi->destination_loc_name,
+                    'amount' => (float)$taxi->amount,
                     'book_at' => Carbon::parse($item->reserve_date)->format('M d, Y'),
-                    'time_window' => date('h:i A', strtotime($item->reserve_from_time)) . ' - ' . date('h:i A', strtotime($item->reserve_to_time)),
-                    'status_text' => $statusName,
-                    'is_paid' => $isPaid,
-                    'is_pending' => $isPending,
-                    'is_completed' => $isCompleted,
-                    'is_refunded' => $isRefunded,
-                    'can_refund' => $canRefund,
-                    'date_at' => $item->created_at->format('M d, Y'),
-                    'passenger_count' => $item->passenger_count,
-                    'vehicle_name' => $item->vehicle ? ($item->vehicle->model . ' (' . $item->vehicle->plate_number . ')') : 'N/A',
-
-                    'has_taxi' => $item->taxiReservation !== null,
-                    'taxi_details' => $item->taxiReservation ? [
-                        'id' => $item->taxiReservation->id,
-                        'qrcode_name' => $item->taxiReservation->qrcode_name,
-                        'pickup' => $item->taxiReservation->pickup_loc_name,
-                        'destination' => $item->taxiReservation->destination_loc_name,
-                        'amount' => $item->taxiReservation->amount,
-                        'status' => $item->taxiReservation->status->name ?? 'Pending',
-                    ] : null,
-                ];
-            });
+                    'time_window' => 'Post-Arrival Pickup',
+                    'status_text' => $tStatus,
+                    'is_paid' => str_contains($tLower, 'paid'),
+                    'is_pending' => str_contains($tLower, 'pending'),
+                    'is_completed' => str_contains($tLower, 'completed'),
+                    'is_refunded' => str_contains($tLower, 'refund'),
+                    'can_refund' => $canRefund, // Taxi follows Bus refund window
+                    'is_expired' => $isExpired,
+                    'date_at' => $taxi->created_at->format('M d, Y'),
+                ]);
+            }
+        }
 
         return Inertia::render('passenger/dashboard/TransactionHistory', [
-            'transactions' => $transactions,
-            'initialFilter' => $filter
+            'transactions' => $allTransactions,
+            'initialFilter' => $statusFilter,
+            'initialType' => $typeFilter
         ]);
     }
 
-    public function refund(Request $request, Reservation $reservation)
+    public function refund(Request $request, $id)
     {
+        // Note: The $id here refers to the Bus Reservation ID
         $user = auth()->user();
+        $reservation = Reservation::where('id', $id)->where('passenger_id', $user->id)->firstOrFail();
         $refundStatus = Status::where('name', 'refund')->first();
-
-        if (!$refundStatus) {
-            return back()->with('error', 'Refund status configuration missing.');
-        }
-
-        if ($reservation->passenger_id !== $user->id) {
-            return back()->with('error', 'Unauthorized.');
-        }
 
         try {
             DB::beginTransaction();
 
-            // 1. Update Bus Reservation Status
-            $reservation->status_id = $refundStatus->id;
-            $reservation->save();
+            $refundTotal = 0;
 
-            $refundTotal = (float) $reservation->amount;
-
-            if ($reservation->taxiReservation) {
-                $taxi = $reservation->taxiReservation;
-                $taxi->status_id = $refundStatus->id;
-                $taxi->save();
-
-                $refundTotal += (float) $taxi->amount;
+            // Refund Bus
+            if (!str_contains(strtolower($reservation->status->name), 'refund')) {
+                $reservation->status_id = $refundStatus->id;
+                $reservation->save();
+                $refundTotal += (float)$reservation->amount;
             }
 
-            // 3. Update E-Wallet
+            // Refund Taxi
+            if ($reservation->taxiReservation) {
+                $taxi = $reservation->taxiReservation;
+                if (!str_contains(strtolower($taxi->status->name), 'refund')) {
+                    $taxi->status_id = $refundStatus->id;
+                    $taxi->save();
+                    $refundTotal += (float)$taxi->amount;
+                }
+            }
+
             $wallet = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
             $wallet = EWallet::where('id', $wallet->id)->lockForUpdate()->first();
 
-            $oldBalance = (float) $wallet->amount;
-            $newBalance = $oldBalance + $refundTotal;
-
-            $wallet->amount = $newBalance;
+            $oldBalance = (float)$wallet->amount;
+            $wallet->amount += $refundTotal;
             $wallet->save();
 
-            // 4. Log History
             TransactionHistory::create([
                 'e_wallet_id' => $wallet->id,
                 'old_amount' => $oldBalance,
-                'new_amount' => $newBalance,
+                'new_amount' => $wallet->amount,
                 'type' => 'credit'
             ]);
 
             DB::commit();
-            return back()->with('success', 'Refund of ₱' . number_format($refundTotal, 2) . ' processed successfully.');
-
+            return back()->with('success', 'Refund of ₱' . number_format($refundTotal, 2) . ' processed.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Refund Error: ' . $e->getMessage());
-            return back()->with('error', 'Process failed: ' . $e->getMessage());
+            return back()->with('error', 'Refund failed.');
         }
     }
 }

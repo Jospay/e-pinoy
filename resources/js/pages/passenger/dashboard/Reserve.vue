@@ -15,6 +15,8 @@ import {
   MapPin,
   Navigation,
   Users,
+  CreditCard,
+  Wallet,
   ChevronLeft,
   CalendarDays,
   Bus,
@@ -67,7 +69,7 @@ const form = useForm({
   amount: 0,
   passenger_count: 1,
   reserve_date: '',
-  payment_method: '',
+  payment_method: 'Wallet',
 });
 
 // --- Destination & Operational Logic ---
@@ -483,39 +485,53 @@ const goBack = () => window.history.back();
                   <div class="space-y-3">
                     <Label
                       class="ml-1 text-[10px] font-black tracking-widest text-slate-400 uppercase"
-                      >Payment</Label
+                      >Payment Method</Label
                     >
-                    <Select v-model="form.payment_method">
-                      <SelectTrigger
-                        class="h-12 rounded-xl border-slate-200 bg-white px-4 text-base font-bold shadow-sm focus:ring-4 focus:ring-blue-100"
+
+                    <div class="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        @click="form.payment_method = 'Wallet'"
+                        :class="
+                          form.payment_method === 'Wallet'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-slate-200'
+                        "
+                        class="flex flex-col items-center rounded-xl border p-3 transition-all"
                       >
-                        <SelectValue
-                          :value="form.payment_method"
-                          placeholder="Choose payment method"
-                        />
-                      </SelectTrigger>
-                      <SelectContent position="popper" class="z-50 rounded-xl">
-                        <SelectItem
-                          value="Online Payment"
-                          class="py-4 font-bold"
-                          >Online Payment</SelectItem
-                        >
-                        <SelectItem value="Wallet" class="py-4 font-bold"
-                          >Wallet</SelectItem
-                        >
-                      </SelectContent>
-                    </Select>
-                    <p
-                      v-if="
-                        form.payment_method === 'Wallet' &&
-                        walletBalanceNum < form.amount
-                      "
-                      class="text-xs text-red-600"
+                        <Wallet class="mb-1 h-5 w-5" />
+                        <span class="text-xs font-bold">Wallet</span>
+                      </button>
+                      <button
+                        type="button"
+                        @click="form.payment_method = 'Online Payment'"
+                        :class="
+                          form.payment_method === 'Online Payment'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-slate-200'
+                        "
+                        class="flex flex-col items-center rounded-xl border p-3 transition-all"
+                      >
+                        <CreditCard class="mb-1 h-5 w-5" />
+                        <span class="text-xs font-bold">Online</span>
+                      </button>
+                    </div>
+
+                    <div
+                      v-if="form.payment_method === 'Wallet'"
+                      class="text-center"
                     >
-                      Insufficient balance. Current wallet: ₱{{
-                        walletBalanceNum
-                      }}
-                    </p>
+                      <p
+                        class="text-xs"
+                        :class="
+                          walletBalanceNum < form.amount
+                            ? 'font-bold text-red-500'
+                            : 'text-slate-500'
+                        "
+                      >
+                        Balance: ₱{{ walletBalanceNum.toFixed(2) }}
+                      </p>
+                    </div>
                   </div>
 
                   <!-- Total & Confirm -->

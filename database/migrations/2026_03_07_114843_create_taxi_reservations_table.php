@@ -17,6 +17,8 @@ return new class extends Migration
             $table->foreignId('vehicle_id')->constrained('vehicles')->onDelete('restrict');
             $table->foreignId('passenger_id')->constrained('user_passengers')->onDelete('restrict');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
+            $table->string('booking_type')->default('after');
+            $table->time('time_pickup')->nullable();
             $table->integer('passenger_count');
             $table->decimal('amount', 10, 2);
             $table->string('pickup_loc_name')->nullable();
