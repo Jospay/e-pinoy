@@ -11,6 +11,9 @@ import {
   Loader2,
   CalendarDays,
   Clock,
+  Users,
+  Info,
+  AlertCircle,
 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
 
@@ -67,6 +70,16 @@ const form = useForm({
   payment_options: 'Wallet',
 });
 
+const formatDate = (dateString: string) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  });
+};
+
 const handleLocationSelected = (data: any) => {
   if (props.bookingType === 'before') {
     form.start_lat = data.lat;
@@ -110,12 +123,21 @@ const canSubmit = computed(() => {
   const timeValid = props.bookingType === 'before' ? !!form.time_pickup : true;
   const isNotProcessing = !form.processing;
   const validFare = form.amount >= 50;
+  const passengerCountValid =
+    form.passenger_count > 0 && form.passenger_count <= 4;
   const balanceValid =
     form.payment_options === 'Wallet'
       ? props.walletBalance >= form.amount
       : true;
 
-  return hasRoute && timeValid && isNotProcessing && validFare && balanceValid;
+  return (
+    hasRoute &&
+    timeValid &&
+    isNotProcessing &&
+    validFare &&
+    balanceValid &&
+    passengerCountValid
+  );
 });
 
 const submit = () => {
@@ -175,7 +197,7 @@ const submit = () => {
                       Travel Date
                     </p>
                     <p class="text-sm font-black text-brand-blue">
-                      {{ busReservation.reserve_date }}
+                      {{ formatDate(busReservation.reserve_date) }}
                     </p>
                   </div>
                 </div>
@@ -273,6 +295,65 @@ const submit = () => {
                       required
                     />
                   </div>
+                </div>
+
+                <div class="mb-6 space-y-2">
+                  <Label
+                    class="ml-1 text-[10px] font-black tracking-widest text-slate-400 uppercase"
+                    :class="{ 'text-red-500': form.passenger_count > 4 }"
+                  >
+                    Passengers
+                  </Label>
+
+                  <div class="relative">
+                    <Users
+                      class="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2"
+                      :class="
+                        form.passenger_count > 4
+                          ? 'text-red-500'
+                          : 'text-slate-400'
+                      "
+                    />
+                    <input
+                      v-model="form.passenger_count"
+                      type="number"
+                      min="1"
+                      max="4"
+                      class="h-12 w-full rounded-xl border bg-white pr-4 pl-12 text-sm font-bold shadow-sm transition-colors outline-none"
+                      :class="[
+                        form.passenger_count > 4 || form.errors.passenger_count
+                          ? 'border-red-500 text-red-600 ring-1 ring-red-500'
+                          : 'border-slate-200 focus:border-black focus:ring-1 focus:ring-black',
+                      ]"
+                    />
+                  </div>
+
+                  <div
+                    v-if="form.passenger_count > 4"
+                    class="mt-1 flex items-start gap-2 text-red-500"
+                  >
+                    <AlertCircle class="mt-0.5 h-3 w-3" />
+                    <p class="text-[11px] font-bold">
+                      Error: You have {{ form.passenger_count }} passengers.
+                      Taxis only support up to 4.
+                    </p>
+                  </div>
+
+                  <div class="mt-1 flex items-start gap-2" v-else>
+                    <Info class="mt-0.5 h-3 w-3 text-slate-400" />
+                    <p class="text-[11px] leading-relaxed text-slate-500">
+                      <strong>Note:</strong> Maximum taxi capacity is 4
+                      passengers. For groups larger than 4, please book an
+                      additional taxi.
+                    </p>
+                  </div>
+
+                  <p
+                    v-if="form.errors.passenger_count"
+                    class="text-xs font-medium text-red-500"
+                  >
+                    {{ form.errors.passenger_count }}
+                  </p>
                 </div>
 
                 <div class="mb-6 space-y-3">

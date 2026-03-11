@@ -23,16 +23,18 @@ class TaxiReservationController extends Controller
         return Status::where('name', 'LIKE', "%{$word}%")->first()?->id;
     }
 
-    public function index(Request $request, Reservation $reservation)
+    public function index(Request $request, $id) // Remove 'Reservation' type-hint
     {
+        // Manually find the Bus Reservation
+        $busReservation = Reservation::with(['fromStation', 'toStation'])->find($id);
         $bookingType = $request->query('type', 'after');
 
         return Inertia::render('passenger/dashboard/TaxiReservation', [
-            'busReservation' => $reservation->load(['fromStation', 'toStation']),
+            'busReservation' => $busReservation,
             'bookingType'    => $bookingType,
-            'defaultPickup'  => $bookingType === 'after' ? $reservation->toStation?->name : '',
-            'defaultDest'    => $bookingType === 'before' ? $reservation->fromStation?->name : '',
-            'passengerCount' => $reservation->passenger_count,
+            'defaultPickup'  => $bookingType === 'after' ? $busReservation->toStation?->name : '',
+            'defaultDest'    => $bookingType === 'before' ? $busReservation->fromStation?->name : '',
+            'passengerCount' => $busReservation->passenger_count,
             'walletBalance'  => (float) (auth()->user()->eWallet?->amount ?? 0),
         ]);
     }
@@ -43,7 +45,7 @@ class TaxiReservationController extends Controller
             'reservation_id'       => 'required|exists:reservations,id',
             'booking_type'         => 'required|in:before,after',
             'time_pickup'          => 'nullable|required_if:booking_type,before',
-            'passenger_count'      => 'required|integer',
+            'passenger_count'      => 'required|integer|min:1|max:4',
             'amount'               => 'required|numeric|min:50',
             'pickup_loc_name'      => 'required|string',
             'destination_loc_name' => 'required|string',
@@ -68,7 +70,7 @@ class TaxiReservationController extends Controller
             $taxiData = array_merge($validated, [
                 'passenger_id' => $user->id,
                 'vehicle_id'   => 1,
-                'reserve_date' => $busReservation->reserve_date,
+                'reserve_date' => Carbon::parse($busReservation->reserve_date)->format('Y-m-d'),
                 'qrcode_name'  => $refNumber
             ]);
 
@@ -196,7 +198,7 @@ class TaxiReservationController extends Controller
                         'currency' => 'PHP',
                         'quantity' => 1,
                     ]],
-                    'payment_method_types' => ['card', 'paymaya', 'qrph', 'grab_pay', 'billease'],
+                    'payment_method_types' => ['card', 'paymaya', 'qrph', 'billease', 'grab_pay', 'dob'],
                     'description' => 'Taxi Booking ID: ' . $taxi->qrcode_name,
                 ],
             ],

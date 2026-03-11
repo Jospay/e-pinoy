@@ -127,7 +127,7 @@ class TransactionHistoryController extends Controller
                         'vehicle_name' => $taxi->vehicle_id
                             ? ($taxi->vehicle->model . ' (' . $taxi->vehicle->plate_number . ')')
                             : 'Searching for driver...',
-                        'passenger_count' => $item->passenger_count,
+                        'passenger_count' => $taxi->passenger_count,
                     ]);
                 }
             }

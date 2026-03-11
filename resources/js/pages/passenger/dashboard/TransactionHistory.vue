@@ -415,7 +415,8 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                       @click="goToTicket(tx.qrcode_name)"
                       class="flex-1 rounded-2xl border-2 border-slate-900 py-3 text-xs font-bold text-slate-900 hover:bg-slate-50"
                     >
-                      <ReceiptText class="mr-1 inline h-4 w-4" /> View Ticket
+                      <ReceiptText class="mr-1 inline h-4 w-4" /> View Bus
+                      Ticket
                     </button>
                   </div>
                 </template>

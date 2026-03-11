@@ -57,15 +57,13 @@ const downloadTicket = async () => {
 };
 
 const beforeTaxiBooking = () => {
-  router.get(
-    `/passenger/reservation/taxi/Reserve/${props.reservation.id}?type=before`,
-  );
+  const busId = props.reservation.reservation_id;
+  router.get(`/passenger/reservation/taxi/Reserve/${busId}?type=before`);
 };
 
 const afterTaxiBooking = () => {
-  router.get(
-    `/passenger/reservation/taxi/Reserve/${props.reservation.id}?type=after`,
-  );
+  const busId = props.reservation.reservation_id;
+  router.get(`/passenger/reservation/taxi/Reserve/${busId}?type=after`);
 };
 </script>
 
