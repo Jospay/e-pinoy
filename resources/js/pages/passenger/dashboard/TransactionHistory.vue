@@ -10,8 +10,8 @@ import {
   AlertTriangle,
   Users,
   Calendar,
-  CarFront, // Added for taxi icon
-  ChevronRight,
+  CarFront,
+  CheckCircle2,
 } from 'lucide-vue-next';
 import { computed, watch, ref } from 'vue';
 import { toast } from 'vue-sonner';
@@ -29,11 +29,13 @@ import { Button } from '@/components/ui/button';
 const props = defineProps<{
   transactions: any[];
   initialFilter: string;
+  initialType: string;
 }>();
 
 const page = usePage();
 const isConfirmOpen = ref(false);
 const selectedTx = ref<any>(null);
+const currentType = ref(props.initialType || 'all');
 
 watch(
   () => page.props.flash,
@@ -45,19 +47,33 @@ watch(
 );
 
 const filteredTransactions = computed(() => {
-  if (props.initialFilter === 'completed')
-    return props.transactions.filter((t) => t.is_completed);
-  if (props.initialFilter === 'paid')
-    return props.transactions.filter((t) => t.is_paid);
-  if (props.initialFilter === 'refund')
-    return props.transactions.filter((t) => t.is_refunded);
-  return props.transactions.filter((t) => t.is_pending);
+  return props.transactions.filter((t) => {
+    const matchesStatus =
+      (props.initialFilter === 'completed' && t.is_completed) ||
+      (props.initialFilter === 'paid' && t.is_paid) ||
+      (props.initialFilter === 'refund' && t.is_refunded) ||
+      (props.initialFilter === 'pending' && t.is_pending);
+
+    const matchesType =
+      currentType.value === 'all' || t.type === currentType.value;
+
+    return matchesStatus && matchesType;
+  });
 });
 
 const updateFilter = (status: string) => {
   router.get(
     `/passenger/transaction-history`,
-    { status },
+    { status, type: currentType.value },
+    { preserveState: true, replace: true },
+  );
+};
+
+const updateType = (type: string) => {
+  currentType.value = type;
+  router.get(
+    `/passenger/transaction-history`,
+    { status: props.initialFilter, type },
     { preserveState: true, replace: true },
   );
 };
@@ -83,9 +99,13 @@ const openRefundModal = (tx: any) => {
 
 const confirmRefund = () => {
   if (!selectedTx.value) return;
+  const id = selectedTx.value.id;
+
   router.post(
-    `/passenger/transaction-history/refund/${selectedTx.value.id}`,
-    {},
+    `/passenger/transaction-history/refund/${id}`,
+    {
+      type: selectedTx.value.type,
+    },
     {
       onBefore: () => {
         isConfirmOpen.value = false;
@@ -105,19 +125,36 @@ const confirmRefund = () => {
   );
 };
 
-const breadcrumbs = [{ title: 'Activity', href: '#' }];
+const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
 </script>
 
 <template>
-  <Head title="Trip Activity" />
+  <Head title="Transaction History" />
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="min-h-[calc(100vh-64px)] bg-slate-50/50 px-3 py-8">
       <div class="mx-auto max-w-2xl">
-        <div class="mb-8 sm:px-4">
+        <div class="mb-8">
           <h1 class="text-2xl font-extrabold text-slate-900 sm:text-3xl">
-            Activity
+            Transaction History
           </h1>
-          <div class="mt-6 overflow-x-auto pb-2 sm:overflow-visible">
+
+          <div class="mt-6 flex gap-2">
+            <button
+              v-for="type in ['all', 'bus', 'taxi']"
+              :key="type"
+              @click="updateType(type)"
+              :class="[
+                currentType === type
+                  ? 'bg-brand-blue text-white'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+              ]"
+              class="rounded-full px-5 py-1.5 text-xs font-bold capitalize transition-all"
+            >
+              {{ type }}
+            </button>
+          </div>
+
+          <div class="mt-4 overflow-x-auto pb-2 sm:overflow-visible">
             <div
               class="flex w-max min-w-full rounded-2xl bg-slate-200/50 p-1 sm:w-fit"
             >
@@ -143,33 +180,40 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
           class="rounded-3xl border-2 border-dashed border-slate-200 bg-white py-20 text-center"
         >
           <p class="text-sm text-slate-400 italic">
-            No {{ initialFilter }} reservations found.
+            No {{ initialFilter }}
+            {{ currentType !== 'all' ? currentType : '' }} reservations found.
           </p>
         </div>
 
         <div v-else class="space-y-6">
           <div
             v-for="tx in filteredTransactions"
-            :key="tx.id"
+            :key="tx.type + tx.id"
             class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl"
           >
             <div
               class="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-3"
             >
               <div class="flex items-center gap-2">
+                <component
+                  :is="tx.type === 'bus' ? Bus : CarFront"
+                  class="h-3.5 w-3.5 text-slate-400"
+                />
                 <span
                   :class="[
                     'rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase',
-                    tx.is_completed
-                      ? 'bg-blue-100 text-blue-700'
-                      : tx.is_paid
-                        ? 'bg-green-100 text-green-700'
-                        : tx.is_refunded
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-700',
+                    tx.is_expired
+                      ? 'bg-slate-200 text-slate-500' // Visual for Expired
+                      : tx.is_completed
+                        ? 'bg-blue-100 text-brand-blue'
+                        : tx.is_paid
+                          ? 'bg-green-100 text-green-700'
+                          : tx.is_refunded
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-amber-100 text-amber-700',
                   ]"
                 >
-                  {{ tx.status_text }}
+                  {{ tx.is_expired ? 'Expired' : tx.status_text }}
                 </span>
                 <span class="font-mono text-[10px] text-slate-400"
                   >#{{ tx.qrcode_name }}</span
@@ -185,7 +229,7 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                 <div class="flex gap-4">
                   <div class="flex flex-col items-center py-1">
                     <div
-                      class="h-2.5 w-2.5 rounded-full border-2 border-blue-500"
+                      class="h-2.5 w-2.5 rounded-full border-2 border-brand-blue"
                     ></div>
                     <div
                       class="my-1 h-12 w-0.5 border-l-2 border-dotted border-slate-200"
@@ -210,65 +254,10 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                   </div>
                 </div>
                 <div class="text-right">
-                  <p class="text-2xl font-black">₱{{ tx.bus_amount }}</p>
+                  <p class="text-2xl font-black">₱{{ tx.amount }}</p>
                   <p class="text-[10px] font-bold text-slate-400 uppercase">
-                    Bus Fare
+                    {{ tx.type === 'bus' ? 'Bus Fare' : 'Taxi Fare' }}
                   </p>
-                </div>
-              </div>
-
-              <div
-                v-if="tx.has_taxi"
-                class="mb-6 rounded-2xl border border-blue-100 bg-blue-50/50 p-4"
-              >
-                <div class="mb-2 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <CarFront class="h-4 w-4 text-blue-600" />
-                    <span
-                      class="text-[11px] font-black tracking-wider text-blue-900 uppercase"
-                    >
-                      Connected Taxi Booking
-                    </span>
-                  </div>
-
-                  <div class="text-right">
-                    <p class="text-sm font-black text-blue-700">
-                      ₱{{ tx.taxi_details.amount }}
-                    </p>
-                    <p class="text-[8px] font-bold text-blue-400 uppercase">
-                      Taxi Fare
-                    </p>
-                  </div>
-                </div>
-
-                <div
-                  class="flex items-center justify-between border-t border-blue-100 pt-3"
-                >
-                  <div class="text-[11px] text-slate-600">
-                    <div class="flex items-center gap-2">
-                      <span
-                        class="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-bold text-blue-700 uppercase"
-                      >
-                        {{ tx.taxi_details.status }}
-                      </span>
-                      <p class="font-mono text-[9px] text-slate-400">
-                        Ref: {{ tx.taxi_details.qrcode_name }}
-                      </p>
-                    </div>
-                    <p class="mt-1">
-                      Drop-off:
-                      <span class="font-bold text-slate-900">{{
-                        tx.taxi_details.destination
-                      }}</span>
-                    </p>
-                  </div>
-
-                  <button
-                    @click="goToTaxiTicket(tx.taxi_details.id)"
-                    class="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline"
-                  >
-                    View Taxi Ticket <ChevronRight class="h-3 w-3" />
-                  </button>
                 </div>
               </div>
 
@@ -276,18 +265,36 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
-                  <Bus class="h-4 w-4 text-slate-400" />
+                  <component
+                    :is="tx.type === 'bus' ? Bus : CarFront"
+                    class="h-4 w-4 text-slate-400"
+                  />
                   <div>
                     <p
                       class="text-[9px] font-bold tracking-wider text-slate-400 uppercase"
                     >
                       Vehicle
                     </p>
-                    <p class="max-w-[100px] truncate text-xs font-bold">
-                      {{ tx.vehicle_name }}
+
+                    <p
+                      class="max-w-[150px] text-xs leading-tight font-bold"
+                      :class="{
+                        'text-amber-600 italic':
+                          !tx.vehicle_name && tx.type === 'taxi',
+                        'text-slate-900': tx.vehicle_name,
+                      }"
+                    >
+                      <template v-if="tx.vehicle_name">
+                        {{ tx.vehicle_name }}
+                      </template>
+                      <template v-else-if="tx.type === 'taxi'">
+                        Waiting for Driver Acceptance
+                      </template>
+                      <template v-else> N/A </template>
                     </p>
                   </div>
                 </div>
+
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
@@ -298,12 +305,13 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                     >
                       Passengers
                     </p>
-                    <p class="max-w-[100px] truncate text-xs font-bold">
+                    <p class="text-xs font-bold">
                       {{ tx.passenger_count }}
                       {{ tx.passenger_count > 1 ? 'Seats' : 'Seat' }}
                     </p>
                   </div>
                 </div>
+
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
@@ -317,45 +325,100 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
                     <p class="text-xs font-bold">{{ tx.book_at }}</p>
                   </div>
                 </div>
+
                 <div
                   class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
                 >
-                  <Clock class="h-4 w-4 text-slate-400" />
-                  <div>
+                  <Clock class="h-4 w-4 shrink-0 text-slate-400" />
+                  <div class="min-w-0 flex-1">
                     <p
                       class="text-[9px] font-bold tracking-wider text-slate-400 uppercase"
                     >
-                      Departure
+                      {{ tx.type === 'bus' ? 'Departure' : 'Pickup Schedule' }}
                     </p>
-                    <p class="text-xs font-bold">{{ tx.time_window }}</p>
+                    <p
+                      class="leading-tight font-bold"
+                      :class="
+                        tx.time_window.length > 10 ? 'text-[10px]' : 'text-xs'
+                      "
+                    >
+                      {{ tx.time_window }}
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div class="flex flex-col gap-3">
-                <button
-                  v-if="tx.can_refund"
-                  @click="openRefundModal(tx)"
-                  class="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3.5 text-xs font-bold text-red-600 transition-all hover:bg-red-100"
+                <template
+                  v-if="
+                    tx.type === 'taxi' &&
+                    tx.is_paid &&
+                    !tx.is_expired &&
+                    !tx.is_completed
+                  "
                 >
-                  <Undo2 class="h-4 w-4" /> Refund to E-Wallet
-                </button>
-                <div class="flex gap-3">
                   <button
-                    v-if="tx.is_completed"
-                    @click="bookAgain(tx)"
-                    class="flex-1 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white hover:bg-slate-800"
+                    @click="goToTaxiTicket(tx.id)"
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-900 py-3 text-xs font-bold text-slate-900 hover:bg-slate-50"
                   >
-                    <RotateCcw class="mr-1 inline h-4 w-4" /> Book Again
+                    <ReceiptText class="h-4 w-4" /> View Taxi Ticket
                   </button>
+
                   <button
-                    v-if="tx.is_paid && !tx.can_refund"
-                    @click="goToTicket(tx.qrcode_name)"
-                    class="flex-1 rounded-2xl border-2 border-slate-900 py-3 text-xs font-bold text-slate-900 hover:bg-slate-50"
+                    @click="openRefundModal(tx)"
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3.5 text-xs font-bold text-red-600 transition-all hover:bg-red-100"
                   >
-                    <ReceiptText class="mr-1 inline h-4 w-4" /> View Ticket
+                    <Undo2 class="h-4 w-4" /> Refund to E-Wallet
                   </button>
-                </div>
+                </template>
+
+                <template v-else>
+                  <button
+                    v-if="tx.can_refund"
+                    @click="openRefundModal(tx)"
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3.5 text-xs font-bold text-red-600 transition-all hover:bg-red-100"
+                  >
+                    <Undo2 class="h-4 w-4" /> Refund to E-Wallet
+                  </button>
+
+                  <div
+                    v-if="tx.is_expired && (tx.is_paid || tx.is_pending)"
+                    class="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-3.5 text-xs font-bold text-slate-400"
+                  >
+                    <Clock class="h-4 w-4" /> Expired
+                  </div>
+
+                  <div class="flex gap-3">
+                    <button
+                      v-if="tx.type === 'bus' && tx.is_completed"
+                      @click="bookAgain(tx)"
+                      class="flex-1 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white hover:bg-slate-800"
+                    >
+                      <RotateCcw class="mr-1 inline h-4 w-4" /> Book Again
+                    </button>
+
+                    <button
+                      v-if="tx.type === 'taxi' && tx.is_completed"
+                      class="flex-1 rounded-2xl bg-brand-blue py-3.5 text-xs font-bold text-white"
+                    >
+                      <CheckCircle2 class="mr-1 inline h-4 w-4" /> Taxi Trip
+                      Completed
+                    </button>
+
+                    <button
+                      v-if="
+                        tx.type === 'bus' &&
+                        tx.is_paid &&
+                        !tx.can_refund &&
+                        !tx.is_expired
+                      "
+                      @click="goToTicket(tx.qrcode_name)"
+                      class="flex-1 rounded-2xl border-2 border-slate-900 py-3 text-xs font-bold text-slate-900 hover:bg-slate-50"
+                    >
+                      <ReceiptText class="mr-1 inline h-4 w-4" /> View Ticket
+                    </button>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -373,7 +436,8 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
           </div>
           <DialogTitle class="text-xl font-bold">Confirm Refund</DialogTitle>
           <DialogDescription class="pt-2 text-slate-500">
-            Are you sure you want to refund this ticket? <br />
+            Are you sure you want to refund this {{ selectedTx?.type }} ticket?
+            <br />
             <span class="text-lg font-bold text-slate-900"
               >₱{{ selectedTx?.amount }}</span
             >
@@ -385,8 +449,9 @@ const breadcrumbs = [{ title: 'Activity', href: '#' }];
             variant="destructive"
             class="h-12 w-full rounded-xl font-bold"
             @click="confirmRefund"
-            >Yes, Refund Now</Button
           >
+            Yes, Refund Now
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

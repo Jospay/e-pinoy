@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('taxi_reservations', function (Blueprint $table) {
             $table->id();
             $table->foreignId('reservation_id')->constrained('reservations')->onDelete('restrict');
-            $table->foreignId('vehicle_id')->constrained('vehicles')->onDelete('restrict');
+            $table->foreignId('vehicle_id')->nullable()->constrained('vehicles')->onDelete('restrict');
             $table->foreignId('passenger_id')->constrained('user_passengers')->onDelete('restrict');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
             $table->string('booking_type')->default('after');

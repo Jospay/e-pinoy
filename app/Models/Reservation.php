@@ -58,9 +58,10 @@ class Reservation extends Model
         return $this->belongsTo(BusStation::class, 'to_bus_station_id');
     }
 
-    public function taxiReservation()
+    // Change this function name and type
+    public function taxiReservations() // Added 's'
     {
-        // This assumes taxi_reservations table has a 'reservation_id' column
-        return $this->hasOne(TaxiReservation::class, 'reservation_id');
+        // Changed hasOne to hasMany
+        return $this->hasMany(TaxiReservation::class, 'reservation_id');
     }
 }
