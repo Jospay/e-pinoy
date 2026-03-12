@@ -248,49 +248,59 @@ class ReservationController extends Controller
             DB::beginTransaction();
             $qrName = 'QR-' . strtoupper(Str::random(12));
 
-            if ($validated['payment_method'] === 'Wallet') {
-                $wallet = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
-                if ($wallet->amount < $validated['amount']) {
-                    return back()->withErrors([
-                        'amount' => "Insufficient wallet balance. Your balance: ₱" . number_format($wallet->amount, 2),
-                    ]);
-                }
+           if ($validated['payment_method'] === 'Wallet') {
+            $walletRecord = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
+            $wallet = EWallet::where('id', $walletRecord->id)->lockForUpdate()->first();
 
-                $wallet->amount -= $validated['amount'];
-                $wallet->save();
-
-                $reservation = Reservation::create([
-                    'vehicle_id' => $validated['vehicle_id'],
-                    'passenger_id' => $user->id,
-                    'from_bus_station_id' => $validated['from_bus_station_id'],
-                    'to_bus_station_id' => $validated['to_bus_station_id'],
-                    'status_id' => $paidStatusId,
-                    'passenger_count' => $validated['passenger_count'],
-                    'amount' => $validated['amount'],
-                    'reserve_from_time' => $sched->from_time,
-                    'reserve_to_time' => $sched->to_time,
-                    'reserve_date' => $validated['reserve_date'],
-                    'qrcode_name' => $qrName,
-                    'payment_options' => 'Wallet',
-                    'paymongo_checkout_session_id' => null,
-                ]);
-
-                TransactionHistory::create([
-                    'e_wallet_id' => $wallet->id,
-                    'old_amount' => $wallet->amount + $validated['amount'],
-                    'new_amount' => $wallet->amount,
-                    'description' => 'Reservation ID: ' . $reservation->id,
-                ]);
-
-                DB::commit();
-
-                // Return the Success page via Inertia
-                return Inertia::render('passenger/dashboard/Success', [
-                    'reservation' => $reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle'])
-                ]);
+            // 1. Initial Security Check
+            if (!$wallet->isVerified()) {
+                Log::emergency("SECURITY ALERT: Tampered wallet detected for User ID: " . $user->id);
+                throw new \Exception("Wallet integrity check failed. For your security, this transaction has been blocked. Please contact support.");
             }
 
-            // Online Payment Flow
+            // 2. Balance Check
+            if ($wallet->amount < $validated['amount']) {
+                throw new \Exception("Insufficient wallet balance. Your balance: ₱" . number_format($wallet->amount, 2));
+            }
+
+            $oldAmount = $wallet->amount;
+            $newAmount = $oldAmount - $validated['amount'];
+
+            $wallet->updateAmountAndSeal($newAmount);
+
+            $reservation = Reservation::create([
+                'vehicle_id' => $validated['vehicle_id'],
+                'passenger_id' => $user->id,
+                'from_bus_station_id' => $validated['from_bus_station_id'],
+                'to_bus_station_id' => $validated['to_bus_station_id'],
+                'status_id' => $paidStatusId,
+                'passenger_count' => $validated['passenger_count'],
+                'amount' => $validated['amount'],
+                'reserve_from_time' => $sched->from_time,
+                'reserve_to_time' => $sched->to_time,
+                'reserve_date' => $validated['reserve_date'],
+                'qrcode_name' => $qrName,
+                'payment_options' => 'Wallet',
+                'paymongo_checkout_session_id' => null,
+            ]);
+
+            // 5. Log Transaction History
+            TransactionHistory::create([
+                'e_wallet_id' => $wallet->id,
+                'old_amount' => $oldAmount,
+                'new_amount' => $newAmount,
+                'type'       => 'debit',
+                'description' => 'Bus Reservation ID: ' . $reservation->id . ' (QR: ' . $qrName . ')',
+            ]);
+
+            DB::commit();
+
+            return Inertia::render('passenger/dashboard/Success', [
+                'reservation' => $reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle'])
+            ]);
+        }
+
+            // --- Online Payment Flow ---
             $reservation = Reservation::create([
                 'vehicle_id' => $validated['vehicle_id'],
                 'passenger_id' => $user->id,
@@ -314,10 +324,11 @@ class ReservationController extends Controller
 
             DB::commit();
             return Inertia::location($paymongoSession['attributes']['checkout_url']);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Reservation Store Error: " . $e->getMessage());
-            return back()->withErrors(['amount' => 'Payment system error: ' . $e->getMessage()]);
+            return back()->withErrors(['amount' => $e->getMessage()]);
         }
     }
 

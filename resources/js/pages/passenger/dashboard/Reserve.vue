@@ -20,8 +20,10 @@ import {
   ChevronLeft,
   CalendarDays,
   Bus,
-  ArrowRight,
+  Loader2,
   Info,
+  AlertTriangle,
+  BusFront,
 } from 'lucide-vue-next';
 import { ref, computed, watch } from 'vue';
 import axios from 'axios';
@@ -131,19 +133,39 @@ watch(
 // --- Wallet ---
 const walletBalanceNum = computed(() => Number(props.walletBalance || 0)); // convert string to number
 
+watch(
+  () => form.payment_method,
+  () => {
+    if (form.errors.amount) {
+      form.errors.amount = null;
+    }
+  },
+);
+
+const isSubmitting = ref(false);
+
 const canSubmit = computed(() => {
-  return (
+  if (isSubmitting.value || form.processing) return false;
+
+  const basicFields =
     form.to_bus_station_id &&
     form.reserve_date &&
     isOperationalDay.value &&
-    availableSeats.value > 0 &&
-    !form.processing &&
-    !(form.payment_method === 'Wallet' && walletBalanceNum.value < form.amount)
-  );
+    availableSeats.value >= form.passenger_count &&
+    !form.processing;
+
+  const walletError =
+    form.payment_method === 'Wallet' &&
+    (walletBalanceNum.value < form.amount || !!form.errors.amount);
+  return basicFields && !walletError;
 });
 
 // --- Submit ---
 const submit = () => {
+  if (isSubmitting.value || form.processing) return;
+
+  isSubmitting.value = true;
+
   if (!isOperationalDay.value) {
     alert(`This trip is unavailable for the selected time/date.`);
     return;
@@ -160,8 +182,16 @@ const submit = () => {
   }
 
   form.post('/passenger/reservation', {
-    onError: (errors) => {
-      console.log('Validation errors from server:', errors);
+    onSuccess: () => {
+      console.log('Success! Staying locked for redirect...');
+    },
+    onError: () => {
+      isSubmitting.value = false;
+    },
+    onFinish: () => {
+      if (Object.keys(form.errors).length > 0) {
+        isSubmitting.value = false;
+      }
     },
   });
 };
@@ -174,6 +204,37 @@ const goBack = () => window.history.back();
   <AppLayout>
     <div class="min-h-screen bg-slate-50/50 px-2 py-10">
       <div class="mx-auto max-w-4xl">
+        <div
+          v-if="form.errors.amount"
+          class="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"
+            >
+              <AlertTriangle class="h-5 w-5" />
+            </div>
+            <div class="text-start">
+              <h3 class="text-sm font-bold text-red-900">Security Alert</h3>
+              <p class="text-[11px] leading-tight font-medium text-red-600">
+                {{ form.errors.amount }}
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-3 border-t border-red-100 pt-3">
+            <p class="text-[10px] font-bold text-red-800 uppercase">
+              Status: Incident Reported
+            </p>
+            <p class="mt-1 text-[11px] leading-normal text-red-700">
+              A report has been sent to our team for verification. If you are in
+              a hurry, please
+              <strong>change your payment method</strong> to
+              <strong>Online Payment</strong> to continue.
+            </p>
+          </div>
+        </div>
+
         <!-- Card -->
         <div
           class="rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-200/60"
@@ -519,7 +580,7 @@ const goBack = () => window.history.back();
 
                     <div
                       v-if="form.payment_method === 'Wallet'"
-                      class="text-center"
+                      class="space-y-2 text-center"
                     >
                       <p
                         class="text-xs"
@@ -556,12 +617,25 @@ const goBack = () => window.history.back();
                       <Button
                         @click="submit"
                         :disabled="!canSubmit"
-                        class="h-12 min-w-[200px] rounded-xl bg-brand-blue text-lg font-black shadow-lg shadow-blue-200 transition-all hover:scale-[1.02] hover:bg-blue-600 active:scale-95 disabled:bg-slate-400 disabled:shadow-none"
+                        type="button"
+                        class="h-14 min-w-[200px] rounded-xl bg-brand-blue font-bold text-white hover:bg-blue-800 disabled:opacity-50"
                       >
-                        <span v-if="form.processing">Processing...</span>
-                        <span v-else class="flex items-center gap-2"
-                          >Confirm <ArrowRight class="h-5 w-5"
-                        /></span>
+                        <Loader2
+                          v-if="isSubmitting || form.processing"
+                          class="mr-2 h-4 w-4 animate-spin"
+                        />
+                        <span class="flex items-center gap-2">
+                          <template v-if="isSubmitting || form.processing">
+                            {{
+                              form.payment_method === 'Wallet'
+                                ? 'Submitting...'
+                                : 'Processing Payment...'
+                            }}
+                          </template>
+                          <template v-else>
+                            Confirm Booking <BusFront class="h-5 w-5" />
+                          </template>
+                        </span>
                       </Button>
                     </div>
                   </div>

@@ -11,7 +11,9 @@ use App\Models\Status;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Log;
 
 class TransactionHistoryController extends Controller
 {
@@ -142,50 +144,62 @@ class TransactionHistoryController extends Controller
         ]);
     }
 
-   public function refund(Request $request, $id)
+    public function refund(Request $request, $id)
 {
     $user = auth()->user();
-    $type = $request->input('type'); // This gets "taxi" or "bus" from your payload
+    $type = $request->input('type');
     $refundStatus = Status::where('name', 'refund')->first();
 
     try {
         DB::beginTransaction();
-        $refundTotal = 0;
 
+        // 1. Fetch the correct model
         if ($type === 'taxi') {
-            $taxi = TaxiReservation::where('id', $id)->firstOrFail();
-
-            if (!str_contains(strtolower($taxi->status->name), 'refund')) {
-                $taxi->status_id = $refundStatus->id;
-                $taxi->save();
-                $refundTotal = (float)$taxi->amount;
-            }
+            $model = TaxiReservation::where('id', $id)->firstOrFail();
         } else {
-            // Default: Bus Refund (Original Logic)
-            $reservation = Reservation::where('id', $id)
+            $model = Reservation::where('id', $id)
                 ->where('passenger_id', $user->id)
                 ->firstOrFail();
-
-            if (!str_contains(strtolower($reservation->status->name), 'refund')) {
-                $reservation->status_id = $refundStatus->id;
-                $reservation->save();
-                $refundTotal += (float)$reservation->amount;
-            }
         }
 
-        // Apply money back to wallet
+        // Check if already refunded
+        if (str_contains(strtolower($model->status->name ?? ''), 'refund')) {
+            throw new \Exception("This transaction has already been refunded.");
+        }
+
+        $refundTotal = (float)$model->amount;
+
         if ($refundTotal > 0) {
-            $wallet = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
-            $wallet = EWallet::where('id', $wallet->id)->lockForUpdate()->first();
+            $walletRecord = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
+
+            // Lock the row for update to prevent race conditions
+            $wallet = EWallet::where('id', $walletRecord->id)->lockForUpdate()->first();
+
+            // SECURITY CHECK: Verify wallet integrity before proceeding
+            if (!$wallet->isVerified()) {
+                Log::emergency("REFUND BLOCKED: Tampered wallet seal for User ID: " . $user->id);
+                throw new \Exception("Wallet integrity check failed. For your security, this transaction has been blocked. Please contact support.");
+            }
+
+            // 2. Perform updates ATOMICALLY
+
+            $model->status_id = $refundStatus->id;
+            $model->save();
+
+            // Update Wallet Balance
             $oldBalance = (float)$wallet->amount;
-            $wallet->amount += $refundTotal;
+            $newBalance = $oldBalance + $refundTotal;
+
+            $wallet->amount = $newBalance;
             $wallet->save();
 
+            // 3. Create Audit Trail
             TransactionHistory::create([
                 'e_wallet_id' => $wallet->id,
-                'old_amount' => $oldBalance,
-                'new_amount' => $wallet->amount,
-                'type' => 'credit'
+                'old_amount'  => $oldBalance,
+                'new_amount'  => $newBalance,
+                'type'        => 'credit',
+                'description' => 'Refund for ' . ucfirst($type) . ' Booking ID: ' . $id
             ]);
         }
 
@@ -194,7 +208,8 @@ class TransactionHistoryController extends Controller
 
     } catch (\Exception $e) {
         DB::rollBack();
-        return back()->with('error', 'Refund failed: ' . $e->getMessage());
+        Log::error("Refund Error: " . $e->getMessage());
+        return back()->with('error', '' . $e->getMessage());
     }
-}
+    }
 }

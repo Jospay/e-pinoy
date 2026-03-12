@@ -13,6 +13,7 @@ import {
   Clock,
   Users,
   Info,
+  AlertTriangle,
   AlertCircle,
 } from 'lucide-vue-next';
 import { ref, computed } from 'vue';
@@ -118,30 +119,45 @@ const handleRouteFound = (data: any) => {
   form.distance_km = isNaN(distKm) ? 0 : distKm;
 };
 
+const isSubmitting = ref(false);
+
 const canSubmit = computed(() => {
+  if (isSubmitting.value || form.processing) return false;
+
   const hasRoute = !!form.start_lat && !!form.end_lat;
   const timeValid = props.bookingType === 'before' ? !!form.time_pickup : true;
-  const isNotProcessing = !form.processing;
   const validFare = form.amount >= 50;
   const passengerCountValid =
     form.passenger_count > 0 && form.passenger_count <= 4;
+
   const balanceValid =
     form.payment_options === 'Wallet'
       ? props.walletBalance >= form.amount
       : true;
 
   return (
-    hasRoute &&
-    timeValid &&
-    isNotProcessing &&
-    validFare &&
-    balanceValid &&
-    passengerCountValid
+    hasRoute && timeValid && validFare && balanceValid && passengerCountValid
   );
 });
 
 const submit = () => {
-  form.post('/passenger/reservation/taxi/reservation');
+  if (isSubmitting.value || form.processing) return;
+
+  isSubmitting.value = true;
+
+  form.post('/passenger/reservation/taxi/reservation', {
+    onSuccess: () => {
+      console.log('Success! Staying locked for redirect...');
+    },
+    onError: () => {
+      isSubmitting.value = false;
+    },
+    onFinish: () => {
+      if (Object.keys(form.errors).length > 0) {
+        isSubmitting.value = false;
+      }
+    },
+  });
 };
 </script>
 
@@ -150,6 +166,37 @@ const submit = () => {
   <AppLayout>
     <div class="min-h-screen bg-slate-50/50 px-4 py-10">
       <div class="mx-auto max-w-5xl">
+        <div
+          v-if="form.errors.amount"
+          class="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"
+            >
+              <AlertTriangle class="h-5 w-5" />
+            </div>
+            <div class="text-start">
+              <h3 class="text-sm font-bold text-red-900">Security Alert</h3>
+              <p class="text-[11px] leading-tight font-medium text-red-600">
+                {{ form.errors.amount }}
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-3 border-t border-red-100 pt-3">
+            <p class="text-[10px] font-bold text-red-800 uppercase">
+              Status: Incident Reported
+            </p>
+            <p class="mt-1 text-[11px] leading-normal text-red-700">
+              A report has been sent to our team for verification. If you are in
+              a hurry, please
+              <strong>change your payment method</strong> to
+              <strong>Online Payment</strong> to continue.
+            </p>
+          </div>
+        </div>
+
         <div class="overflow-hidden rounded-2xl border bg-white shadow-xl">
           <div class="grid grid-cols-1 lg:grid-cols-12">
             <div class="relative h-[400px] lg:col-span-7 lg:h-auto">
@@ -410,14 +457,23 @@ const submit = () => {
               <Button
                 @click="submit"
                 :disabled="!canSubmit"
-                class="h-14 w-full rounded-xl bg-brand-blue font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                class="h-14 w-full rounded-xl bg-brand-blue font-bold text-white hover:bg-blue-800 disabled:opacity-50"
               >
                 <Loader2
-                  v-if="form.processing"
+                  v-if="isSubmitting || form.processing"
                   class="mr-2 h-4 w-4 animate-spin"
                 />
-                <span v-else class="flex items-center gap-2">
-                  Confirm Booking <CarFront class="h-5 w-5" />
+                <span class="flex items-center gap-2">
+                  <template v-if="isSubmitting || form.processing">
+                    {{
+                      form.payment_options === 'Wallet'
+                        ? 'Submitting...'
+                        : 'Processing Payment...'
+                    }}
+                  </template>
+                  <template v-else>
+                    Confirm Booking <CarFront class="h-5 w-5" />
+                  </template>
                 </span>
               </Button>
             </div>

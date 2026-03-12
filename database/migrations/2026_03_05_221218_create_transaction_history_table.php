@@ -17,6 +17,7 @@ return new class extends Migration
             $table->decimal('old_amount', 10, 2);
             $table->decimal('new_amount', 10, 2);
             $table->enum('type', ['debit', 'credit']);
+            $table->string('description');
             $table->timestamps();
         });
     }

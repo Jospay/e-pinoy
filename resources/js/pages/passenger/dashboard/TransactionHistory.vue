@@ -36,12 +36,30 @@ const page = usePage();
 const isConfirmOpen = ref(false);
 const selectedTx = ref<any>(null);
 const currentType = ref(props.initialType || 'all');
+const amountError = ref<string | null>(null);
 
+// Watcher handles transforming the 'loading' toast into 'success' or 'error'
 watch(
   () => page.props.flash,
   (flash: any) => {
-    if (flash?.success) toast.success(flash.success);
-    if (flash?.error) toast.error(flash.error);
+    if (flash?.success) {
+      toast.success(flash.success, { id: 'refund-toast' });
+      amountError.value = null; // Hide alert on success
+    }
+    if (flash?.error) {
+      toast.error(flash.error, { id: 'refund-toast' });
+
+      // BROADEN THE SEARCH: Catch anything security or wallet related
+      const errorMsg = flash.error.toLowerCase();
+      if (
+        errorMsg.includes('security') ||
+        errorMsg.includes('seal') ||
+        errorMsg.includes('tamper') ||
+        errorMsg.includes('mismatch')
+      ) {
+        amountError.value = flash.error;
+      }
+    }
   },
   { deep: true },
 );
@@ -103,23 +121,24 @@ const confirmRefund = () => {
 
   router.post(
     `/passenger/transaction-history/refund/${id}`,
-    {
-      type: selectedTx.value.type,
-    },
+    { type: selectedTx.value.type },
     {
       onBefore: () => {
         isConfirmOpen.value = false;
         toast.loading('Processing your refund...', { id: 'refund-toast' });
       },
       onSuccess: () => {
-        updateFilter('refund');
-        toast.dismiss('refund-toast');
-        toast.success('Refund successful!');
-        selectedTx.value = null;
+        if (!page.props.flash.error) {
+          router.get(
+            '/passenger/transaction-history',
+            { status: 'refund', type: currentType.value },
+            { preserveState: true },
+          );
+        }
       },
-      onError: () => {
-        toast.dismiss('refund-toast');
-        toast.error('Refund failed');
+      onError: (errors) => {
+        const message = errors.refund || 'Refund failed. Please try again.';
+        toast.error(message, { id: 'refund-toast' });
       },
     },
   );
@@ -171,6 +190,25 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
               >
                 {{ s }}
               </button>
+            </div>
+          </div>
+
+          <div
+            v-if="amountError"
+            class="mt-5.5 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm"
+          >
+            <div class="flex items-center gap-3">
+              <div
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"
+              >
+                <AlertTriangle class="h-5 w-5" />
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-red-900">Security Alert</h3>
+                <p class="text-[11px] leading-tight font-medium text-red-600">
+                  {{ amountError }}
+                </p>
+              </div>
             </div>
           </div>
         </div>

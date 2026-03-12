@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('restrict');
             $table->decimal('amount', 10, 2);
+            $table->string('hash_seal')->nullable();
             $table->timestamps();
         });
     }

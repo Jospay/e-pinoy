@@ -75,23 +75,37 @@ class TaxiReservationController extends Controller
             ]);
 
             if ($validated['payment_options'] === 'Wallet') {
-                $wallet = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
+                $walletCheck = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
+                $wallet = EWallet::where('id', $walletCheck->id)->lockForUpdate()->first();
 
-                if ($wallet->amount < $validated['amount']) {
-                    return back()->withErrors(['amount' => 'Insufficient wallet balance.']);
+                // 1. Initial Security Check
+                if (!$wallet->isVerified()) {
+                    Log::emergency("SECURITY ALERT: Tampered wallet detected for User ID: " . $user->id);
+                    throw new \Exception("Wallet integrity check failed. For your security, this transaction has been blocked. Please contact support.");
                 }
 
-                $wallet = EWallet::where('id', $wallet->id)->lockForUpdate()->first();
-                $wallet->decrement('amount', $validated['amount']);
+                // 2. Balance Check
+                if ($wallet->amount < $validated['amount']) {
+                    throw new \Exception('Insufficient wallet balance.');
+                }
 
+                $oldAmount = $wallet->amount;
+                $newAmount = $oldAmount - $validated['amount'];
+
+                // 3. Update Amount and Seal (Unified Method)
+                $wallet->updateAmountAndSeal($newAmount);
+
+                // 4. Create the Taxi Reservation
                 $taxi = TaxiReservation::create(array_merge($taxiData, [
                     'status_id' => $paidStatusId,
                 ]));
 
+                // 5. Log Transaction History
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
-                    'old_amount'  => $wallet->amount + $validated['amount'],
-                    'new_amount'  => $wallet->amount,
+                    'old_amount'  => $oldAmount,
+                    'new_amount'  => $newAmount,
+                    'type'        => 'debit',
                     'description' => 'Taxi Booking Payment: ' . $taxi->qrcode_name,
                 ]);
 
@@ -99,7 +113,7 @@ class TaxiReservationController extends Controller
                 return redirect()->route('passenger.reservationtaxi.success', $taxi->id);
             }
 
-            // Online Payment
+            // Online Payment Flow
             $taxi = TaxiReservation::create(array_merge($taxiData, [
                 'status_id' => $pendingStatusId,
                 'paymongo_checkout_session_id' => 'INITIALIZING',
@@ -114,7 +128,8 @@ class TaxiReservationController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Taxi Store Error: " . $e->getMessage());
-            return back()->withErrors(['amount' => 'An unexpected error occurred.']);
+            // Returning the specific error message so the user knows if it's a balance or security issue
+            return back()->withErrors(['amount' => $e->getMessage()]);
         }
     }
 
