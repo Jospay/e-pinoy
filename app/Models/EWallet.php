@@ -11,7 +11,8 @@ class EWallet extends Model
     protected $fillable = [
         'user_id',
         'amount',
-        'hash_seal'
+        'hash_seal',
+        'last_otp_verified_at'
     ];
 
     protected $casts = [

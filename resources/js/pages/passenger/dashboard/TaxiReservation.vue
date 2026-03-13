@@ -199,7 +199,7 @@ const submit = () => {
 
         <div class="overflow-hidden rounded-2xl border bg-white shadow-xl">
           <div class="grid grid-cols-1 lg:grid-cols-12">
-            <div class="relative h-[400px] lg:col-span-7 lg:h-auto">
+            <div class="relative h-[400px] lg:col-span-6 lg:h-auto">
               <LocationMap
                 v-if="isMapReady"
                 :center="stationCoords"
@@ -216,7 +216,7 @@ const submit = () => {
               </div>
             </div>
 
-            <div class="flex flex-col justify-between p-6 lg:col-span-5">
+            <div class="flex flex-col justify-between p-6 lg:col-span-6">
               <div>
                 <h2
                   class="mb-1 text-2xl font-black tracking-tighter uppercase italic"

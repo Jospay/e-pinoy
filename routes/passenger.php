@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Passenger\OTPController;
 use App\Http\Controllers\Passenger\ReservationController;
 use App\Http\Controllers\Passenger\TaxiReservationController;
 use App\Http\Controllers\Passenger\TransactionHistoryController;
@@ -24,4 +25,9 @@ Route::middleware(['auth', 'verified', 'user_type:passenger'])->prefix('passenge
 
         Route::get('/my-wallet', [WalletController::class, 'index'])->name('mywallet');
         Route::get('/my-wallet/infinite', [WalletController::class, 'infiniteTransactions']);
+
+        // OTP Routes - Ensure index is named correctly for the redirect
+        Route::get('/verify-phone', [OTPController::class, 'index'])->name('otp.index');
+        Route::post('/send-otp', [OTPController::class, 'sendOtp'])->name('otp.send');
+        Route::post('/verify-otp', [OTPController::class, 'verifyOtp'])->name('otp.verify');
 });

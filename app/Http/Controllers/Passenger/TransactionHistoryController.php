@@ -11,7 +11,6 @@ use App\Models\Status;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
 
@@ -39,7 +38,6 @@ class TransactionHistoryController extends Controller
         $allTransactions = collect();
 
         foreach ($reservations as $item) {
-            // --- 1. BUS TRANSACTION ---
             $statusName = $item->status->name ?? 'Pending';
             $lowerStatus = strtolower($statusName);
             $isCompleted = str_contains($lowerStatus, 'completed');
@@ -47,14 +45,10 @@ class TransactionHistoryController extends Controller
             $isRefunded = str_contains($lowerStatus, 'refund');
             $isPending = !$isPaid && !$isCompleted && !$isRefunded;
 
-            // Departure and Expiry (End of the reservation day)
             $departureDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_from_time, 'Asia/Manila');
             $endOfDayExpiry = Carbon::parse($item->reserve_date, 'Asia/Manila')->endOfDay();
-
             $tenMinsPastDept = $departureDateTime->copy()->addMinutes(10);
 
-            // BUS REFUND LOGIC:
-            // Can refund starting 10 mins after departure UNTIL the clock hits 11:59:59 PM of that day.
             $canRefundBus = $isPaid && $now->greaterThanOrEqualTo($tenMinsPastDept) && $now->lessThanOrEqualTo($endOfDayExpiry);
             $isBusExpired = $now->greaterThan($endOfDayExpiry) && ($isPaid || $isPending);
 
@@ -81,7 +75,6 @@ class TransactionHistoryController extends Controller
                 'from_bus_station_id' => $item->from_bus_station_id,
             ]);
 
-            // --- 2. TAXI TRANSACTIONS ---
             if ($item->taxiReservations && $item->taxiReservations->count() > 0) {
                 foreach ($item->taxiReservations as $taxi) {
                     $tStatus = $taxi->status->name ?? 'Pending';
@@ -89,13 +82,11 @@ class TransactionHistoryController extends Controller
                     $isPaidStatus = str_contains($tLower, 'paid');
                     $isTaxiCompleted = str_contains($tLower, 'completed');
                     $isTaxiRefunded = str_contains($tLower, 'refund');
-                    $endOfDayExpiry = Carbon::parse($item->reserve_date, 'Asia/Manila')->endOfDay();
                     $isTaxiExpired = $now->greaterThan($endOfDayExpiry);
                     $canShowTaxiActions = $isPaidStatus && !$isTaxiCompleted && !$isTaxiExpired;
 
                     $formattedPickupTime = 'Pending Payment';
                     if ($isPaidStatus || $isTaxiCompleted) {
-                        // ... (Your existing pickup time logic here) ...
                         if ($taxi->time_pickup) {
                             $formattedPickupTime = Carbon::parse($taxi->time_pickup)->format('h:i A');
                         } else {
@@ -121,7 +112,7 @@ class TransactionHistoryController extends Controller
                         'is_pending' => str_contains($tLower, 'pending'),
                         'is_completed' => $isTaxiCompleted,
                         'is_refunded' => $isTaxiRefunded,
-                        'can_refund' => $canShowTaxiActions, // Used for Refund Button
+                        'can_refund' => $canShowTaxiActions,
                         'can_view_ticket' => $canShowTaxiActions,
                         'is_expired' => $isTaxiExpired,
                         'date_at' => $taxi->created_at->format('M d, Y'),
@@ -145,71 +136,89 @@ class TransactionHistoryController extends Controller
     }
 
     public function refund(Request $request, $id)
-{
-    $user = auth()->user();
-    $type = $request->input('type');
-    $refundStatus = Status::where('name', 'refund')->first();
+    {
+        $user = auth()->user();
+        $type = $request->input('type');
 
-    try {
-        DB::beginTransaction();
+        // Find the 'refunded' status.
+        // TIP: Ensure your 'statuses' table actually has the name 'refunded' or 'refund'
+        $refundStatus = Status::where('name', 'like', '%refund%')->first();
 
-        // 1. Fetch the correct model
-        if ($type === 'taxi') {
-            $model = TaxiReservation::where('id', $id)->firstOrFail();
-        } else {
-            $model = Reservation::where('id', $id)
-                ->where('passenger_id', $user->id)
-                ->firstOrFail();
+        if (!$refundStatus) {
+            return back()->with('error', 'Refund status configuration missing in database.');
         }
 
-        // Check if already refunded
-        if (str_contains(strtolower($model->status->name ?? ''), 'refund')) {
-            throw new \Exception("This transaction has already been refunded.");
+        // 1. Check OTP Verification Status
+        $walletRecord = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
+        $lastVerified = $walletRecord->last_otp_verified_at;
+
+        if (!$lastVerified || Carbon::parse($lastVerified)->addDays(7)->isPast()) {
+            $otpController = new OTPController();
+            $otpController->sendOtp($request);
+            return redirect()->route('passenger.otp.index')->with('requires_otp', true);
         }
 
-        $refundTotal = (float)$model->amount;
+        try {
+            DB::beginTransaction();
 
-        if ($refundTotal > 0) {
-            $walletRecord = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
-
-            // Lock the row for update to prevent race conditions
-            $wallet = EWallet::where('id', $walletRecord->id)->lockForUpdate()->first();
-
-            // SECURITY CHECK: Verify wallet integrity before proceeding
-            if (!$wallet->isVerified()) {
-                Log::emergency("REFUND BLOCKED: Tampered wallet seal for User ID: " . $user->id);
-                throw new \Exception("Wallet integrity check failed. For your security, this transaction has been blocked. Please contact support.");
+            // 2. Fetch the correct model based on type
+            if ($type === 'taxi') {
+                $model = TaxiReservation::where('id', $id)
+                    ->whereHas('reservation', function($q) use ($user) {
+                        $q->where('passenger_id', $user->id);
+                    })->firstOrFail();
+            } else {
+                $model = Reservation::where('id', $id)
+                    ->where('passenger_id', $user->id)
+                    ->firstOrFail();
             }
 
-            // 2. Perform updates ATOMICALLY
+            // 3. Check if already refunded
+            if ($model->status_id == $refundStatus->id) {
+                throw new \Exception("This transaction has already been refunded.");
+            }
 
-            $model->status_id = $refundStatus->id;
-            $model->save();
+            $refundTotal = (float)$model->amount;
 
-            // Update Wallet Balance
-            $oldBalance = (float)$wallet->amount;
-            $newBalance = $oldBalance + $refundTotal;
+            if ($refundTotal > 0) {
+                // 4. Lock Wallet for Update using user_id
+                $wallet = EWallet::where('user_id', $user->id)->lockForUpdate()->first();
 
-            $wallet->amount = $newBalance;
-            $wallet->save();
+                if (!$wallet->isVerified()) {
+                    Log::emergency("REFUND BLOCKED: Tampered wallet seal for User ID: " . $user->id);
+                    throw new \Exception("Wallet integrity check failed. For your security, this transaction has been blocked. Please contact support.");
+                }
 
-            // 3. Create Audit Trail
-            TransactionHistory::create([
-                'e_wallet_id' => $wallet->id,
-                'old_amount'  => $oldBalance,
-                'new_amount'  => $newBalance,
-                'type'        => 'credit',
-                'description' => 'Refund for ' . ucfirst($type) . ' Booking ID: ' . $id
-            ]);
+                // 5. UPDATE THE STATUS ID (The Fix)
+                $model->status_id = $refundStatus->id;
+                $model->save();
+
+                // 6. Update Balance
+                $oldBalance = (float)$wallet->amount;
+                $newBalance = $oldBalance + $refundTotal;
+
+                $wallet->amount = $newBalance;
+                $wallet->save();
+
+                // 7. Log History
+                TransactionHistory::create([
+                    'e_wallet_id' => $wallet->id,
+                    'old_amount'  => $oldBalance,
+                    'new_amount'  => $newBalance,
+                    'type'        => 'credit',
+                    'description' => 'Refund for ' . ucfirst($type) . ' Booking ID: ' . ($type === 'taxi' ? $model->qrcode_name : $model->qrcode_name)
+                ]);
+            }
+
+            DB::commit();
+
+            return redirect()->route('passenger.transactionhisory', ['status' => 'refund'])
+                             ->with('success', 'Refund successful. ₱' . $refundTotal . ' added to wallet.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Refund Error: " . $e->getMessage());
+            return back()->with('error', $e->getMessage());
         }
-
-        DB::commit();
-        return back()->with('success', 'Refund processed successfully.');
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error("Refund Error: " . $e->getMessage());
-        return back()->with('error', '' . $e->getMessage());
-    }
     }
 }

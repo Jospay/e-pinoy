@@ -13,7 +13,7 @@ import {
   CarFront,
   CheckCircle2,
 } from 'lucide-vue-next';
-import { computed, watch, ref } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { toast } from 'vue-sonner';
 
 import {
@@ -38,43 +38,61 @@ const selectedTx = ref<any>(null);
 const currentType = ref(props.initialType || 'all');
 const amountError = ref<string | null>(null);
 
-// Watcher handles transforming the 'loading' toast into 'success' or 'error'
-watch(
-  () => page.props.flash,
-  (flash: any) => {
-    if (flash?.success) {
-      toast.success(flash.success, { id: 'refund-toast' });
-      amountError.value = null; // Hide alert on success
-    }
-    if (flash?.error) {
-      toast.error(flash.error, { id: 'refund-toast' });
+/**
+ * FLASH MESSAGE HANDLER
+ * We use the router 'finish' event to ensure that when your OTP
+ * redirect happens, the toast is triggered immediately.
+ */
+router.on('finish', () => {
+  const flash = page.props.flash as any;
 
-      // BROADEN THE SEARCH: Catch anything security or wallet related
-      const errorMsg = flash.error.toLowerCase();
-      if (
-        errorMsg.includes('security') ||
-        errorMsg.includes('seal') ||
-        errorMsg.includes('tamper') ||
-        errorMsg.includes('mismatch')
-      ) {
-        amountError.value = flash.error;
-      }
-    }
-  },
-  { deep: true },
-);
+  if (flash?.success) {
+    toast.success(flash.success, {
+      id: 'transaction-toast',
+      duration: 5000,
+    });
+    // Clear amount error if verification was successful
+    amountError.value = null;
+  }
 
+  if (flash?.error) {
+    toast.error(flash.error, { id: 'transaction-toast' });
+    const errorMsg = String(flash.error).toLowerCase();
+    if (
+      errorMsg.includes('security') ||
+      errorMsg.includes('seal') ||
+      errorMsg.includes('tamper')
+    ) {
+      amountError.value = flash.error;
+    }
+  }
+});
+
+/**
+ * Also check on initial mount in case the page is
+ * loaded directly with a flash message.
+ */
+onMounted(() => {
+  const flash = page.props.flash as any;
+  if (flash?.success) {
+    toast.success(flash.success, { id: 'transaction-toast' });
+  }
+});
+
+// Filter logic
 const filteredTransactions = computed(() => {
   return props.transactions.filter((t) => {
     const matchesStatus =
       (props.initialFilter === 'completed' && t.is_completed) ||
-      (props.initialFilter === 'paid' && t.is_paid) ||
+      (props.initialFilter === 'paid' &&
+        t.is_paid &&
+        !t.is_completed &&
+        !t.is_refunded) ||
       (props.initialFilter === 'refund' && t.is_refunded) ||
       (props.initialFilter === 'pending' && t.is_pending);
 
     const matchesType =
       currentType.value === 'all' || t.type === currentType.value;
-
     return matchesStatus && matchesType;
   });
 });
@@ -96,19 +114,11 @@ const updateType = (type: string) => {
   );
 };
 
-const goToTicket = (qrName: string) =>
-  router.get(`/passenger/reservation/success/${qrName}`);
-
-const goToTaxiTicket = (id: number) => {
-  router.get(`/passenger/reservation/taxi/success/${id}`);
-};
-
-const bookAgain = (tx: any) => {
-  router.get(`/passenger/dashboard/Reserve`, {
-    station_reservation_id: tx.id,
-    from_id: tx.from_bus_station_id,
-  });
-};
+// Navigations
+const goToTicket = (qrcode: string) =>
+  router.get(`/passenger/bus/ticket/${qrcode}`);
+const goToTaxiTicket = (id: number) =>
+  router.get(`/passenger/taxi/ticket/${id}`);
 
 const openRefundModal = (tx: any) => {
   selectedTx.value = tx;
@@ -117,29 +127,19 @@ const openRefundModal = (tx: any) => {
 
 const confirmRefund = () => {
   if (!selectedTx.value) return;
-  const id = selectedTx.value.id;
 
   router.post(
-    `/passenger/transaction-history/refund/${id}`,
+    `/passenger/transaction-history/refund/${selectedTx.value.id}`,
     { type: selectedTx.value.type },
     {
       onBefore: () => {
         isConfirmOpen.value = false;
-        toast.loading('Processing your refund...', { id: 'refund-toast' });
+        toast.loading('Processing refund...', { id: 'transaction-toast' });
       },
       onSuccess: () => {
-        if (!page.props.flash.error) {
-          router.get(
-            '/passenger/transaction-history',
-            { status: 'refund', type: currentType.value },
-            { preserveState: true },
-          );
-        }
+        selectedTx.value = null;
       },
-      onError: (errors) => {
-        const message = errors.refund || 'Refund failed. Please try again.';
-        toast.error(message, { id: 'refund-toast' });
-      },
+      preserveScroll: true,
     },
   );
 };
@@ -241,7 +241,7 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                   :class="[
                     'rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase',
                     tx.is_expired
-                      ? 'bg-slate-200 text-slate-500' // Visual for Expired
+                      ? 'bg-slate-200 text-slate-500'
                       : tx.is_completed
                         ? 'bg-blue-100 text-brand-blue'
                         : tx.is_paid
@@ -313,7 +313,6 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                     >
                       Vehicle
                     </p>
-
                     <p
                       class="max-w-[150px] text-xs leading-tight font-bold"
                       :class="{
@@ -429,7 +428,6 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                   <div class="flex gap-3">
                     <button
                       v-if="tx.type === 'bus' && tx.is_completed"
-                      @click="bookAgain(tx)"
                       class="flex-1 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white hover:bg-slate-800"
                     >
                       <RotateCcw class="mr-1 inline h-4 w-4" /> Book Again
