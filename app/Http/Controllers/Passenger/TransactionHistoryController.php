@@ -121,6 +121,7 @@ class TransactionHistoryController extends Controller
                             ? ($taxi->vehicle->model . ' (' . $taxi->vehicle->plate_number . ')')
                             : 'Searching for driver...',
                         'passenger_count' => $taxi->passenger_count,
+                        'from_bus_station_id' => $item->from_bus_station_id,
                     ]);
                 }
             }

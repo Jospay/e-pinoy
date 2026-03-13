@@ -119,10 +119,19 @@ const updateType = (type: string) => {
 };
 
 // Navigations
-const goToTicket = (qrcode: string) =>
-  router.get(`/passenger/bus/ticket/${qrcode}`);
-const goToTaxiTicket = (id: number) =>
-  router.get(`/passenger/taxi/ticket/${id}`);
+const goToTicket = (qrName: string) =>
+  router.get(`/passenger/reservation/success/${qrName}`);
+
+const goToTaxiTicket = (id: number) => {
+  router.get(`/passenger/reservation/taxi/success/${id}`);
+};
+
+const bookAgain = (tx: any) => {
+  router.get(`/passenger/dashboard/Reserve`, {
+    station_reservation_id: tx.id,
+    from_id: tx.from_bus_station_id,
+  });
+};
 
 const openRefundModal = (tx: any) => {
   selectedTx.value = tx;
@@ -461,6 +470,7 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                   <div class="flex gap-3">
                     <button
                       v-if="tx.type === 'bus' && tx.is_completed"
+                      @click="bookAgain(tx)"
                       class="flex-1 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white hover:bg-slate-800"
                     >
                       <RotateCcw class="mr-1 inline h-4 w-4" /> Book Again
