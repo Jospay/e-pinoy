@@ -121,6 +121,7 @@ class TransactionHistoryController extends Controller
                             ? ($taxi->vehicle->model . ' (' . $taxi->vehicle->plate_number . ')')
                             : 'Searching for driver...',
                         'passenger_count' => $taxi->passenger_count,
+                        'from_bus_station_id' => $item->from_bus_station_id,
                     ]);
                 }
             }
@@ -137,23 +138,29 @@ class TransactionHistoryController extends Controller
 
     public function refund(Request $request, $id)
     {
+        // Validate that GPS data is present
+        $request->validate([
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
+            'type' => 'required|string'
+        ]);
+
         $user = auth()->user();
         $type = $request->input('type');
+        $latitude = $request->input('latitude');
+        $longitude = $request->input('longitude');
 
-        // Find the 'refunded' status.
-        // TIP: Ensure your 'statuses' table actually has the name 'refunded' or 'refund'
         $refundStatus = Status::where('name', 'like', '%refund%')->first();
 
         if (!$refundStatus) {
-            return back()->with('error', 'Refund status configuration missing in database.');
+            return back()->with('error', 'Refund status configuration missing.');
         }
 
-        // 1. Check OTP Verification Status
         $walletRecord = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
         $lastVerified = $walletRecord->last_otp_verified_at;
 
         if (!$lastVerified || Carbon::parse($lastVerified)->addDays(7)->isPast()) {
-            $otpController = new OTPController();
+            $otpController = new OTPController(); // Ensure correct path
             $otpController->sendOtp($request);
             return redirect()->route('passenger.otp.index')->with('requires_otp', true);
         }
@@ -161,7 +168,6 @@ class TransactionHistoryController extends Controller
         try {
             DB::beginTransaction();
 
-            // 2. Fetch the correct model based on type
             if ($type === 'taxi') {
                 $model = TaxiReservation::where('id', $id)
                     ->whereHas('reservation', function($q) use ($user) {
@@ -173,7 +179,6 @@ class TransactionHistoryController extends Controller
                     ->firstOrFail();
             }
 
-            // 3. Check if already refunded
             if ($model->status_id == $refundStatus->id) {
                 throw new \Exception("This transaction has already been refunded.");
             }
@@ -181,7 +186,6 @@ class TransactionHistoryController extends Controller
             $refundTotal = (float)$model->amount;
 
             if ($refundTotal > 0) {
-                // 4. Lock Wallet for Update using user_id
                 $wallet = EWallet::where('user_id', $user->id)->lockForUpdate()->first();
 
                 if (!$wallet->isVerified()) {
@@ -189,31 +193,31 @@ class TransactionHistoryController extends Controller
                     throw new \Exception("Wallet integrity check failed. For your security, this transaction has been blocked. Please contact support.");
                 }
 
-                // 5. UPDATE THE STATUS ID (The Fix)
+                // Update status
                 $model->status_id = $refundStatus->id;
                 $model->save();
 
-                // 6. Update Balance
+                // Update Balance
                 $oldBalance = (float)$wallet->amount;
                 $newBalance = $oldBalance + $refundTotal;
-
                 $wallet->amount = $newBalance;
                 $wallet->save();
 
-                // 7. Log History
+                // Log History with GPS
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
                     'old_amount'  => $oldBalance,
                     'new_amount'  => $newBalance,
                     'type'        => 'credit',
-                    'description' => 'Refund for ' . ucfirst($type) . ' Booking ID: ' . ($type === 'taxi' ? $model->qrcode_name : $model->qrcode_name)
+                    'description' => 'Refund for ' . ucfirst($type) . ' Booking ID: ' . $model->qrcode_name,
+                    'latitude'    => $latitude,
+                    'longitude'   => $longitude
                 ]);
             }
 
             DB::commit();
-
             return redirect()->route('passenger.transactionhisory', ['status' => 'refund'])
-                             ->with('success', 'Refund successful. ₱' . $refundTotal . ' added to wallet.');
+                            ->with('success', 'Refund successful! GPS location logged.');
 
         } catch (\Exception $e) {
             DB::rollBack();

@@ -72,6 +72,8 @@ const form = useForm({
   passenger_count: 1,
   reserve_date: '',
   payment_method: 'Wallet',
+  latitude: null as number | null,
+  longitude: null as number | null,
 });
 
 // --- Destination & Operational Logic ---
@@ -161,10 +163,9 @@ const canSubmit = computed(() => {
 });
 
 // --- Submit ---
+// --- Submit Logic (Updated for Location) ---
 const submit = () => {
   if (isSubmitting.value || form.processing) return;
-
-  isSubmitting.value = true;
 
   if (!isOperationalDay.value) {
     alert(`This trip is unavailable for the selected time/date.`);
@@ -181,6 +182,27 @@ const submit = () => {
     return;
   }
 
+  isSubmitting.value = true;
+
+  // Capture location before sending
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        form.latitude = position.coords.latitude;
+        form.longitude = position.coords.longitude;
+        processPost();
+      },
+      (error) => {
+        console.warn('Location blocked or unavailable', error);
+        processPost(); // Still proceed even if location fails
+      },
+    );
+  } else {
+    processPost();
+  }
+};
+
+const processPost = () => {
   form.post('/passenger/reservation', {
     onSuccess: () => {
       console.log('Success! Staying locked for redirect...');

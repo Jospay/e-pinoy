@@ -18,6 +18,8 @@ return new class extends Migration
             $table->decimal('new_amount', 10, 2);
             $table->enum('type', ['debit', 'credit']);
             $table->string('description');
+            $table->decimal('latitude', 10, 8)->nullable();
+            $table->decimal('longitude', 11, 8)->nullable();
             $table->timestamps();
         });
     }

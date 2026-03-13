@@ -15,6 +15,8 @@ class TransactionHistory extends Model
         'new_amount',
         'type',
         'description',
+        'latitude',
+        'longitude',
     ];
 
     protected $casts = [

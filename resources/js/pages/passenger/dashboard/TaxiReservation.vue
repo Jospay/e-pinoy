@@ -69,6 +69,8 @@ const form = useForm({
       : (null as number | null),
   distance_km: 0,
   payment_options: 'Wallet',
+  latitude: null as number | null,
+  longitude: null as number | null,
 });
 
 const formatDate = (dateString: string) => {
@@ -145,6 +147,22 @@ const submit = () => {
 
   isSubmitting.value = true;
 
+  // Capture location before posting for Transaction History
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        form.latitude = position.coords.latitude;
+        form.longitude = position.coords.longitude;
+        processSubmit();
+      },
+      () => processSubmit(),
+    );
+  } else {
+    processSubmit();
+  }
+};
+
+const processSubmit = () => {
   form.post('/passenger/reservation/taxi/reservation', {
     onSuccess: () => {
       console.log('Success! Staying locked for redirect...');

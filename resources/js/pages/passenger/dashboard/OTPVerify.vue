@@ -7,7 +7,11 @@ import { toast } from 'vue-sonner';
 import { ref, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps({ errors: Object });
-const formVerify = useForm({ code: '' });
+const formVerify = useForm({
+  code: '',
+  latitude: null as number | null,
+  longitude: null as number | null,
+});
 
 // Cooldown Logic (120 seconds = 2 minutes)
 const cooldown = ref(0);
@@ -50,7 +54,7 @@ const resendOtp = () => {
       onBefore: () => toast.loading('Sending code...', { id: 'otp-send' }),
       onSuccess: () => {
         toast.success('A new OTP has been sent!', { id: 'otp-send' });
-        startTimer(120); // Start 2 minute cooldown
+        startTimer(120);
       },
       onError: () => toast.error('Failed to send OTP.', { id: 'otp-send' }),
     },
@@ -58,12 +62,27 @@ const resendOtp = () => {
 };
 
 const verifyOtp = () => {
+  // Capture location during verification for security logs
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        formVerify.latitude = position.coords.latitude;
+        formVerify.longitude = position.coords.longitude;
+        processVerification();
+      },
+      () => processVerification(), // Proceed even if location is denied
+    );
+  } else {
+    processVerification();
+  }
+};
+
+const processVerification = () => {
   formVerify.post('/passenger/verify-otp', {
     onBefore: () =>
       toast.loading('Verifying security code...', { id: 'verify-toast' }),
     onSuccess: () => {
-      // The redirect to TransactionHistory will happen automatically.
-      // We don't call toast here because the next page's watcher will handle the flash message.
+      // Success redirect handled by Controller
     },
     onError: () => {
       toast.error('Verification failed. Check your code.', {

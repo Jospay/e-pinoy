@@ -55,6 +55,8 @@ class TaxiReservationController extends Controller
             'end_lng'              => 'required|numeric',
             'distance_km'          => 'required|numeric',
             'payment_options'      => 'required|string|in:Wallet,Online Payment',
+            'latitude'             => 'nullable|numeric',
+            'longitude'            => 'nullable|numeric',
         ]);
 
         $user = auth()->user();
@@ -76,6 +78,20 @@ class TaxiReservationController extends Controller
 
             if ($validated['payment_options'] === 'Wallet') {
                 $walletCheck = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
+
+                // OTP Security Check (7-day window)
+                $lastVerified = $walletCheck->last_otp_verified_at;
+                if (!$lastVerified || Carbon::parse($lastVerified)->addDays(7)->isPast()) {
+                    // We add 'reservation_type' => 'taxi' so the OTP controller knows which flow to use
+                    session(['pending_reservation' => array_merge($validated, ['reservation_type' => 'taxi'])]);
+
+                    $otpController = new OTPController();
+                    $otpController->sendOtp($request);
+
+                    DB::rollBack();
+                    return redirect()->route('passenger.otp.index')->with('requires_otp', true);
+                }
+
                 $wallet = EWallet::where('id', $walletCheck->id)->lockForUpdate()->first();
 
                 // 1. Initial Security Check
@@ -107,6 +123,8 @@ class TaxiReservationController extends Controller
                     'new_amount'  => $newAmount,
                     'type'        => 'debit',
                     'description' => 'Taxi Booking Payment: ' . $taxi->qrcode_name,
+                    'latitude'    => $validated['latitude'],
+                    'longitude'   => $validated['longitude']
                 ]);
 
                 DB::commit();

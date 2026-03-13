@@ -32,6 +32,9 @@ class WalletController extends Controller
                     'balance' => number_format($item->new_amount, 2),
                     'date' => $item->created_at->format('M d, Y'),
                     'time' => $item->created_at->format('h:i A'),
+                    'description' => $item->description,
+                    'latitude' => $item->latitude,
+                    'longitude' => $item->longitude,
                 ];
             });
 
