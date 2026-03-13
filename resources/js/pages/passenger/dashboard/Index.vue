@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import LocationMap from '@/components/ReservedMap.vue'; // Using your existing map component
+import LocationMap from '@/components/ReservedMap.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';

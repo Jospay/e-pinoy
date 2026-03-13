@@ -39,44 +39,48 @@ const currentType = ref(props.initialType || 'all');
 const amountError = ref<string | null>(null);
 
 /**
- * FLASH MESSAGE HANDLER
- * We use the router 'finish' event to ensure that when your OTP
- * redirect happens, the toast is triggered immediately.
+ * HELPER: PROCESS FLASH MESSAGES
+ * This centralizes the logic so both onMounted and router.on use the same rules.
  */
-router.on('finish', () => {
+const handleFlashMessages = () => {
   const flash = page.props.flash as any;
+  if (!flash) return;
 
-  if (flash?.success) {
-    toast.success(flash.success, {
-      id: 'transaction-toast',
-      duration: 5000,
-    });
-    // Clear amount error if verification was successful
-    amountError.value = null;
+  // Handle Success
+  if (flash.success) {
+    toast.success(flash.success, { id: 'transaction-toast', duration: 5000 });
+    amountError.value = null; // Clear error on success
   }
 
-  if (flash?.error) {
+  // Handle Error
+  if (flash.error) {
     toast.error(flash.error, { id: 'transaction-toast' });
+
     const errorMsg = String(flash.error).toLowerCase();
+    // Check if the error belongs in the "Security Alert" box
     if (
       errorMsg.includes('security') ||
       errorMsg.includes('seal') ||
-      errorMsg.includes('tamper')
+      errorMsg.includes('tamper') ||
+      errorMsg.includes('integrity')
     ) {
       amountError.value = flash.error;
     }
   }
+};
+
+/**
+ * Listen for Inertia visits finishing (like redirects from OTP)
+ */
+router.on('finish', () => {
+  handleFlashMessages();
 });
 
 /**
- * Also check on initial mount in case the page is
- * loaded directly with a flash message.
+ * Check on initial load (in case of a direct redirect/refresh)
  */
 onMounted(() => {
-  const flash = page.props.flash as any;
-  if (flash?.success) {
-    toast.success(flash.success, { id: 'transaction-toast' });
-  }
+  handleFlashMessages();
 });
 
 // Filter logic
@@ -128,19 +132,48 @@ const openRefundModal = (tx: any) => {
 const confirmRefund = () => {
   if (!selectedTx.value) return;
 
-  router.post(
-    `/passenger/transaction-history/refund/${selectedTx.value.id}`,
-    { type: selectedTx.value.type },
-    {
-      onBefore: () => {
-        isConfirmOpen.value = false;
-        toast.loading('Processing refund...', { id: 'transaction-toast' });
-      },
-      onSuccess: () => {
-        selectedTx.value = null;
-      },
-      preserveScroll: true,
+  if (!navigator.geolocation) {
+    toast.error('Geolocation is not supported by your browser.');
+    return;
+  }
+
+  toast.loading('Accessing GPS location...', { id: 'transaction-toast' });
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords;
+
+      router.post(
+        `/passenger/transaction-history/refund/${selectedTx.value.id}`,
+        {
+          type: selectedTx.value.type,
+          latitude: latitude,
+          longitude: longitude,
+        },
+        {
+          onBefore: () => {
+            isConfirmOpen.value = false;
+            toast.loading('Processing refund...', { id: 'transaction-toast' });
+          },
+          onSuccess: () => {
+            selectedTx.value = null;
+          },
+          onError: () => {
+            // This catches validation errors or 500s
+            handleFlashMessages();
+          },
+          preserveScroll: true,
+        },
+      );
     },
+    (error) => {
+      let msg = 'Please enable location services to process a refund.';
+      if (error.code === 1)
+        msg = 'Location access denied. We need your GPS to verify the refund.';
+
+      toast.error(msg, { id: 'transaction-toast' });
+    },
+    { enableHighAccuracy: true, timeout: 5000 },
   );
 };
 
