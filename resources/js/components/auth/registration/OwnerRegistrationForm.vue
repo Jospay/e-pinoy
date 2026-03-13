@@ -102,6 +102,7 @@ const identityStep4Show = {
   licenseExpiry: false,
   expertise: false,
   yearExperience: false,
+  vehicleType: false,
 };
 
 // --- Step 5 (Documents to Upload) State & Config ---

@@ -16,6 +16,7 @@ interface FieldNames {
   validIdNumber: string;
   expertise: string;
   yearExperience: string;
+  vehicleType: string;
 }
 interface Labels {
   licenseNumber: string;
@@ -27,6 +28,7 @@ interface Labels {
   validIdNumber: string;
   expertise: string;
   yearExperience: string;
+  vehicleType: string;
 }
 interface ShowFields {
   licenseNumber: boolean;
@@ -36,6 +38,7 @@ interface ShowFields {
   validIdNumber: boolean;
   expertise: boolean;
   yearExperience: boolean;
+  vehicleType: boolean;
 }
 
 // --- PROPS ---
@@ -43,10 +46,12 @@ const props = defineProps<{
   errors?: Record<string, string>;
   // Data props
   idTypes?: { value: string; label: string }[];
+  vehicleTypes?: { value: string; label: string }[];
   expertise?: { value: string; label: string }[];
   // v-model props
   licenseExpiry?: string;
   selectedIdType?: string;
+  selectedVehicleType?: string;
   selectedExpertise?: string;
   validIdFront?: File | null;
   validIdBack?: File | null;
@@ -64,6 +69,7 @@ const emit = defineEmits([
   'update:validIdFront',
   'update:validIdBack',
   'update:validIdNumber',
+  'update:selectedVehicleType',
 ]);
 
 // --- DEFAULTS ---
@@ -76,6 +82,7 @@ const defaultFieldNames: FieldNames = {
   validIdNumber: 'valid_id_number',
   expertise: 'expertise',
   yearExperience: 'year_experience',
+  vehicleType: 'vehicle_type',
 };
 const defaultLabels: Labels = {
   licenseNumber: "Driver's License Number",
@@ -87,6 +94,7 @@ const defaultLabels: Labels = {
   validIdNumber: 'Valid ID Number',
   expertise: 'Area of Expertise',
   yearExperience: 'Years of Experience',
+  vehicleType: 'Vehicle Type',
 };
 const defaultShowFields: ShowFields = {
   licenseNumber: true,
@@ -96,6 +104,7 @@ const defaultShowFields: ShowFields = {
   validIdNumber: true,
   expertise: true,
   yearExperience: true,
+  vehicleType: true,
 };
 
 // --- MERGED COMPUTEDS ---
@@ -127,6 +136,10 @@ const computedValidIdBack = computed({
 const computedValidIdNumber = computed<string | undefined>({
   get: () => props.validIdNumber,
   set: (value) => emit('update:validIdNumber', value),
+});
+const computedVehicleType = computed<string | undefined>({
+  get: () => props.selectedVehicleType,
+  set: (value) => emit('update:selectedVehicleType', value),
 });
 
 // --- REFS FOR FILE INPUTS ---
@@ -314,6 +327,29 @@ function removeFile(side: 'front' | 'back') {
     </div>
     <InputError :message="errors?.[fields.frontValidIdPicture]" />
     <InputError :message="errors?.[fields.backValidIdPicture]" />
+  </div>
+
+  <div v-if="show.vehicleType" class="grid gap-2">
+    <Label :for="fields.vehicleType" class="font-semibold text-auth-blue">{{
+      labels.vehicleType
+    }}</Label>
+    <select
+      :id="fields.vehicleType"
+      :name="fields.vehicleType"
+      required
+      v-model="computedVehicleType"
+      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-sm font-semibold capitalize focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
+    >
+      <option value="" disabled>Select Vehicle Type</option>
+      <option
+        v-for="vehicleType in vehicleTypes"
+        :key="vehicleType.value"
+        :value="vehicleType.value"
+      >
+        {{ vehicleType.label }}
+      </option>
+    </select>
+    <InputError :message="errors?.[fields.vehicleType]" />
   </div>
 
   <!-- VALID ID NUMBER -->

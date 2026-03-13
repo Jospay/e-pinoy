@@ -12,6 +12,7 @@ use App\Models\Franchise;
 use App\Models\UserOwner;
 use App\Models\UserType;
 use App\Models\Status;
+use App\Models\VehicleType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
@@ -74,6 +75,7 @@ class CreateNewUser implements CreatesNewUsers
                 Rule::unique(User::class),
                 Rule::unique('franchises', 'phone')
             ],
+            'vehicle_type' => ['required', 'string', 'max:255', Rule::exists('vehicle_types', 'name')],
             'password' => $this->passwordRules(),
             'gender' => ['required', new Enum(Gender::class)],
             'birth_date' => ['required','date','before_or_equal:' . now()->subYears(10)->toDateString(),'after_or_equal:' . now()->subYears(100)->toDateString(),],         
@@ -103,6 +105,7 @@ class CreateNewUser implements CreatesNewUsers
 
             // inactive status
             $inActiveStatus = Status::where('name', 'inactive')->firstOrFail()->id;
+            $vehicleTypeId = VehicleType::where('name', $input['vehicle_type'])->firstOrFail()->id;
 
             // 2a. Store all files
             $frontIdPath = $input['front_license_picture']->store('driver_ids', 'public');
@@ -127,7 +130,7 @@ class CreateNewUser implements CreatesNewUsers
                 'postal_code' => $input['postal_code'],
             ]);
 
-            UserDriver::create([
+            $driver = UserDriver::create([
                 'id' => $newUser->id,
                 'status_id' => $inActiveStatus,
                 'license_number' => $input['license_number'],
@@ -137,6 +140,9 @@ class CreateNewUser implements CreatesNewUsers
                 'nbi_clearance' => $nbiClearancePath,
                 'selfie_picture' => $selfiePicturePath,
             ]);
+
+            $driver->vehicleTypes()->syncWithoutDetaching($vehicleTypeId);
+
             // Return the new user from the closure
             return $newUser;
         });

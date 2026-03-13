@@ -1,10 +1,9 @@
 <script setup lang="ts">
+import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-vue-next';
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Link } from '@inertiajs/vue3';
-import TextLink from '@/components/TextLink.vue';
 
 const props = defineProps<{
   currentStep: number;
@@ -182,15 +181,6 @@ onBeforeUnmount(() => {
         <span v-else>Create account</span>
       </Button>
     </div>
-
-    <Button
-      asChild
-      class="text-md w-full cursor-pointer bg-brand-red font-bold text-white hover:bg-brand-red hover:opacity-80"
-      :tabindex="5"
-      :disabled="processing"
-    >
-      <Link href="/"> RETURN HOME </Link>
-    </Button>
 
     <!-- Progress Bar -->
     <div class="mt-2 h-2 w-full rounded-full bg-gray-200">

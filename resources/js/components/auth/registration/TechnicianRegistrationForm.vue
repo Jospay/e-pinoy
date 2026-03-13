@@ -96,6 +96,7 @@ const identityStep4Show = {
   licenseExpiry: false,
   expertise: false,
   yearExperience: false,
+  vehicleType: false,
 };
 const uploadStep4Show = {
   prcCertificate: false,

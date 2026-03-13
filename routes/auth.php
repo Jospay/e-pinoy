@@ -8,6 +8,7 @@ use App\Enums\Language;
 use App\Enums\Shifts;
 use App\Models\PaymentOption;
 use App\Models\UserType;
+use App\Models\VehicleType;
 use Illuminate\Support\Facades\Crypt;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,13 @@ Route::get('/register/{user_type}', function ($user_type) {
         ];
     });
 
+    $vehicleTypes = VehicleType::all()->map(function ($type) {
+        return [
+            'id' => (string) $type->id,
+            'label' => $type->name,
+        ];
+    });
+
     return Inertia::render('auth/Register', [
         'userType' => [
             'name' => $userType->name,
@@ -60,6 +68,7 @@ Route::get('/register/{user_type}', function ($user_type) {
         'accessibilityOptions' => AccesibilityOption::options(),
         'paymentOptions' => $paymentOptions,
         'shifts' => Shifts::options(),
+        'vehicleTypes' => $vehicleTypes
     ]);
 })->name('register.dynamic');
 

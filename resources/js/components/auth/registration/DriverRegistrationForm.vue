@@ -18,6 +18,7 @@ defineProps<{
     encrypted_id: string;
     name: string;
   };
+  vehicleTypes: { value: string; label: string }[];
 }>();
 
 const stepTitles: Record<number, string> = {
@@ -67,6 +68,7 @@ const addressLabels = {
 };
 
 // Step 3 Identity State & Config ---
+const selectedVehicleType = ref('');
 const driverIdFront = ref<File | null>(null);
 const driverIdBack = ref<File | null>(null);
 const identityStep3Show = {
@@ -140,6 +142,7 @@ const fieldStepMap: Record<string, number> = {
   license_expiry: 3,
   front_license_picture: 3,
   back_license_picture: 3,
+  vehicle_type: 3,
   nbi_clearance: 4,
   selfie_picture: 4,
 };
@@ -215,6 +218,8 @@ watch(
         <Step4Account
           :errors="errors"
           :show-fields="identityStep3Show"
+          :vehicle-types="vehicleTypes"
+          v-model:selected-vehicle-type="selectedVehicleType"
           v-model:validIdFront="driverIdFront"
           v-model:validIdBack="driverIdBack"
           :field-names="identityfields"

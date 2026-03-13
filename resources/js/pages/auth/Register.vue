@@ -24,6 +24,7 @@ defineProps<{
     encrypted_id: string;
     name: string;
   };
+  vehicleTypes: { value: string; label: string }[];
 }>();
 
 // Force light mode on this page only
@@ -37,6 +38,7 @@ usePageTheme('light');
     :payment-options="paymentOptions"
     :user-type="userType"
     :shifts="shifts"
+    :vehicle-types="vehicleTypes"
   />
 
   <PassengerRegisrationForm
