@@ -25,6 +25,8 @@ Route::middleware(['auth', 'verified', 'user_type:passenger'])->prefix('passenge
 
         Route::get('/my-wallet', [WalletController::class, 'index'])->name('mywallet');
         Route::get('/my-wallet/infinite', [WalletController::class, 'infiniteTransactions']);
+        Route::post('/my-wallet/load', [WalletController::class, 'createLoadSession'])->name('wallet.load');
+        Route::get('/my-wallet/success', [WalletController::class, 'loadSuccess'])->name('wallet.success');
 
         // OTP Routes - Ensure index is named correctly for the redirect
         Route::get('/verify-phone', [OTPController::class, 'index'])->name('otp.index');
