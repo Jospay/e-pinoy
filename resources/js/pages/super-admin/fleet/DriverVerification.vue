@@ -44,9 +44,8 @@ const props = defineProps<{
     data: DriverRow[];
   };
   franchises: Array<{ id: number; name: string }>;
-  branches: Array<{ id: number; name: string }>;
   filters: {
-    status: 'inactive' | 'available';
+    status: 'inactive' | 'for approval' | 'available';
   };
 }>();
 
@@ -58,6 +57,8 @@ interface DriverRow {
   phone: string;
   status_name: string;
   license_number: string;
+  franchise_name?: string;
+  branch_name?: string;
 }
 
 // --- 3. Setup Breadcrumbs ---
@@ -78,6 +79,7 @@ interface DriverModal {
   name: string;
   email: string;
   phone: string;
+  vehicle_type: string;
   address: string;
   region: string;
   city: string;
@@ -103,6 +105,7 @@ const driverDetails = computed(() => {
     { label: 'Name', value: data.name, type: 'text' },
     { label: 'Email', value: data.email, type: 'text' },
     { label: 'Phone', value: data.phone, type: 'text' },
+    { label: 'Vehicle Type', value: data.vehicle_type, type: 'text' },
     { label: 'Status', value: data.status, type: 'text' },
     { label: 'Region', value: data.region, type: 'text' },
     { label: 'Province', value: data.province, type: 'text' },
@@ -165,6 +168,34 @@ const handleVerifyDriver = () => {
   );
 };
 
+// --- Approve Modal State ---
+const isApproveModalOpen = ref(false);
+const isApprovingDriver = ref(false);
+
+const openApproveModal = (driver: DriverRow) => {
+  selectedDriver.value = driver;
+  isApproveModalOpen.value = true;
+};
+
+const handleApproveDriver = () => {
+  if (!selectedDriver.value?.id) return;
+  isApprovingDriver.value = true;
+
+  router.patch(
+    superAdmin.driver.approve(selectedDriver.value.id).url,
+    {},
+    {
+      onSuccess: () => {
+        isApproveModalOpen.value = false;
+        toast.success('Driver approved successfully!');
+      },
+      onFinish: () => {
+        isApprovingDriver.value = false;
+      },
+    },
+  );
+};
+
 // Computed columns for the data table
 const driverColumns = computed<ColumnDef<DriverRow>[]>(() => {
   const baseColumns: ColumnDef<DriverRow>[] = [
@@ -191,6 +222,7 @@ const driverColumns = computed<ColumnDef<DriverRow>[]>(() => {
         const status = row.getValue('status_name') as string;
         const badgeClass = {
           'bg-rose-500 hover:bg-rose-600': status === 'inactive',
+          'bg-blue-500 hover:bg-blue-600': status === 'for approval',
           'bg-emerald-500 hover:bg-emerald-600': status === 'available',
         };
         return h('div', { class: 'text-center' }, [
@@ -240,6 +272,21 @@ const driverColumns = computed<ColumnDef<DriverRow>[]>(() => {
                         onClick: () => openVerifyModal(driver),
                       },
                       () => 'Verify Driver',
+                    ),
+                  ]
+                : null,
+
+              driver.status_name === 'for approval'
+                ? [
+                    h(DropdownMenuSeparator),
+                    h(
+                      DropdownMenuItem,
+                      {
+                        class:
+                          'cursor-pointer text-blue-500 focus:text-blue-600',
+                        onClick: () => openApproveModal(driver),
+                      },
+                      () => 'Approve Driver',
                     ),
                   ]
                 : null,
@@ -293,6 +340,7 @@ watch(
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="inactive"> Inactive </SelectItem>
+                <SelectItem value="for approval"> For Approval </SelectItem>
                 <SelectItem value="available"> Available </SelectItem>
               </SelectContent>
             </Select>
@@ -384,6 +432,35 @@ watch(
           :disabled="isVerifyingDriver"
         >
           {{ isVerifyingDriver ? 'Verifying...' : 'Yes, Verify' }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog v-model:open="isApproveModalOpen">
+    <DialogContent class="max-w-md font-mono">
+      <DialogHeader>
+        <DialogTitle class="text-2xl">Approve Driver?</DialogTitle>
+        <DialogDescription class="text-md font-semibold">
+          Are you sure you want to approve
+          <strong class="text-blue-500">{{ selectedDriver.username }}</strong>
+          and
+          <strong class="text-blue-500">{{
+            selectedDriver.franchise_name || selectedDriver.branch_name
+          }}</strong
+          >?
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button variant="outline" @click="isApproveModalOpen = false"
+          >Cancel</Button
+        >
+        <Button
+          variant="default"
+          @click="handleApproveDriver"
+          :disabled="isApprovingDriver"
+        >
+          {{ isApprovingDriver ? 'Approving...' : 'Yes, Approve' }}
         </Button>
       </DialogFooter>
     </DialogContent>

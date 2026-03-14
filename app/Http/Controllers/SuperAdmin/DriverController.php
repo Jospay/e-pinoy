@@ -84,7 +84,7 @@ class DriverController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
-            'status' => ['sometimes', 'string', Rule::in(['inactive', 'available'])],
+            'status' => ['sometimes', 'string', Rule::in(['inactive', 'for approval', 'available'])],
         ]);
 
         // 2. Set defaults
@@ -96,6 +96,7 @@ class DriverController extends Controller
         $query = UserDriver::with([
             'user:id,username,email,phone',
             'status:id,name',
+            'franchises:id,name',
         ])->whereHas('status', fn ($q) => $q->where('name', $filters['status']));
         $drivers = $query->get();
 
@@ -165,10 +166,20 @@ class DriverController extends Controller
         return back();
     }
 
+    public function approve(UserDriver $driver)
+    {
+        $activeStatusId = Status::where('name', 'active')->firstOrFail();
+
+        $driver->status_id = $activeStatusId->id;
+        $driver->save();
+
+        return back();
+    }
+
     public function show(UserDriver $driver)
     {
         // Load relationships and return as JSON
-        $driver->loadMissing(['user:id,username,name,email,phone,gender,address,region,city,barangay,province,postal_code', 'status:id,name']);
+        $driver->loadMissing(['user:id,username,name,email,phone,gender,address,region,city,barangay,province,postal_code', 'status:id,name', 'vehicleTypes']);
 
         return new DriverResource($driver);
     }

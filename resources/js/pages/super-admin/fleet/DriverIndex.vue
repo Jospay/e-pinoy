@@ -92,6 +92,7 @@ interface DriverModal {
   id: number;
   status: string;
   code_number: string;
+  vehicle_type: string;
   username: string;
   name: string;
   email: string;
@@ -122,6 +123,7 @@ const driverDetails = computed(() => {
     { label: 'Name', value: data.name, type: 'text' },
     { label: 'Email', value: data.email, type: 'text' },
     { label: 'Phone', value: data.phone, type: 'text' },
+    { label: 'Vehicle Type', value: data.vehicle_type, type: 'text' },
     { label: 'Status', value: data.status, type: 'text' },
     { label: 'Region', value: data.region, type: 'text' },
     { label: 'Province', value: data.province, type: 'text' },

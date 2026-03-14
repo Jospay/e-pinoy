@@ -45,6 +45,7 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/driver/verification', [DriverController::class, 'verification'])->name('driver.verification');
     Route::get('/driver/{driver}', [DriverController::class, 'show'])->name('driver.show');
     Route::patch('/driver/{driver}/verify', [DriverController::class, 'verify'])->name('driver.verify');
+    Route::patch('/driver/{driver}/approve', [DriverController::class, 'approve'])->name('driver.approve');
 
     Route::get('/vehicle', [VehicleController::class, 'index'])->name('vehicle.index');
     Route::post('/vehicle', [VehicleController::class, 'store'])->name('vehicle.store');

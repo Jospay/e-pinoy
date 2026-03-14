@@ -22,6 +22,8 @@ class DriverVerificationResource extends JsonResource
             'phone' => $this->whenLoaded('user', $this->user->phone),
             'status_name' => $this->whenLoaded('status', $this->status->name),
             'license_number' => $this->license_number,
+            'branch_name' => $this->whenLoaded('branches', fn () => $this->branches->first()->name),
+            'franchise_name' => $this->whenLoaded('franchises', fn () => $this->franchises->first()->name),
         ];
 
         return $data;
