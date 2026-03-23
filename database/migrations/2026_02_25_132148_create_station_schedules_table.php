@@ -18,6 +18,7 @@ return new class extends Migration
             $table->integer('route_step');
             $table->time('from_time')->nullable();
             $table->time('to_time')->nullable();
+            $table->string('unique_name')->nullable()->unique();
             $table->timestamps();
         });
     }
