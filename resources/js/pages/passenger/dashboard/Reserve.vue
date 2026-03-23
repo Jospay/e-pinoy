@@ -669,7 +669,7 @@ const goBack = () => window.history.back();
         <p
           class="mt-8 text-center text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase"
         >
-          Secure Payment via PayMongo • QR Code Ticket Generation
+          Secure Payment via PayMongo or Wallet • QR Code Ticket Generation
         </p>
       </div>
     </div>

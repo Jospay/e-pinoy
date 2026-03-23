@@ -119,6 +119,7 @@ class TaxiReservationController extends Controller
                 // 5. Log Transaction History
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
+                    'status_id' => $paidStatusId,
                     'old_amount'  => $oldAmount,
                     'new_amount'  => $newAmount,
                     'type'        => 'debit',

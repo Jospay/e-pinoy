@@ -206,6 +206,7 @@ class TransactionHistoryController extends Controller
                 // Log History with GPS
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
+                    'status_id'  => $refundStatus->id,
                     'old_amount'  => $oldBalance,
                     'new_amount'  => $newBalance,
                     'type'        => 'credit',

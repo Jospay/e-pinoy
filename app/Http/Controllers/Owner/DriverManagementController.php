@@ -119,10 +119,10 @@ class DriverManagementController extends Controller
                     'is_verified' => $driver->is_verified,
                     'shift' => $driver->shift,
                     'hire_date' => $driver->hire_date,
-                    'front_license_picture' => $driver->front_license_picture ? asset('storage/driver_documents/' . $driver->front_license_picture) : null,
-                    'back_license_picture' => $driver->back_license_picture ? asset('storage/driver_documents/' . $driver->back_license_picture) : null,
-                    'nbi_clearance' => $driver->nbi_clearance ? asset('storage/driver_documents/' . $driver->nbi_clearance) : null,
-                    'selfie_picture' => $driver->selfie_picture ? asset('storage/driver_documents/' . $driver->selfie_picture) : null,
+                    'front_license_picture' => $driver->front_license_picture ? asset('storage/' . $driver->front_license_picture) : null,
+                    'back_license_picture' => $driver->back_license_picture ? asset('storage/' . $driver->back_license_picture) : null,
+                    'nbi_clearance' => $driver->nbi_clearance ? asset('storage/' . $driver->nbi_clearance) : null,
+                    'selfie_picture' => $driver->selfie_picture ? asset('storage/' . $driver->selfie_picture) : null,
                 ],
             ];
         });
