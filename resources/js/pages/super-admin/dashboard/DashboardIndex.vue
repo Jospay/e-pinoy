@@ -230,6 +230,10 @@ const handleAcceptFranchise = () => {
   );
 };
 
+const createFranchise = () => {
+  router.get(superAdmin.franchise.create().url);
+};
+
 const franchiseColumns: ColumnDef<FranchiseRow>[] = [
   {
     accessorKey: 'name',
@@ -465,7 +469,13 @@ watch(
           :columns="franchiseColumns"
           :data="franchises.data"
           search-placeholder="Search franchises..."
-        />
+        >
+          <template #custom-actions>
+            <Button class="me-5" @click="createFranchise">
+              <PlusIcon />Add Franchise
+            </Button>
+          </template>
+        </DataTable>
       </div>
     </div>
   </AppLayout>
