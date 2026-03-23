@@ -14,12 +14,14 @@ return new class extends Migration
         Schema::create('transaction_history', function (Blueprint $table) {
             $table->id();
             $table->foreignId('e_wallet_id')->constrained('e_wallets')->onDelete('restrict');
+            $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
             $table->decimal('old_amount', 10, 2);
             $table->decimal('new_amount', 10, 2);
             $table->enum('type', ['debit', 'credit']);
             $table->string('description');
             $table->decimal('latitude', 10, 8)->nullable();
             $table->decimal('longitude', 11, 8)->nullable();
+            $table->string('paymongo_checkout_session_id')->nullable();
             $table->timestamps();
         });
     }

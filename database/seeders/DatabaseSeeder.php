@@ -43,20 +43,20 @@ class DatabaseSeeder extends Seeder
             'email' => 'pedrodelacruz@gmail.com',
         ]);
 
-        User::factory()->create([
-            'user_type_id' => 4,
-            'username' => 'dibbertmeda',
-            'name' => 'Prof Cordell Kerluke',
-            'email' => 'nnienow@example.org',
-            'phone' => '09264728199',
-        ]);
+        // User::factory()->create([
+        //     'user_type_id' => 4,
+        //     'username' => 'dibbertmeda',
+        //     'name' => 'Prof Cordell Kerluke',
+        //     'email' => 'nnienow@example.org',
+        //     'phone' => '09264728199',
+        // ]);
 
-        User::factory()->create([
-            'user_type_id' => 4,
-            'username' => 'verdagorczany',
-            'name' => 'Westley Thiel',
-            'phone' => '09914288276',
-        ]);
+        // User::factory()->create([
+        //     'user_type_id' => 4,
+        //     'username' => 'verdagorczany',
+        //     'name' => 'Westley Thiel',
+        //     'phone' => '09914288276',
+        // ]);
 
         User::factory()->create([
             'user_type_id' => 6,
@@ -66,52 +66,52 @@ class DatabaseSeeder extends Seeder
             'phone' => '09304206320',
         ]);
 
-        User::factory()->create([
-            'user_type_id' => 6,
-            'username' => 'Iverson',
-            'name' => 'Iverson M Mamangun',
-            'email' => 'mamanguniverson@gmail.com',
-            'phone' => '09761772917',
-        ]);
+        // User::factory()->create([
+        //     'user_type_id' => 6,
+        //     'username' => 'Iverson',
+        //     'name' => 'Iverson M Mamangun',
+        //     'email' => 'mamanguniverson@gmail.com',
+        //     'phone' => '09761772917',
+        // ]);
 
-        User::factory()->create([
-            'user_type_id' => 6,
-            'username' => 'Joshua F Payumo',
-            'name' => 'Joshua F Payumo',
-            'email' => 'joshuapayumo2001@gmail.com',
-            'phone' => '09101301920',
-        ]);
+        // User::factory()->create([
+        //     'user_type_id' => 6,
+        //     'username' => 'Joshua F Payumo',
+        //     'name' => 'Joshua F Payumo',
+        //     'email' => 'joshuapayumo2001@gmail.com',
+        //     'phone' => '09101301920',
+        // ]);
 
-        User::factory(5)->create([
-            'user_type_id' => 2,
-        ]);
+        // User::factory(5)->create([
+        //     'user_type_id' => 2,
+        // ]);
 
-        User::factory(20)->create([
-            'user_type_id' => 4,
-        ]);
+        // User::factory(20)->create([
+        //     'user_type_id' => 4,
+        // ]);
 
-        $this->call(DriverAssignmentSeeder::class);
-        $this->call(VehicleSeeder::class);
+        // $this->call(DriverAssignmentSeeder::class);
+        // $this->call(VehicleSeeder::class);
 
-        $this->call(BoundaryContractSeeder::class);
-        $this->call(RevenueSeeder::class);
+        // $this->call(BoundaryContractSeeder::class);
+        // $this->call(RevenueSeeder::class);
 
         $this->call(PercentageTypeSeeder::class);
-        $this->call(RevenueBreakdownSeeder::class);
+        // $this->call(RevenueBreakdownSeeder::class);
 
-        $this->call(BranchSeeder::class);
+        // $this->call(BranchSeeder::class);
 
-        $this->call(BusStationSeeder::class);
+        // $this->call(BusStationSeeder::class);
 
         $this->call(DaySeeder::class);
 
 
-        $this->call(InventorySeeder::class);
-        $this->call(MaintenanceSeeder::class);
+        // $this->call(InventorySeeder::class);
+        // $this->call(MaintenanceSeeder::class);
 
-        $this->call(SupportTicketSeeder::class);
+        // $this->call(SupportTicketSeeder::class);
 
-        $this->call(FeedbackSeeder::class);
+        // $this->call(FeedbackSeeder::class);
 
     }
 }

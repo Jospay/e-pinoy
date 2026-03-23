@@ -142,29 +142,38 @@ class ReservationController extends Controller
         $originIndex = $allSchedules->search(fn($s) => $s->id === $originSchedule->id);
 
         $availableDestinations = $allSchedules->slice($originIndex + 1)
-            ->map(function ($s) use ($allSchedules, $originIndex) {
-                $path = $allSchedules->slice($originIndex + 1, $allSchedules->search(fn($item) => $item->id === $s->id) - $originIndex);
-                $fareSum = $path->map(function ($step) use ($allSchedules) {
-                    $currentIndexInAll = $allSchedules->search(fn($item) => $item->id === $step->id);
-                    $prevStation = $allSchedules[$currentIndexInAll - 1]->busStation;
-                    $currStation = $step->busStation;
-                    return StationAmount::where(function ($q) use ($prevStation, $currStation) {
-                            $q->where('from_bus_station_id', $prevStation->id)
-                              ->where('to_bus_station_id', $currStation->id);
-                        })
-                        ->orWhere(function ($q) use ($prevStation, $currStation) {
-                            $q->where('from_bus_station_id', $currStation->id)
-                              ->where('to_bus_station_id', $prevStation->id);
-                        })
-                        ->first()?->amount ?? 0;
-                })->sum();
+        ->map(function ($targetSchedule) use ($allSchedules, $originIndex) {
+            $fareSum = 0;
 
-                return [
-                    'id' => $s->busStation->id,
-                    'name' => $s->busStation->name,
-                    'calculated_fare' => (float)$fareSum,
-                ];
-            })->values();
+            $startId = $allSchedules[$originIndex]->bus_station_id;
+            $endId = $targetSchedule->bus_station_id;
+
+            $currentId = $startId;
+            $step = ($startId < $endId) ? 1 : -1;
+
+            while ($currentId != $endId) {
+                $nextId = $currentId + $step;
+
+                $legFare = StationAmount::where(function ($q) use ($currentId, $nextId) {
+                        $q->where('from_bus_station_id', $currentId)
+                          ->where('to_bus_station_id', $nextId);
+                    })
+                    ->orWhere(function ($q) use ($currentId, $nextId) {
+                        $q->where('from_bus_station_id', $nextId)
+                          ->where('to_bus_station_id', $currentId);
+                    })
+                    ->value('amount');
+
+                $fareSum += $legFare ?? 0;
+                $currentId = $nextId;
+            }
+
+            return [
+                'id' => $targetSchedule->busStation->id,
+                'name' => $targetSchedule->busStation->name,
+                'calculated_fare' => (float)$fareSum,
+            ];
+        })->values();
 
         $fullTimeline = $allSchedules->map(fn($s) => [
             'name' => $s->busStation->name,
@@ -299,6 +308,7 @@ class ReservationController extends Controller
 
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
+                    'status_id' => $paidStatusId,
                     'old_amount' => $oldAmount,
                     'new_amount' => $newAmount,
                     'type'       => 'debit',

@@ -36,7 +36,12 @@ class DriverApplicationController extends Controller
     $branches = $franchise->branches()->select('id', 'name')->get();
     $branchIds = $branches->pluck('id');
 
-    $driversQuery = User::with(['driverDetails.status', 'driverDetails.vehicleTypes'])
+    $driversQuery = User::with([
+            'driverDetails.status',
+            'driverDetails.vehicleTypes',
+            'driverDetails.branches',
+            'driverDetails.franchises'
+        ])
         ->whereHas('userType', fn($q) => $q->where('name', 'driver'))
         ->whereHas('driverDetails', function ($q) use (
             $statusFilter,
@@ -87,7 +92,7 @@ class DriverApplicationController extends Controller
                 'city' => $user->city,
                 'barangay' => $user->barangay,
                 'address' => $user->address,
-                'status' => $user->driverDetails?->status?->name,
+                'status' => $user->driverDetails?->status?->name ?? 'Unknown',
                 'assignment' => [
                     'type' => $user->driverDetails?->branches->first()?->name ? 'branch' : 'franchise',
                     'name' => $user->driverDetails?->branches->first()?->name
@@ -106,16 +111,16 @@ class DriverApplicationController extends Controller
                     'shift' => $user->driverDetails?->shift,
                     'hire_date' => $user->driverDetails?->hire_date,
                     'front_license_picture' => $user->driverDetails?->front_license_picture
-                        ? asset('storage/driver_documents/' . $user->driverDetails->front_license_picture)
+                        ? asset('storage/' . $user->driverDetails->front_license_picture)
                         : null,
                     'back_license_picture' => $user->driverDetails?->back_license_picture
-                        ? asset('storage/driver_documents/' . $user->driverDetails->back_license_picture)
+                        ? asset('storage/' . $user->driverDetails->back_license_picture)
                         : null,
                     'nbi_clearance' => $user->driverDetails?->nbi_clearance
-                        ? asset('storage/driver_documents/' . $user->driverDetails->nbi_clearance)
+                        ? asset('storage/' . $user->driverDetails->nbi_clearance)
                         : null,
                     'selfie_picture' => $user->driverDetails?->selfie_picture
-                        ? asset('storage/driver_documents/' . $user->driverDetails->selfie_picture)
+                        ? asset('storage/' . $user->driverDetails->selfie_picture)
                         : null,
                 ],
             ]),

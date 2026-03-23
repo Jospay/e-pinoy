@@ -11,12 +11,14 @@ class TransactionHistory extends Model
 
     protected $fillable = [
         'e_wallet_id',
+        'status_id',
         'old_amount',
         'new_amount',
         'type',
         'description',
         'latitude',
         'longitude',
+        'paymongo_checkout_session_id',
     ];
 
     protected $casts = [
@@ -27,5 +29,10 @@ class TransactionHistory extends Model
     public function eWallet(): BelongsTo
     {
         return $this->belongsTo(EWallet::class);
+    }
+
+    public function status(): BelongsTo
+    {
+        return $this->belongsTo(Status::class);
     }
 }
