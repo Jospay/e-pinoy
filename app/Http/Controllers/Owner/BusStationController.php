@@ -114,38 +114,62 @@ class BusStationController extends Controller
         ]);
 
         DB::transaction(function () use ($validated) {
-            if (!empty($validated['reservation_id'])) {
-                $oldRes = StationReservation::find($validated['reservation_id']);
-                if ($oldRes) {
-                    $oldRes->schedules()->delete();
-                    $oldRes->dateSchedules()->delete();
-                    $oldRes->delete();
-                }
-            }
+        // 1. Get or Create the Reservation (DO NOT DELETE IT)
+        $reservation = StationReservation::updateOrCreate(
+            ['id' => $validated['reservation_id'] ?? null],
+            ['vehicle_id' => $validated['vehicle_id']]
+        );
 
-            // Create the specific instance for THIS journey
-            $reservation = StationReservation::create([
-                'vehicle_id' => $validated['vehicle_id']
+        // 2. Refresh Operating Days
+        $reservation->dateSchedules()->delete();
+        foreach ($validated['day_schedule_ids'] as $dayId) {
+            DateSchedule::create([
+                'station_reservation_id' => $reservation->id,
+                'day_schedule_id' => $dayId,
             ]);
+        }
 
-            // Insert Operating Days
-            foreach ($validated['day_schedule_ids'] as $dayId) {
-                DateSchedule::create([
-                    'station_reservation_id' => $reservation->id,
-                    'day_schedule_id' => $dayId,
+        // 3. Keep track of current station IDs in the request to remove deleted ones later
+        $receivedStationIds = array_keys($validated['stations']);
+
+        // 4. Update or Create Station Stops
+        foreach ($validated['stations'] as $stationId => $data) {
+            $order = (int)($data['order'] ?? 0);
+
+            // Find if this station already exists for this journey
+            $schedule = StationSchedule::where('station_reservation_id', $reservation->id)
+                ->where('bus_station_id', $stationId)
+                ->first();
+
+            if ($schedule) {
+                // UPDATE existing: Keep unique_name as is!
+                $schedule->update([
+                    'route_step' => $order,
+                    'from_time' => $data['from_time'] ?? '00:00',
+                    'to_time' => $data['to_time'] ?? '00:00',
                 ]);
-            }
-
-            // Insert Station Stops
-            foreach ($validated['stations'] as $stationId => $data) {
-                StationSchedule::create([
+            } else {
+                // INSERT new stop
+                $schedule = StationSchedule::create([
                     'station_reservation_id' => $reservation->id,
                     'bus_station_id' => $stationId,
-                    'route_step' => $data['order'] ?? 0,
+                    'route_step' => $order,
                     'from_time' => $data['from_time'] ?? '00:00',
                     'to_time' => $data['to_time'] ?? '00:00',
                 ]);
             }
+
+            // 5. Generate unique name ONLY if it is empty and order > 1
+            if ($order > 1 && empty($schedule->unique_name)) {
+                $uniqueCode = 'EPINOY-' . str_pad($schedule->id, 5, '0', STR_PAD_LEFT);
+                $schedule->update(['unique_name' => $uniqueCode]);
+            }
+        }
+
+        // 6. Cleanup: Remove any stations that were removed from the UI
+        StationSchedule::where('station_reservation_id', $reservation->id)
+            ->whereNotIn('bus_station_id', $receivedStationIds)
+            ->delete();
         });
 
         return redirect()->back()->with('message', 'Route schedule updated successfully');

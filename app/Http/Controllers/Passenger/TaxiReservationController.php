@@ -63,6 +63,10 @@ class TaxiReservationController extends Controller
         $paidStatusId = $this->getStatusIdByWord('Paid');
         $pendingStatusId = $this->getStatusIdByWord('Pending');
 
+        if (!$paidStatusId || !$pendingStatusId) {
+            return back()->withErrors(['amount' => 'System error: Required reservation statuses are missing.']);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -89,7 +93,7 @@ class TaxiReservationController extends Controller
                     $otpController->sendOtp($request);
 
                     DB::rollBack();
-                    return redirect()->route('passenger.otp.index')->with('requires_otp', true);
+                    return redirect()->route('passenger.otp.index', ['purpose' => 'reservation'])->with('requires_otp', true);
                 }
 
                 $wallet = EWallet::where('id', $walletCheck->id)->lockForUpdate()->first();

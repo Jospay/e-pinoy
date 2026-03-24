@@ -162,6 +162,10 @@ const afterTaxiBooking = () => {
             <p class="text-2xl font-black">
               ₱{{ Number(reservation.amount).toFixed(2) }}
             </p>
+
+            <p class="text-[9px] font-bold text-emerald-600 uppercase">
+              Paid via {{ reservation.payment_options }}
+            </p>
           </div>
         </div>
 
