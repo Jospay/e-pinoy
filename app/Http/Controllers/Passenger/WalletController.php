@@ -457,7 +457,8 @@ public function payBus(Request $request)
             'longitude'   => $validated['longitude'] ?? null
         ]);
 
-        return redirect()->back()->with('success', 'Payment successful');
+
+        return redirect()->route('passenger.mywallet')->with('success', 'Payment successful');
     });
 }
 }

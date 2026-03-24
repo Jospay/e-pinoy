@@ -183,14 +183,26 @@ const buyLoad = () => {
 async function loadMore() {
   if (loading.value || page.value >= lastPage.value) return;
   loading.value = true;
+
   try {
+    // Use the next page based on our current state
+    const nextPage = page.value + 1;
     const response = await fetch(
-      `/passenger/my-wallet/infinite?page=${page.value + 1}`,
+      `/passenger/my-wallet/infinite?page=${nextPage}`,
     );
     const data = await response.json();
-    items.value = [...items.value, ...data.data];
+
+    // Prevent duplicates just in case
+    const currentIds = new Set(items.value.map((i) => i.id));
+    const filteredNewData = data.data.filter(
+      (item: Transaction) => !currentIds.has(item.id),
+    );
+
+    items.value = [...items.value, ...filteredNewData];
     page.value = data.current_page;
     lastPage.value = data.last_page;
+  } catch (e) {
+    console.error('Failed to load more transactions', e);
   } finally {
     loading.value = false;
   }
@@ -309,6 +321,24 @@ const confirmBusPayment = () => {
     { enableHighAccuracy: true, timeout: 5000 },
   );
 };
+
+watch(
+  () => props.transactions.data,
+  (newData) => {
+    // When Inertia refreshes the props after a successful post (payment),
+    // we want to update our local 'items' list.
+
+    // Logic: Find items in newData that aren't in our current items list yet
+    const currentIds = new Set(items.value.map((i) => i.id));
+    const newItems = newData.filter((item) => !currentIds.has(item.id));
+
+    if (newItems.length > 0) {
+      // Prepend new transactions to the top of the list
+      items.value = [...newItems, ...items.value];
+    }
+  },
+  { deep: true },
+);
 </script>
 
 <template>
