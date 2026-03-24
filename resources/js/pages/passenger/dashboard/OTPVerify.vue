@@ -2,18 +2,22 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, useForm, router } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
-import { ShieldCheck, ArrowLeft, RefreshCw } from 'lucide-vue-next';
+import { ShieldCheck, RefreshCw } from 'lucide-vue-next';
 import { toast } from 'vue-sonner';
 import { ref, onMounted, onUnmounted } from 'vue';
 
-const props = defineProps({ errors: Object });
+const props = defineProps({
+  errors: Object,
+  purpose: { type: String, default: 'reservation' }, // 'reservation' or 'wallet'
+});
+
 const formVerify = useForm({
   code: '',
   latitude: null as number | null,
   longitude: null as number | null,
 });
 
-// Cooldown Logic (120 seconds = 2 minutes)
+// Cooldown Logic
 const cooldown = ref(0);
 let timerInterval: any = null;
 
@@ -46,7 +50,6 @@ onUnmounted(() => clearInterval(timerInterval));
 
 const resendOtp = () => {
   if (cooldown.value > 0) return;
-
   router.post(
     '/passenger/send-otp',
     {},
@@ -62,7 +65,6 @@ const resendOtp = () => {
 };
 
 const verifyOtp = () => {
-  // Capture location during verification for security logs
   if ('geolocation' in navigator) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -70,7 +72,7 @@ const verifyOtp = () => {
         formVerify.longitude = position.coords.longitude;
         processVerification();
       },
-      () => processVerification(), // Proceed even if location is denied
+      () => processVerification(),
     );
   } else {
     processVerification();
@@ -78,11 +80,17 @@ const verifyOtp = () => {
 };
 
 const processVerification = () => {
-  formVerify.post('/passenger/verify-otp', {
+  // DYNAMIC URL SELECTION
+  const targetUrl =
+    props.purpose === 'wallet'
+      ? '/passenger/verify-load-ewallet'
+      : '/passenger/verify-otp';
+
+  formVerify.post(targetUrl, {
     onBefore: () =>
       toast.loading('Verifying security code...', { id: 'verify-toast' }),
     onSuccess: () => {
-      // Success redirect handled by Controller
+      /* Redirect handled by controller */
     },
     onError: () => {
       toast.error('Verification failed. Check your code.', {

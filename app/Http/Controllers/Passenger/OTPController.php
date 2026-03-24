@@ -19,9 +19,11 @@ use Carbon\Carbon;
 
 class OTPController extends Controller
 {
-    public function index()
+    public function index($purpose = null)
     {
-        return Inertia::render('passenger/dashboard/OTPVerify');
+        return Inertia::render('passenger/dashboard/OTPVerify', [
+            'purpose' => $purpose
+        ]);
     }
 
     public function sendOtp(Request $request)
@@ -59,7 +61,6 @@ class OTPController extends Controller
 
             Log::error("Movider API Error: " . $response->body());
             return back()->withErrors(['otp' => 'SMS provider error.']);
-
         } catch (\Exception $e) {
             Log::error("OTP Send Exception: " . $e->getMessage());
             return back()->withErrors(['otp' => 'Failed to send SMS.']);
@@ -72,6 +73,7 @@ class OTPController extends Controller
             'code' => 'required|numeric',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
+            'purpose' => 'nullable|string'
         ]);
 
         $storedOtp = Session::get('otp_code');
@@ -80,17 +82,16 @@ class OTPController extends Controller
         if ($storedOtp && $request->code == $storedOtp && now()->lt($expiresAt)) {
             $user = auth()->user();
 
-            // 1. Update verification timestamp to bypass OTP for the next 7 days
+            // 1. Mark as verified in DB
             EWallet::where('user_id', $user->id)->update(['last_otp_verified_at' => now()]);
             Session::forget(['otp_code', 'otp_expires_at']);
 
-            // 2. Branching Logic
+            // 2. CHECK FLOW: Is this a pending BUS or TAXI booking?
             if (Session::has('pending_reservation')) {
                 $data = Session::get('pending_reservation');
                 $data['latitude'] = $request->latitude ?? ($data['latitude'] ?? null);
                 $data['longitude'] = $request->longitude ?? ($data['longitude'] ?? null);
 
-                // Check if it's a Taxi or Bus reservation (Taxi has 'booking_type')
                 if (isset($data['booking_type'])) {
                     return $this->processResumedTaxi($data);
                 } else {
@@ -98,12 +99,31 @@ class OTPController extends Controller
                 }
             }
 
-            // KEEPING YOUR REFUND REDIRECT
+            // 3. CHECK FLOW: Is this a pending WALLET LOAD?
+            if (Session::has('pending_wallet_amount')) {
+                return redirect()->route('passenger.wallet.resume_after_otp', [
+                    'latitude' => $request->latitude,
+                    'longitude' => $request->longitude
+                ]);
+            }
+
+            // 4. CHECK FLOW: Is this just a general WALLET security check?
+            if ($request->purpose === 'wallet' || $request->query('purpose') === 'wallet') {
+                return redirect()->route('passenger.mywallet')->with('success', 'Security verified!');
+            }
+
+            // DEFAULT: Redirect to history (usually for refunds)
             return redirect()->route('passenger.transactionhisory', ['status' => 'paid'])
-                             ->with('success', 'Security verified! You can now click Refund again.');
+                             ->with('success', 'Security verified!');
         }
 
         return back()->withErrors(['code' => 'The code is incorrect or has expired.']);
+    }
+
+    public function verifyLoadEwallet(Request $request)
+    {
+        // This remains as a secondary helper, but verifyOtp above now handles both flows.
+        return $this->verifyOtp($request);
     }
 
     private function processResumedTaxi($data)
@@ -112,7 +132,9 @@ class OTPController extends Controller
             return DB::transaction(function () use ($data) {
                 $user = auth()->user();
                 $wallet = EWallet::where('user_id', $user->id)->lockForUpdate()->first();
-                $paidStatusId = Status::where('name', 'Paid')->first()->id;
+                $paidStatus = Status::where('name', 'Paid')->first();
+                $paidStatusId = $paidStatus ? $paidStatus->id : 1;
+
                 $busRes = Reservation::findOrFail($data['reservation_id']);
 
                 if ($wallet->amount < $data['amount']) throw new \Exception("Insufficient balance.");
@@ -164,14 +186,15 @@ class OTPController extends Controller
         }
     }
 
-    private function processResumedReservation($data) // BUS FLOW
+    private function processResumedReservation($data)
     {
         try {
             return DB::transaction(function () use ($data) {
                 $user = auth()->user();
                 $wallet = EWallet::where('user_id', $user->id)->lockForUpdate()->first();
                 $sched = StationSchedule::findOrFail($data['station_schedule_id']);
-                $paidStatusId = Status::where('name', 'Paid')->first()->id;
+                $paidStatus = Status::where('name', 'Paid')->first();
+                $paidStatusId = $paidStatus ? $paidStatus->id : 1;
 
                 if ($wallet->amount < $data['amount']) {
                     throw new \Exception("Insufficient wallet balance.");

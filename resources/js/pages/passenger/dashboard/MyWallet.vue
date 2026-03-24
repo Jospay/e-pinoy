@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import {
-  ChevronLeft,
-  ArrowRight,
   Wallet,
-  MapPin,
   PlusCircle,
   Loader2,
   Clock,
-  Undo2,
   Check,
+  AlertTriangle,
+  MapPin,
+  ArrowRight,
+  ChevronLeft,
+  Undo2,
 } from 'lucide-vue-next';
 import LocationMap from '@/components/ReservedMap.vue';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import Input from '@/components/ui/input/Input.vue';
 
 interface Transaction {
   id: number;
@@ -52,6 +53,72 @@ const items = ref<Transaction[]>([...props.transactions.data]);
 const page = ref(props.transactions.current_page);
 const lastPage = ref(props.transactions.last_page);
 const loading = ref(false);
+const amountError = ref<string | null>(null);
+
+/**
+ * HELPER: PROCESS MESSAGES & VALIDATION ERRORS
+ * Checks both flash messages and Inertia validation errors
+ */
+const handleFlashMessages = () => {
+  const flash = pageObj.props.flash as any;
+  const errors = pageObj.props.errors as any;
+  const toastId = 'wallet-toast';
+
+  // 1. Handle Validation Errors (from withErrors in Controller)
+  if (errors && Object.keys(errors).length > 0) {
+    const firstError = Object.values(errors)[0] as string;
+    toast.error(firstError, { id: toastId });
+    amountError.value = firstError;
+    return; // Stop if there's a specific validation error
+  }
+
+  // 2. Handle Flash Messages
+  if (!flash) return;
+
+  if (flash.success) {
+    toast.success(flash.success, { id: toastId, duration: 5000 });
+    amountError.value = null;
+  }
+
+  if (flash.error) {
+    toast.error(flash.error, { id: toastId });
+    const errorMsg = String(flash.error).toLowerCase();
+    if (
+      errorMsg.includes('security') ||
+      errorMsg.includes('seal') ||
+      errorMsg.includes('tamper') ||
+      errorMsg.includes('integrity')
+    ) {
+      amountError.value = flash.error;
+    }
+  }
+
+  if (flash.info) {
+    toast.info(flash.info, { id: toastId });
+  }
+};
+
+// Watch for changes in page props (especially errors) to trigger alerts
+watch(
+  () => pageObj.props,
+  () => {
+    handleFlashMessages();
+  },
+  { deep: true },
+);
+
+router.on('finish', () => {
+  handleFlashMessages();
+});
+
+onMounted(() => {
+  handleFlashMessages();
+  window.addEventListener('scroll', handleScroll);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
+});
 
 // --- Buy Load Logic ---
 const isLoadOpen = ref(false);
@@ -59,13 +126,15 @@ const loadAmount = ref(100);
 const isProcessingLoad = ref(false);
 
 const buyLoad = () => {
+  amountError.value = null;
   if (!navigator.geolocation) {
     toast.error('Geolocation is not supported by your browser.');
     return;
   }
 
   isProcessingLoad.value = true;
-  toast.loading('Accessing GPS location...', { id: 'geo-toast' });
+  const toastId = 'wallet-toast';
+  toast.loading('Accessing GPS location...', { id: toastId });
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
@@ -80,65 +149,37 @@ const buyLoad = () => {
         },
         {
           onStart: () => {
-            toast.loading('Creating payment session...', { id: 'geo-toast' });
+            toast.loading('Creating payment session...', { id: toastId });
           },
+          // SUCCESS: Close modal and stop loading
+          onSuccess: () => {
+            isLoadOpen.value = false;
+            isProcessingLoad.value = false;
+          },
+          // ERROR: (This is where the Security Alert comes from)
+          onError: (errors) => {
+            isLoadOpen.value = false; // Add this line
+            isProcessingLoad.value = false;
+            handleFlashMessages();
+          },
+          // FINISH: Backup cleanup
           onFinish: () => {
             isProcessingLoad.value = false;
-            toast.dismiss('geo-toast');
-          },
-          onError: () => {
-            toast.error('Failed to initiate top-up.', { id: 'geo-toast' });
           },
         },
       );
     },
     (error) => {
       isProcessingLoad.value = false;
-      toast.dismiss('geo-toast');
-
-      switch (error.code) {
-        case error.PERMISSION_DENIED:
-          toast.error('Please enable location access to continue.');
-          break;
-        case error.POSITION_UNAVAILABLE:
-          toast.error('Location information is unavailable.');
-          break;
-        case error.TIMEOUT:
-          toast.error('Location request timed out.');
-          break;
-        default:
-          toast.error('An unknown error occurred while getting location.');
-      }
+      toast.error('Location access is required for secure top-ups.', {
+        id: toastId,
+      });
     },
     { enableHighAccuracy: true, timeout: 10000 },
   );
 };
 
-watch(
-  () => pageObj.props.flash,
-  (flash: any) => {
-    if (flash?.success) toast.success(flash.success);
-    if (flash?.error) toast.error(flash.error);
-  },
-  { deep: true, immediate: true },
-);
-
-// --- Map Logic ---
-const isMapOpen = ref(false);
-const showMapContent = ref(false);
-const selectedLocationTx = ref<Transaction | null>(null);
-
-const openLocationMap = async (tx: Transaction) => {
-  if (tx.latitude && tx.longitude) {
-    selectedLocationTx.value = tx;
-    isMapOpen.value = true;
-    showMapContent.value = false;
-    await nextTick();
-    showMapContent.value = true;
-  }
-};
-
-// --- Infinite Scroll Logic ---
+// --- Pagination/Infinite Scroll Logic ---
 async function loadMore() {
   if (loading.value || page.value >= lastPage.value) return;
   loading.value = true;
@@ -161,8 +202,20 @@ function handleScroll() {
   if (isAtBottom && !loading.value) loadMore();
 }
 
-onMounted(() => window.addEventListener('scroll', handleScroll));
-onUnmounted(() => window.removeEventListener('scroll', handleScroll));
+// --- Map Logic ---
+const isMapOpen = ref(false);
+const showMapContent = ref(false);
+const selectedLocationTx = ref<Transaction | null>(null);
+
+const openLocationMap = async (tx: Transaction) => {
+  if (tx.latitude && tx.longitude) {
+    selectedLocationTx.value = tx;
+    isMapOpen.value = true;
+    showMapContent.value = false;
+    await nextTick();
+    showMapContent.value = true;
+  }
+};
 </script>
 
 <template>
@@ -171,6 +224,25 @@ onUnmounted(() => window.removeEventListener('scroll', handleScroll));
   <AppLayout>
     <div class="space-y-6 px-3 py-12">
       <div class="mx-auto max-w-2xl">
+        <div
+          v-if="amountError"
+          class="mb-5.5 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm"
+        >
+          <div class="flex items-center gap-3">
+            <div
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600"
+            >
+              <AlertTriangle class="h-5 w-5" />
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-red-900">Security Alert</h3>
+              <p class="text-[11px] leading-tight font-medium text-red-600">
+                {{ amountError }}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div
           class="flex flex-col items-center justify-between gap-4 rounded-xl border border-gray-100 bg-white p-6 shadow-md md:flex-row"
         >
