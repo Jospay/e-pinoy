@@ -9,6 +9,7 @@ use App\Http\Requests\SuperAdmin\StoreFranchiseRequest;
 use App\Models\UserOwner;
 use App\Models\UserType;
 use App\Models\Franchise;
+use App\Models\VehicleType;
 use App\Models\Status;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -29,8 +30,16 @@ class FranchiseController extends Controller
 
     public function create(): Response
     {
+        $vehicleTypes = VehicleType::all()->map(function ($type) {
+            return [
+                'id' => (string) $type->id,
+                'label' => $type->name,
+            ];
+        });
+
         return Inertia::render('super-admin/dashboard/FranchiseCreate', [
             'idTypeOptions' => IdType::options(),
+            'vehicleType' => $vehicleTypes,
         ]);
     }
 

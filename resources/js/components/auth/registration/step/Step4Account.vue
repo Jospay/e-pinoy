@@ -226,7 +226,7 @@ function removeFile(side: 'front' | 'back') {
       :name="fields.validIdType"
       required
       v-model="computedIdType"
-      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
+      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 px-3 py-2 font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <option value="" disabled>Select Valid ID Type</option>
       <option
@@ -338,7 +338,7 @@ function removeFile(side: 'front' | 'back') {
       :name="fields.vehicleType"
       required
       v-model="computedVehicleType"
-      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-sm font-semibold capitalize focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
+      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 px-3 py-2 font-mono text-sm font-semibold capitalize focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <option value="" disabled>Select Vehicle Type</option>
       <option
