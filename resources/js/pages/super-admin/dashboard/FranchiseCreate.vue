@@ -20,12 +20,13 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { useForm } from '@inertiajs/vue3';
 import { IdCardIcon } from 'lucide-vue-next';
-import { computed, reactive, watchEffect } from 'vue';
+import { computed, reactive, ref, watchEffect } from 'vue';
 import { toast } from 'vue-sonner';
 
 // Props passed from Controller
 defineProps<{
   idTypeOptions: Array<{ value: string; label: string }>;
+  vehicleTypes: { value: string; label: string }[];
 }>();
 
 // 1. Initialize Address Logic for Franchise
@@ -122,8 +123,6 @@ const disableSubmit = computed(() => {
     },
     ['province', 'name'],
   );
-
-  console.log({ franchiseValid, ownerValid });
 
   // Final rule
   return !(franchiseValid && ownerValid);
@@ -390,6 +389,8 @@ watchEffect(() => {
                   :errors="form.errors"
                   :show-fields="ownerIdentityShow"
                   :field-names="ownerIdentityField"
+                  :vehicle-types="vehicleTypes"
+                  v-model:selected-vehicle-type=""
                   v-model:valid-id-number="form.valid_id_number"
                 />
               </div>

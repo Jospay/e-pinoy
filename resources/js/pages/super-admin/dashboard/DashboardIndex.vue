@@ -41,6 +41,7 @@ import {
   BanknoteArrowUpIcon,
   LandmarkIcon,
   MoreHorizontal,
+  PlusIcon,
   UsersRoundIcon,
 } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';

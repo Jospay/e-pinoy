@@ -277,7 +277,7 @@ const calculatedAge = computed(() => {
       :name="fields.gender"
       required
       v-model="computedGender"
-      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 bg-white px-3 py-2 font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
+      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 px-3 py-2 font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
     >
       <option value="" disabled>Select your gender</option>
       <option
