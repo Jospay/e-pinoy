@@ -14,10 +14,11 @@ class PaymentOptionSeeder extends Seeder
     public function run(): void
     {
         DB::table('payment_options')->insert([
-            ['id' => 1, 'name' => 'Cash'], 
+            ['id' => 1, 'name' => 'Cash'],
             ['id' => 2, 'name' => 'Credit Card'],
-            ['id' => 3, 'name' => 'Gcash'], 
+            ['id' => 3, 'name' => 'Gcash'],
             ['id' => 4, 'name' => 'Paymaya'],
+            ['id' => 5, 'name' => 'Wallet'],
         ]);
     }
 }

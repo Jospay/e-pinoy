@@ -13,6 +13,7 @@ class StationSchedule extends Model
         'route_step',
         'from_time',
         'to_time',
+        'unique_name',
     ];
 
     public function reservation(): BelongsTo

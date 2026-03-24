@@ -8,29 +8,39 @@ use App\Http\Controllers\Passenger\WalletController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:passenger'])->prefix('passenger')->name('passenger.')->group(function () {
-    // Selection Page
-        Route::get('/dashboard', [ReservationController::class, 'index'])->name('dashboard');
-        Route::get('/dashboard/Reserve', [ReservationController::class, 'create'])->name('reservation.create');
-        Route::post('/reservation', [ReservationController::class, 'store'])->name('reservation.store');
-        Route::get('/reservation/success/{reservation:qrcode_name}', [ReservationController::class, 'success'])->name('reservation.success');
+    // Selection Page & Bookings
+    Route::get('/dashboard', [ReservationController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/Reserve', [ReservationController::class, 'create'])->name('reservation.create');
+    Route::post('/reservation', [ReservationController::class, 'store'])->name('reservation.store');
+    Route::get('/reservation/success/{reservation:qrcode_name}', [ReservationController::class, 'success'])->name('reservation.success');
 
-        Route::get('/reservation/taxi/Reserve/{reservation}', [TaxiReservationController::class, 'index'])->name('reservationtaxi');
-        Route::post('/reservation/taxi/reservation', [TaxiReservationController::class, 'store'])->name('reservationtaxi.store');
-        Route::get('/reservation/taxi/success/{reservation:id}', [TaxiReservationController::class, 'success'])->name('reservationtaxi.success');
+    // Taxi Flow
+    Route::get('/reservation/taxi/Reserve/{reservation}', [TaxiReservationController::class, 'index'])->name('reservationtaxi');
+    Route::post('/reservation/taxi/reservation', [TaxiReservationController::class, 'store'])->name('reservationtaxi.store');
+    Route::get('/reservation/taxi/success/{reservation:id}', [TaxiReservationController::class, 'success'])->name('reservationtaxi.success');
 
-        Route::get('/vehicle-availability', [ReservationController::class, 'getAvailability']);
+    Route::get('/vehicle-availability', [ReservationController::class, 'getAvailability']);
 
-        Route::get('/transaction-history', [TransactionHistoryController::class, 'index'])->name('transactionhisory');
-        Route::post('/transaction-history/refund/{reservation}', [TransactionHistoryController::class, 'refund'])->name('reservation.refund');
+    // History & Refunds
+    Route::get('/transaction-history', [TransactionHistoryController::class, 'index'])->name('transactionhisory');
+    Route::post('/transaction-history/refund/{reservation}', [TransactionHistoryController::class, 'refund'])->name('reservation.refund');
 
-        Route::get('/my-wallet', [WalletController::class, 'index'])->name('mywallet');
-        Route::get('/my-wallet/infinite', [WalletController::class, 'infiniteTransactions']);
-        Route::post('/my-wallet/load', [WalletController::class, 'createLoadSession'])->name('wallet.load');
-        // Add {userId?} to the end of the URI
-Route::get('/my-wallet/success/{userId?}', [WalletController::class, 'loadSuccess'])->name('wallet.success');
+    // Wallet Management
+    Route::get('/my-wallet', [WalletController::class, 'index'])->name('mywallet');
+    Route::get('/my-wallet/infinite', [WalletController::class, 'infiniteTransactions']);
+    Route::post('/my-wallet/load', [WalletController::class, 'createLoadSession'])->name('wallet.load');
+    Route::get('/my-wallet/success/{userId?}', [WalletController::class, 'loadSuccess'])->name('wallet.success');
 
-        // OTP Routes - Ensure index is named correctly for the redirect
-        Route::get('/verify-phone', [OTPController::class, 'index'])->name('otp.index');
-        Route::post('/send-otp', [OTPController::class, 'sendOtp'])->name('otp.send');
-        Route::post('/verify-otp', [OTPController::class, 'verifyOtp'])->name('otp.verify');
+    // Resume route for wallet (Called by OTPController after verification)
+    Route::get('/my-wallet/resume', [WalletController::class, 'resumeAfterOtp'])->name('wallet.resume_after_otp');
+
+    // --- OTP Routes ---
+    Route::get('/verify-phone/{purpose?}', [OTPController::class, 'index'])->name('otp.index');
+    Route::post('/send-otp', [OTPController::class, 'sendOtp'])->name('otp.send');
+
+    // Main Unified Verification
+    Route::post('/verify-otp', [OTPController::class, 'verifyOtp'])->name('otp.verify');
+
+    // Legacy/Helper for Load Ewallet
+    Route::post('/verify-load-ewallet', [OTPController::class, 'verifyLoadEwallet'])->name('verify_load_ewallet');
 });
