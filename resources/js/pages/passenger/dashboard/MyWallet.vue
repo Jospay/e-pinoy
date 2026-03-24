@@ -658,7 +658,7 @@ watch(
             </div>
 
             <div class="border-t pt-4">
-              <div class="flex justify-between">
+              <div class="flex items-center justify-between">
                 <div>
                   <p class="text-[10px] font-black text-slate-400 uppercase">
                     Total Fare
@@ -694,21 +694,31 @@ watch(
                   </div>
                 </div>
               </div>
-              <Button
-                @click="confirmBusPayment"
-                :disabled="isProcessingPayment"
-                class="w-full bg-brand-blue font-bold hover:bg-brand-blue/90 md:w-fit"
-              >
-                <Loader2
-                  v-if="isProcessingPayment"
-                  class="mr-2 h-4 w-4 animate-spin"
-                />
-                {{
-                  isProcessingPayment
-                    ? 'Processing...'
-                    : `Confirm & Pay ₱${(busData.total_amount * passengerCount).toFixed(2)}`
-                }}
-              </Button>
+
+              <div class="grid gap-3 pt-5">
+                <Button
+                  @click="confirmBusPayment"
+                  :disabled="isProcessingPayment"
+                  class="w-full bg-brand-blue hover:bg-blue-900"
+                >
+                  <Loader2
+                    v-if="isProcessingPayment"
+                    class="mr-2 h-4 w-4 animate-spin"
+                  />
+                  {{
+                    isProcessingPayment
+                      ? 'Processing...'
+                      : `Confirm & Pay ₱${(busData.total_amount * passengerCount).toFixed(2)}`
+                  }}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  @click="isPayBusOpen = false"
+                  class="w-full"
+                  >Cancel</Button
+                >
+              </div>
             </div>
           </div>
         </div>
