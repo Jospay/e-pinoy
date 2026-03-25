@@ -30,16 +30,16 @@ class FranchiseController extends Controller
 
     public function create(): Response
     {
-        $vehicleTypes = VehicleType::all()->map(function ($type) {
-            return [
-                'id' => (string) $type->id,
-                'label' => $type->name,
-            ];
-        });
+        // $vehicleTypes = VehicleType::all()->map(function ($type) {
+        //     return [
+        //         'value' => (string) $type->id,
+        //         'label' => $type->name,
+        //     ];
+        // });
 
         return Inertia::render('super-admin/dashboard/FranchiseCreate', [
             'idTypeOptions' => IdType::options(),
-            'vehicleType' => $vehicleTypes,
+            // 'vehicleTypes' => $vehicleTypes,
         ]);
     }
 
@@ -102,7 +102,7 @@ class FranchiseController extends Controller
             ]);
         });
 
-        return redirect(route('super-admin.dashboard'));
+        return redirect(route('super-admin.dashboard.index'));
     }
 
     public function accept(Franchise $franchise)

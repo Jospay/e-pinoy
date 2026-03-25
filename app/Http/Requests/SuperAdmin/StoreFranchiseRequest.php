@@ -4,6 +4,7 @@ namespace App\Http\Requests\SuperAdmin;
 
 use Illuminate\Foundation\Http\FormRequest;
 use App\Models\User;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rule;
 
 class StoreFranchiseRequest extends FormRequest
@@ -13,7 +14,7 @@ class StoreFranchiseRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -36,13 +37,13 @@ class StoreFranchiseRequest extends FormRequest
                 Rule::unique(User::class),
                 Rule::unique('franchises', 'phone')
             ],
-            'password' => $this->passwordRules(),
-            'home_region' => ['required', 'string', 'max:255'],
-            'home_province' => ['nullable', 'string', 'max:255', 'required_unless:home_region,NCR'],
-            'home_city' => ['required', 'string', 'max:255'],
-            'home_barangay' => ['required', 'string', 'max:255'],
-            'home_postal_code' => ['required', 'string', 'max:20'],
-            'home_address' => ['required', 'string', 'max:255'],
+            'password' => $this->customPasswordRules(),
+            'region' => ['required', 'string', 'max:255'],
+            'province' => ['nullable', 'string', 'max:255', 'required_unless:region,NCR'],
+            'city' => ['required', 'string', 'max:255'],
+            'barangay' => ['required', 'string', 'max:255'],
+            'postal_code' => ['required', 'string', 'max:20'],
+            'address' => ['required', 'string', 'max:255'],
             'franchise_name' => ['required', 'string', 'max:255'],
             'franchise_region' => ['required', 'string', 'max:255'],
             'franchise_province' => ['nullable', 'string', 'max:255', 'required_unless:franchise_region,NCR'],
@@ -58,6 +59,21 @@ class StoreFranchiseRequest extends FormRequest
             'mayor_permit' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf,docx,doc', 'max:5120'],
             'proof_capital' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf,docx,doc', 'max:5120'],
             
+        ];
+    }
+
+    protected function customPasswordRules(): array
+    {
+        return [
+            'required', 
+            'string', 
+            'min:8', 
+            'confirmed',
+            Password::min(8)
+                ->mixedCase() 
+                ->numbers()
+                ->symbols(),
+            'regex:/[\d\W_]/'
         ];
     }
 }

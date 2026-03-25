@@ -3,7 +3,14 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar, FileText, IdCard, Upload, X } from 'lucide-vue-next';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Calendar, Car, FileText, IdCard, Upload, X } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 // --- TYPES ---
@@ -329,26 +336,29 @@ function removeFile(side: 'front' | 'back') {
     <InputError :message="errors?.[fields.backValidIdPicture]" />
   </div>
 
-  <div v-if="show.vehicleType" class="grid gap-2">
-    <Label :for="fields.vehicleType" class="font-semibold text-auth-blue">{{
-      labels.vehicleType
-    }}</Label>
-    <select
-      :id="fields.vehicleType"
-      :name="fields.vehicleType"
-      required
-      v-model="computedVehicleType"
-      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 px-3 py-2 font-mono text-sm font-semibold capitalize focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
+  <div class="grid gap-2" v-if="show.vehicleType">
+    <Label class="font-semibold text-auth-blue">{{ labels.vehicleType }}</Label>
+    <div
+      class="flex w-full max-w-sm overflow-hidden rounded-md border border-gray-300"
     >
-      <option value="" disabled>Select Vehicle Type</option>
-      <option
-        v-for="vehicleType in vehicleTypes"
-        :key="vehicleType.value"
-        :value="vehicleType.value"
-      >
-        {{ vehicleType.label }}
-      </option>
-    </select>
+      <div class="flex items-center justify-center bg-auth-blue px-3">
+        <Car class="h-5 w-5 text-white" />
+      </div>
+      <Select v-model="computedVehicleType">
+        <SelectTrigger
+          class="flex-1 border-0 font-mono font-semibold capitalize focus-visible:ring-0"
+          ><SelectValue placeholder="Select Vehicle Type"
+        /></SelectTrigger>
+        <SelectContent class="font-mono font-semibold capitalize">
+          <SelectItem
+            v-for="vehicleType in vehicleTypes"
+            :key="vehicleType.value"
+            :value="vehicleType.value"
+            >{{ vehicleType.label }}</SelectItem
+          >
+        </SelectContent>
+      </Select>
+    </div>
     <InputError :message="errors?.[fields.vehicleType]" />
   </div>
 

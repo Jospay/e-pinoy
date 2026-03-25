@@ -20,13 +20,12 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { useForm } from '@inertiajs/vue3';
 import { IdCardIcon } from 'lucide-vue-next';
-import { computed, reactive, ref, watchEffect } from 'vue';
+import { computed, reactive, watchEffect } from 'vue';
 import { toast } from 'vue-sonner';
 
 // Props passed from Controller
 defineProps<{
   idTypeOptions: Array<{ value: string; label: string }>;
-  vehicleTypes: { value: string; label: string }[];
 }>();
 
 // 1. Initialize Address Logic for Franchise
@@ -59,7 +58,6 @@ const form = useForm({
   phone: '',
   password: '',
   password_confirmation: '',
-  gender: '',
   address: '',
   region: '',
   province: '',
@@ -73,64 +71,31 @@ const form = useForm({
 });
 
 const disableSubmit = computed(() => {
-  // Helper to check required fields except province
-  const checkRequired = (obj: Record<string, any>, exclude: string[] = []) => {
-    return Object.entries(obj).every(([key, value]) => {
-      if (exclude.includes(key)) return true; // skip excluded fields
-      return value !== '' && value !== null; // must have value
-    });
-  };
+  // Define which keys we want to IGNORE in the validation
+  const excludedKeys = ['franchise_province', 'province', 'name'];
 
-  // Franchise required fields (exclude province)
-  const franchiseValid = checkRequired(
-    {
-      name: form.franchise_name,
-      email: form.franchise_email, // excluded
-      phone: form.franchise_phone,
-      address: form.franchise_address,
-      region: form.franchise_region,
-      province: form.franchise_province, // excluded
-      city: form.franchise_city,
-      barangay: form.franchise_barangay,
-      postal_code: form.franchise_postal_code,
-      dti_certificate: form.dti_certificate,
-      mayor_permit: form.mayor_permit,
-      proof_capital: form.proof_capital,
-    },
-    ['province'],
-  );
+  // 1. Explicitly type 'val' as any or unknown
+  const isEmpty = (val: any) => val === '' || val === null || val === undefined;
 
-  // Owner required fields (exclude province)
-  const ownerValid = checkRequired(
-    {
-      username: form.username,
-      name: form.name, // excluded
-      email: form.email, // excluded
-      phone: form.phone,
-      password: form.password,
-      password_confirmation: form.password_confirmation,
-      gender: form.gender,
-      address: form.address,
-      region: form.region,
-      province: form.province, // excluded
-      city: form.city,
-      barangay: form.barangay,
-      postal_code: form.postal_code,
-      valid_id_type: form.valid_id_type,
-      valid_id_number: form.valid_id_number,
-      front_valid_id_picture: form.front_valid_id_picture,
-      back_valid_id_picture: form.back_valid_id_picture,
-    },
-    ['province', 'name'],
-  );
+  // 2. Cast the keys of form.data() to the specific keys of your form
+  const isFormInvalid = (
+    Object.keys(form.data()) as Array<keyof typeof form>
+  ).some((key) => {
+    // Skip if it's an excluded key
+    if ((excludedKeys as readonly string[]).includes(key as string))
+      return false;
 
-  // Final rule
-  return !(franchiseValid && ownerValid);
+    return isEmpty(form[key]);
+  });
+
+  return isFormInvalid;
 });
 
 // Configuration for Franchise Details Component
 const franchiseDetailFields = {
   franchiseName: 'franchise_name',
+  email: 'franchise_email',
+  phone: 'franchise_phone',
 };
 const franchiseDetailLabels = {
   franchiseName: 'Business / Franchise Name',
@@ -211,6 +176,7 @@ const ownerIdentityShow = {
   validIdUpload: false,
   expertise: false,
   yearExperience: false,
+  vehicleType: false,
 };
 const ownerIdentityField = {
   validIdNumber: 'valid_id_number',
@@ -222,6 +188,7 @@ const ownerIdShow = {
   expertise: false,
   yearExperience: false,
   validIdNumber: false,
+  vehicleType: false,
 };
 const ownerIdField = {
   frontValidIdPicture: 'front_valid_id_picture',
@@ -290,9 +257,9 @@ watchEffect(() => {
               :field-names="franchiseDetailFields"
               :labels="franchiseDetailLabels"
               :show-fields="franchiseDetailShow"
-              v-model:franchiseName="form.name"
-              v-model:email="form.email"
-              v-model:phone="form.phone"
+              v-model:franchiseName="form.franchise_name"
+              v-model:email="form.franchise_email"
+              v-model:phone="form.franchise_phone"
             />
 
             <StepAddress
@@ -389,8 +356,6 @@ watchEffect(() => {
                   :errors="form.errors"
                   :show-fields="ownerIdentityShow"
                   :field-names="ownerIdentityField"
-                  :vehicle-types="vehicleTypes"
-                  v-model:selected-vehicle-type=""
                   v-model:valid-id-number="form.valid_id_number"
                 />
               </div>
