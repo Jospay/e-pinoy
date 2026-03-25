@@ -183,14 +183,26 @@ const buyLoad = () => {
 async function loadMore() {
   if (loading.value || page.value >= lastPage.value) return;
   loading.value = true;
+
   try {
+    // Use the next page based on our current state
+    const nextPage = page.value + 1;
     const response = await fetch(
-      `/passenger/my-wallet/infinite?page=${page.value + 1}`,
+      `/passenger/my-wallet/infinite?page=${nextPage}`,
     );
     const data = await response.json();
-    items.value = [...items.value, ...data.data];
+
+    // Prevent duplicates just in case
+    const currentIds = new Set(items.value.map((i) => i.id));
+    const filteredNewData = data.data.filter(
+      (item: Transaction) => !currentIds.has(item.id),
+    );
+
+    items.value = [...items.value, ...filteredNewData];
     page.value = data.current_page;
     lastPage.value = data.last_page;
+  } catch (e) {
+    console.error('Failed to load more transactions', e);
   } finally {
     loading.value = false;
   }
@@ -216,6 +228,117 @@ const openLocationMap = async (tx: Transaction) => {
     showMapContent.value = true;
   }
 };
+
+// --- Bus Payment Logic ---
+const isPayBusOpen = ref(false);
+const busSearchQuery = ref('');
+const busData = ref<any>(null); // Stores search results
+const isSearchingBus = ref(false);
+
+const searchBusCode = async () => {
+  if (!busSearchQuery.value) return;
+  isSearchingBus.value = true;
+  try {
+    const response = await fetch(
+      `/passenger/wallet/search-bus?unique_name=${busSearchQuery.value}`,
+      {
+        headers: {
+          Accept: 'application/json', // <--- Add this
+          'X-Requested-With': 'XMLHttpRequest', // <--- And this
+        },
+      },
+    );
+
+    const data = await response.json();
+
+    if (response.ok) {
+      busData.value = data;
+    } else {
+      // Now 'data' will be the Laravel error JSON instead of an HTML string
+      toast.error(data.message || 'Bus code not found.');
+    }
+  } catch (error) {
+    console.error('Search failed:', error);
+    toast.error('A server error occurred.');
+  } finally {
+    isSearchingBus.value = false;
+  }
+};
+
+const isProcessingPayment = ref(false);
+const passengerCount = ref(1);
+
+const confirmBusPayment = () => {
+  // 1. Check if Geolocation is supported
+  if (!navigator.geolocation) {
+    toast.error('Geolocation is not supported by your browser.');
+    return;
+  }
+
+  // 2. Set loading state
+  isProcessingPayment.value = true;
+
+  // 3. Get current position before sending request
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      router.post(
+        '/passenger/wallet/pay-bus',
+        {
+          amount: busData.value.total_amount * passengerCount.value,
+          unique_name: busSearchQuery.value,
+          reservation_id: busData.value.destination.station_reservation_id,
+          passengers: passengerCount.value,
+          latitude: lat,
+          longitude: lng,
+        },
+        {
+          onSuccess: () => {
+            isPayBusOpen.value = false;
+            busData.value = null;
+            busSearchQuery.value = '';
+            passengerCount.value = 1;
+
+            toast.success('Payment Successful! Enjoy your trip.');
+          },
+          onError: (errors) => {
+            // Get the first error message from Laravel validation or Exception
+            const errorMessage = Object.values(errors)[0] || 'Payment failed.';
+            toast.error(errorMessage);
+          },
+          onFinish: () => {
+            isProcessingPayment.value = false;
+          },
+        },
+      );
+    },
+    (error) => {
+      isProcessingPayment.value = false;
+      toast.error('Location access is required to complete the payment.');
+    },
+    { enableHighAccuracy: true, timeout: 5000 },
+  );
+};
+
+watch(
+  () => props.transactions.data,
+  (newData) => {
+    // When Inertia refreshes the props after a successful post (payment),
+    // we want to update our local 'items' list.
+
+    // Logic: Find items in newData that aren't in our current items list yet
+    const currentIds = new Set(items.value.map((i) => i.id));
+    const newItems = newData.filter((item) => !currentIds.has(item.id));
+
+    if (newItems.length > 0) {
+      // Prepend new transactions to the top of the list
+      items.value = [...newItems, ...items.value];
+    }
+  },
+  { deep: true },
+);
 </script>
 
 <template>
@@ -257,13 +380,23 @@ const openLocationMap = async (tx: Transaction) => {
               </h1>
             </div>
           </div>
-          <Button
-            @click="isLoadOpen = true"
-            class="w-full rounded-xl bg-brand-blue px-6 py-6 font-bold hover:bg-brand-blue/90 md:w-auto"
-          >
-            <PlusCircle class="mr-2 h-5 w-5" />
-            Buy Load
-          </Button>
+          <div class="flex gap-5">
+            <Button
+              @click="isLoadOpen = true"
+              class="w-full rounded-xl bg-brand-blue px-6 py-6 font-bold hover:bg-brand-blue/90 md:w-auto"
+            >
+              <PlusCircle class="mr-2 h-5 w-5" />
+              Buy Load
+            </Button>
+            <Button
+              variant="outline"
+              @click="isPayBusOpen = true"
+              class="w-full rounded-xl border-2 border-brand-blue px-6 py-5.5 font-bold text-brand-blue md:w-auto"
+            >
+              <Wallet class="mr-2 h-5 w-5" />
+              Pay with Wallet
+            </Button>
+          </div>
         </div>
 
         <div class="space-y-4 pt-8">
@@ -446,6 +579,146 @@ const openLocationMap = async (tx: Transaction) => {
             />
             <div v-else class="flex h-full items-center justify-center">
               <Loader2 class="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="isPayBusOpen" @update:open="isPayBusOpen = $event">
+      <DialogContent class="max-w-xl rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Quick Bus Payment</DialogTitle>
+          <DialogDescription
+            >Enter the Bus Unique Code (e.g., EPINOY-00001)</DialogDescription
+          >
+        </DialogHeader>
+
+        <div class="space-y-4 py-4">
+          <div class="flex gap-2">
+            <Input
+              v-model="busSearchQuery"
+              placeholder="Enter Unique Name..."
+              class="font-bold uppercase"
+            />
+            <Button
+              @click="searchBusCode"
+              :disabled="isSearchingBus"
+              class="bg-brand-blue"
+            >
+              <Loader2
+                v-if="isSearchingBus"
+                class="mr-2 h-4 w-4 animate-spin"
+              />
+              Search
+            </Button>
+          </div>
+
+          <div
+            v-if="busData"
+            class="rounded-xl border border-slate-100 bg-slate-50 p-4"
+          >
+            <div class="relative mb-6 ml-2">
+              <div
+                class="absolute top-2 left-[11px] h-[calc(100%-24px)] w-0.5 border-l-2 border-dashed border-slate-200"
+              ></div>
+              <div
+                v-for="(stop, index) in busData.route_stations"
+                :key="index"
+                class="relative mb-6 pl-10 last:mb-0"
+              >
+                <div
+                  :class="[
+                    'absolute top-0 left-0 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-sm',
+                    stop.route_step === 1
+                      ? 'bg-brand-blue'
+                      : stop.unique_name?.toUpperCase() ===
+                          busSearchQuery.toUpperCase()
+                        ? 'bg-red-500'
+                        : 'bg-slate-200',
+                  ]"
+                >
+                  <div class="h-1.5 w-1.5 rounded-full bg-white"></div>
+                </div>
+                <p
+                  class="text-xs font-bold"
+                  :class="
+                    stop.unique_name?.toUpperCase() ===
+                    busSearchQuery.toUpperCase()
+                      ? 'text-red-600'
+                      : 'text-slate-900'
+                  "
+                >
+                  {{ stop.name }}
+                </p>
+                <p class="text-[10px] text-slate-500">
+                  {{ stop.address || 'Terminal Station' }}
+                </p>
+              </div>
+            </div>
+
+            <div class="border-t pt-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-[10px] font-black text-slate-400 uppercase">
+                    Total Fare
+                  </p>
+                  <h2 class="text-2xl font-black text-brand-blue">
+                    ₱{{ (busData.total_amount * passengerCount).toFixed(2) }}
+                  </h2>
+                </div>
+                <div class="">
+                  <p
+                    class="mb-1 text-[10px] font-black text-slate-400 uppercase"
+                  >
+                    Passengers
+                  </p>
+                  <div
+                    class="flex w-fit items-center gap-3 rounded-lg border bg-white p-1"
+                  >
+                    <button
+                      @click="passengerCount > 1 ? passengerCount-- : null"
+                      class="flex h-8 w-8 items-center justify-center rounded bg-slate-100"
+                    >
+                      -
+                    </button>
+                    <span class="w-4 text-center text-sm font-bold">{{
+                      passengerCount
+                    }}</span>
+                    <button
+                      @click="passengerCount++"
+                      class="flex h-8 w-8 items-center justify-center rounded bg-slate-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid gap-3 pt-5">
+                <Button
+                  @click="confirmBusPayment"
+                  :disabled="isProcessingPayment"
+                  class="w-full bg-brand-blue hover:bg-blue-900"
+                >
+                  <Loader2
+                    v-if="isProcessingPayment"
+                    class="mr-2 h-4 w-4 animate-spin"
+                  />
+                  {{
+                    isProcessingPayment
+                      ? 'Processing...'
+                      : `Confirm & Pay ₱${(busData.total_amount * passengerCount).toFixed(2)}`
+                  }}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  @click="isPayBusOpen = false"
+                  class="w-full"
+                  >Cancel</Button
+                >
+              </div>
             </div>
           </div>
         </div>

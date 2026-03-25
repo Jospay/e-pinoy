@@ -38,6 +38,11 @@ Route::middleware(['auth', 'verified', 'user_type:passenger'])->prefix('passenge
     Route::get('/verify-phone/{purpose?}', [OTPController::class, 'index'])->name('otp.index');
     Route::post('/send-otp', [OTPController::class, 'sendOtp'])->name('otp.send');
 
+    // --- New Bus Payment Routes ---
+    Route::get('/wallet/search-bus', [WalletController::class, 'searchBus'])->name('wallet.search_bus');
+    Route::post('/wallet/pay-bus', [WalletController::class, 'payBus'])->name('wallet.pay_bus');
+    // ------------------------------
+
     // Main Unified Verification
     Route::post('/verify-otp', [OTPController::class, 'verifyOtp'])->name('otp.verify');
 

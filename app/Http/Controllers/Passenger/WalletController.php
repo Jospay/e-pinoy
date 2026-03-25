@@ -9,11 +9,13 @@ use App\Models\TransactionHistory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
+use Str;
 
 class WalletController extends Controller
 {
@@ -252,4 +254,211 @@ class WalletController extends Controller
             return redirect()->route('passenger.mywallet')->with('error', 'Failed to update wallet balance.');
         }
     }
+
+    private function getReverseGeocode($lat, $lng)
+    {
+        if (!$lat || !$lng) return "Location unavailable";
+        $latMod = round($lat, 4);
+        $lngMod = round($lng, 4);
+        $cacheKey = "addr_v6_{$latMod}_{$lngMod}";
+
+        return Cache::remember($cacheKey, now()->addDays(30), function () use ($lat, $lng) {
+            try {
+                usleep(500000);
+                $response = Http::withHeaders(['User-Agent' => 'BusTerminal_System'])
+                    ->timeout(3)->get("https://nominatim.openstreetmap.org/reverse", [
+                        'lat' => $lat,
+                        'lon' => $lng,
+                        'format' => 'json',
+                    ]);
+                if ($response->successful()) {
+                    $data = $response->json();
+                    return $data['display_name'] ?? "Terminal Location ($lat, $lng)";
+                }
+                return "Terminal at $lat, $lng";
+            } catch (\Exception $e) {
+                return "Address unavailable";
+            }
+        });
+    }
+
+   public function searchBus(Request $request) {
+    $request->validate(['unique_name' => 'required|string']);
+
+    // 1. Find the Scanned Destination + Join Bus Station Details
+    $destinationData = DB::table('station_schedules')
+        ->join('bus_stations', 'station_schedules.bus_station_id', '=', 'bus_stations.id')
+        ->where('station_schedules.unique_name', $request->unique_name)
+        ->select(
+            'bus_stations.name',
+            'bus_stations.latitude',
+            'bus_stations.longitude',
+            'station_schedules.*'
+        )
+        ->first();
+
+    if (!$destinationData) {
+        return response()->json(['error' => 'Bus code not found.'], 404);
+    }
+
+    // Add Geocoded Address to Destination
+    $destinationData->address = $this->getReverseGeocode($destinationData->latitude, $destinationData->longitude);
+
+    // 2. Find the Automatic Origin (Route Step 1) + Join Bus Station Details
+    $originData = DB::table('station_schedules')
+        ->join('bus_stations', 'station_schedules.bus_station_id', '=', 'bus_stations.id')
+        ->where('station_schedules.station_reservation_id', $destinationData->station_reservation_id)
+        ->where('station_schedules.route_step', 1)
+        ->select(
+            'bus_stations.name',
+            'bus_stations.latitude',
+            'bus_stations.longitude',
+            'station_schedules.*'
+        )
+        ->first();
+
+    // Add Geocoded Address to Origin
+    if ($originData) {
+        $originData->address = $this->getReverseGeocode($originData->latitude, $originData->longitude);
+    }
+
+    // 3. Get the Full Timeline (For the UI Route List)
+    $allSchedules = DB::table('station_schedules')
+        ->join('bus_stations', 'station_schedules.bus_station_id', '=', 'bus_stations.id')
+        ->where('station_reservation_id', $destinationData->station_reservation_id)
+        ->orderBy('route_step', 'asc')
+        ->select('bus_stations.name', 'bus_stations.latitude', 'bus_stations.longitude', 'station_schedules.*')
+        ->get();
+
+    // 4. Calculate Fare Leg-by-Leg
+    $fareSum = 0;
+    if ($originData && $originData->bus_station_id != $destinationData->bus_station_id) {
+        $relevantSteps = $allSchedules->where('route_step', '>=', $originData->route_step)
+                                     ->where('route_step', '<=', $destinationData->route_step)
+                                     ->values();
+
+        for ($i = 0; $i < count($relevantSteps) - 1; $i++) {
+            $currentId = $relevantSteps[$i]->bus_station_id;
+            $nextId = $relevantSteps[$i+1]->bus_station_id;
+
+            $legFare = DB::table('station_amounts')
+                ->where(function ($q) use ($currentId, $nextId) {
+                    $q->where('from_bus_station_id', $currentId)
+                      ->where('to_bus_station_id', $nextId);
+                })
+                ->orWhere(function ($q) use ($currentId, $nextId) {
+                    $q->where('from_bus_station_id', $nextId)
+                      ->where('to_bus_station_id', $currentId);
+                })
+                ->value('amount');
+
+            $fareSum += $legFare ?? 0;
+        }
+    }
+
+    // 5. Build the UI Route Stations Array with Geocoding
+    $routeStations = $allSchedules->map(fn($s) => [
+        'name'         => $s->name,
+        'unique_name'  => $s->unique_name,
+        'address'      => $this->getReverseGeocode($s->latitude, $s->longitude), // Dynamic Address
+        'arrival'      => $s->from_time ? date('h:i A', strtotime($s->from_time)) : '--:--',
+        'departure'    => $s->to_time ? date('h:i A', strtotime($s->to_time)) : '--:--',
+        'lat'          => (float)$s->latitude,
+        'lng'          => (float)$s->longitude,
+        'route_step'   => $s->route_step,
+    ]);
+
+    return response()->json([
+        'origin'         => $originData,
+        'destination'    => $destinationData,
+        'route_stations' => $routeStations,
+        'total_amount'   => (float)($fareSum > 0 ? $fareSum : 50.00)
+    ]);
+}
+
+public function payBus(Request $request)
+{
+    $validated = $request->validate([
+        'amount' => 'required|numeric',
+        'unique_name' => 'required|string',
+        'reservation_id' => 'required|integer',
+        'passengers' => 'required|integer|min:1',
+        'latitude' => 'nullable|numeric',
+        'longitude' => 'nullable|numeric',
+    ]);
+
+    $user = Auth::user();
+
+    return DB::transaction(function () use ($validated, $user) {
+        // 1. Get Wallet and Lock for Update to prevent race conditions
+        $wallet = EWallet::where('user_id', $user->id)->lockForUpdate()->first();
+
+        if (!$wallet || $wallet->amount < $validated['amount']) {
+            throw new \Exception("Insufficient wallet balance.");
+        }
+
+        // 2. Get the Reservation and Vehicle Details
+        $reservation = DB::table('station_reservations')
+            ->join('vehicles', 'station_reservations.vehicle_id', '=', 'vehicles.id')
+            ->where('station_reservations.id', $validated['reservation_id'])
+            ->select(
+                'vehicles.id as vehicle_id',
+                'vehicles.franchise_id',
+                'vehicles.branch_id',
+                'vehicles.vehicle_type_id',
+                'vehicles.driver_id'
+            )
+            ->first();
+
+        if (!$reservation) {
+            throw new \Exception("Reservation or Vehicle details not found.");
+        }
+
+        // 3. Fetch IDs for Status and Payment Option
+        $paymentOptionId = DB::table('payment_options')->where('name', 'Wallet')->value('id');
+        $paidStatusId = Status::where('name', 'Paid')->first()?->id ?? 2;
+
+        // 4. Generate Unique Invoice
+        $invoiceNo = "EPINOY-" . strtoupper(Str::random(8));
+
+        // 5. Deduct from Wallet (using your custom method for security/sealing)
+        $oldAmount = (float) $wallet->amount;
+        $newAmount = $oldAmount - (float) $validated['amount'];
+        $wallet->updateAmountAndSeal($newAmount);
+
+        // 6. Create Revenue Entry
+        DB::table('revenues')->insert([
+            'status_id'           => $paidStatusId,
+            'franchise_id'        => $reservation->franchise_id,
+            'branch_id'           => $reservation->branch_id,
+            'vehicle_type_id'     => $reservation->vehicle_type_id,
+            'driver_id'           => $reservation->driver_id,
+            'boundary_contract_id'=> null,
+            'payment_option_id'   => $paymentOptionId,
+            'invoice_no'          => $invoiceNo,
+            'amount'              => $validated['amount'],
+            'currency'            => 'PHP',
+            'service_type'        => 'Trips',
+            'payment_date'        => now(),
+            'notes'               => "Bus payment for {$validated['passengers']} passenger(s) via {$validated['unique_name']}",
+            'created_at'          => now(),
+            'updated_at'          => now(),
+        ]);
+
+        // 7. Create Transaction History
+        TransactionHistory::create([
+            'e_wallet_id' => $wallet->id,
+            'status_id'   => $paidStatusId,
+            'old_amount'  => $oldAmount,
+            'new_amount'  => $newAmount,
+            'type'        => 'debit',
+            'description' => "Bus Trip: {$validated['unique_name']} ({$validated['passengers']} Pax)",
+            'latitude'    => $validated['latitude'] ?? null,
+            'longitude'   => $validated['longitude'] ?? null
+        ]);
+
+
+        return redirect()->route('passenger.mywallet')->with('success', 'Payment successful');
+    });
+}
 }

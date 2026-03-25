@@ -268,12 +268,14 @@ class ReservationController extends Controller
                 $lastVerified = $walletRecord->last_otp_verified_at;
                 if (!$lastVerified || Carbon::parse($lastVerified)->addDays(7)->isPast()) {
                     session(['pending_reservation' => $validated]);
+                    session()->save();
 
                     $otpController = new OTPController();
                     $otpController->sendOtp($request);
 
                     DB::rollBack();
-                    return redirect()->route('passenger.otp.index')->with('requires_otp', true);
+                    return redirect()->route('passenger.otp.index', ['purpose' => 'reservation'])
+                        ->with('requires_otp', true);
                 }
 
                 $wallet = EWallet::where('id', $walletRecord->id)->lockForUpdate()->first();
@@ -312,7 +314,7 @@ class ReservationController extends Controller
                     'old_amount' => $oldAmount,
                     'new_amount' => $newAmount,
                     'type'       => 'debit',
-                    'description' => 'Bus Reservation ID: ' . $reservation->id . ' (QR: ' . $qrName . ')',
+                    'description' => 'Bus Reservation Payment: ' . $qrName ,
                     'latitude'    => $validated['latitude'],
                     'longitude'   => $validated['longitude']
                 ]);
@@ -359,13 +361,21 @@ class ReservationController extends Controller
 {
     try {
         $reservation->lockForUpdate();
-        $paidStatusId = $this->getStatusIdByWord('Paid') ?? 1;
 
-        // If already paid
-        if ((int)$reservation->status_id === (int)$paidStatusId) {
-            return $this->renderSuccess($reservation);
+        // Use your helper to find the real 'Paid' ID
+        $paidStatusId = $this->getStatusIdByWord('Paid');
+
+        if (!$paidStatusId) {
+            Log::emergency("Critical Error: 'Paid' status not found in the statuses table.");
+            return redirect()->route('passenger.dashboard')->with('error', 'System configuration error.');
         }
 
+        // 1. Check if already marked as Paid (Wallet or completed PayMongo)
+        if ((int)$reservation->status_id === (int)$paidStatusId) {
+            return $this->renderSuccess($reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle']));
+        }
+
+        // 2. Online Payment Flow
         if (!$reservation->paymongo_checkout_session_id) {
             return redirect()->route('passenger.dashboard')
                 ->with('error', 'Payment session not found.');
@@ -400,7 +410,6 @@ class ReservationController extends Controller
             return $this->renderSuccess($reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle']));
         }
 
-        // If payment is not completed, just redirect with error
         return redirect()->route('passenger.dashboard')
             ->with('error', 'Payment not completed. Please try again.');
 
