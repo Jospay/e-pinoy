@@ -449,8 +449,13 @@ watch(
       >
         <div class="mb-4 flex items-center justify-between">
           <h2 class="font-mono text-xl font-semibold">Franchise Management</h2>
-
-          <div class="flex gap-4">
+        </div>
+        <DataTable
+          :columns="franchiseColumns"
+          :data="franchises.data"
+          search-placeholder="Search franchises..."
+        >
+          <template #custom-actions>
             <Select v-model="selectedStatus">
               <SelectTrigger class="w-[150px] cursor-pointer">
                 <SelectValue placeholder="Filter by..." />
@@ -464,14 +469,6 @@ watch(
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </div>
-        <DataTable
-          :columns="franchiseColumns"
-          :data="franchises.data"
-          search-placeholder="Search franchises..."
-        >
-          <template #custom-actions>
             <Button class="me-5" @click="createFranchise">
               <PlusIcon />Add Franchise
             </Button>

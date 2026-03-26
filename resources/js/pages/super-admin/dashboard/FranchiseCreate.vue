@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { useAddress } from '@/composables/useAddress';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
@@ -283,8 +282,6 @@ watchEffect(() => {
             />
           </div>
         </div>
-
-        <Separator />
 
         <div class="space-y-4">
           <div class="space-y-4 rounded-lg border p-4">
