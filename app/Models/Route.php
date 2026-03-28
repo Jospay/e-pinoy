@@ -11,7 +11,28 @@ class Route extends Model
 {
     use HasFactory;
 
-    // protected $fillable = [];
+    protected $fillable = [
+        'status_id',
+        'vehicle_type_id',
+        'driver_id',
+        'vehicle_id',
+        'passenger_id',
+        'revenue_id',
+        'passenger_count',
+        'start_trip',
+        'end_trip',
+        'pickup_loc_name',
+        'destination_loc_name',
+        'start_lat',
+        'start_lng',
+        'end_lat',
+        'end_lng',
+        'distance_km',
+        'average_speed_kmh',
+        'max_speed_kmh',
+        'route_path',
+        'is_favorite'
+    ];
 
     // relationship to status, one to many
     public function status(): BelongsTo

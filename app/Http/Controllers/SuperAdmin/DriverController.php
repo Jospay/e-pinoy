@@ -57,7 +57,7 @@ class DriverController extends Controller
                 ->where('franchise_vehicle_type.status_id', $activeStatusId);
             })
             ->get();
-            
+
         $branchList = Branch::select('id', 'name', 'franchise_id')
             ->whereHas('franchise.vehicleTypes', function ($q) use ($activeStatusId, $filters) {
                 $q->where('vehicle_types.name', $filters['tab'])
@@ -124,7 +124,7 @@ class DriverController extends Controller
         if ($filters['type'] === 'branch') {
             // Filter by specific branches
             $query->whereHas('branches', function ($q) use ($filters) {
-                $q->when(!empty($filters['branches']), fn ($subQ) => 
+                $q->when(!empty($filters['branches']), fn ($subQ) =>
                     $subQ->whereIn('branches.id', $filters['branches'])
                 );
                 // If no branches selected, but franchises are, ensure branches belong to those franchises
@@ -168,7 +168,7 @@ class DriverController extends Controller
 
     public function approve(UserDriver $driver)
     {
-        $activeStatusId = Status::where('name', 'active')->firstOrFail();
+        $activeStatusId = Status::where('name', 'approved')->firstOrFail();
 
         $driver->status_id = $activeStatusId->id;
         $driver->save();

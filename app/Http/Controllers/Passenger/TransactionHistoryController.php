@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Passenger;
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
 use App\Models\EWallet;
+use App\Models\Revenue;
 use App\Models\TaxiReservation;
 use App\Models\TransactionHistory;
 use App\Models\Status;
@@ -18,40 +19,108 @@ class TransactionHistoryController extends Controller
 {
     public function index(Request $request)
     {
-        $user = auth()->user();
-        $statusFilter = $request->query('status', 'completed');
-        $typeFilter = $request->query('type', 'all');
-        $now = Carbon::now('Asia/Manila');
+    $user = auth()->user();
+    $statusFilter = $request->query('status', 'completed');
+    $typeFilter = $request->query('type', 'all');
+    $now = Carbon::now('Asia/Manila');
 
-        $reservations = Reservation::with([
-                'fromStation',
-                'toStation',
-                'status',
-                'vehicle',
-                'taxiReservations.status',
-                'taxiReservations.vehicle'
-            ])
-            ->where('passenger_id', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+    $allTransactions = collect();
 
-        $allTransactions = collect();
+   if ($statusFilter === 'completed') {
+    // 1. COMPLETED TAB: Fetch from Revenues with the linked Route
+    $revenues = Revenue::with(['status', 'vehicleType', 'route.vehicle'])
+        ->where('passenger_id', $user->id)
+        ->whereHas('status', function ($q) {
+            $q->where('name', 'like', '%paid%')
+              ->orWhere('name', 'like', '%completed%');
+        })
+        ->orderBy('created_at', 'desc')
+        ->get();
 
-        foreach ($reservations as $item) {
-            $statusName = $item->status->name ?? 'Pending';
-            $lowerStatus = strtolower($statusName);
-            $isCompleted = str_contains($lowerStatus, 'completed');
-            $isPaid = str_contains($lowerStatus, 'paid') && !$isCompleted;
-            $isRefunded = str_contains($lowerStatus, 'refund');
-            $isPending = !$isPaid && !$isCompleted && !$isRefunded;
+    foreach ($revenues as $rev) {
+        $vType = strtolower($rev->vehicleType->name ?? '');
+        $isBus = str_contains($vType, 'bus');
 
-            $departureDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_from_time, 'Asia/Manila');
-            $endOfDayExpiry = Carbon::parse($item->reserve_date, 'Asia/Manila')->endOfDay();
-            $tenMinsPastDept = $departureDateTime->copy()->addMinutes(10);
+        // Apply type filter
+        if ($typeFilter !== 'all') {
+            if ($typeFilter === 'bus' && !$isBus) continue;
+            if ($typeFilter === 'taxi' && $isBus) continue;
+        }
 
-            $canRefundBus = $isPaid && $now->greaterThanOrEqualTo($tenMinsPastDept) && $now->lessThanOrEqualTo($endOfDayExpiry);
-            $isBusExpired = $now->greaterThan($endOfDayExpiry) && ($isPaid || $isPending);
+        // Access the route data
+        $route = $rev->route;
 
+        $allTransactions->push([
+            'id' => $rev->id,
+            'type' => $isBus ? 'bus' : 'taxi',
+            'qrcode_name' => $rev->invoice_no,
+            'origin' => $route->pickup_loc_name ?? 'Completed Trip',
+            'destination' => $route->destination_loc_name ?? $rev->service_type,
+            'amount' => (float)$rev->amount,
+            'book_at' => Carbon::parse($rev->payment_date ?? $rev->created_at)->format('M d, Y'),
+            'time_window' => $route && $route->start_trip
+                                ? Carbon::parse($route->start_trip)->format('h:i A')
+                                : 'Completed',
+            'status_text' => 'Completed',
+            'is_paid' => true,
+            'is_pending' => false,
+            'is_completed' => true,
+            'is_refunded' => false,
+            'can_refund' => false,
+            'is_expired' => false,
+            'date_at' => $rev->created_at->format('M d, Y'),
+            'created_at_raw' => $rev->created_at,
+            'vehicle_name' => $route->vehicle ? ($route->vehicle->model . ' (' . $route->vehicle->plate_number . ')') : 'N/A',
+            'passenger_count' => $route->passenger_count ?? '0',
+            'from_bus_station_id' => $route->id ?? null,
+        ]);
+    }
+} else {
+    $reservations = Reservation::with([
+        'fromStation', 'toStation', 'status', 'vehicle',
+        'taxiReservations.status', 'taxiReservations.vehicle'
+    ])
+    ->where('passenger_id', $user->id)
+    ->orderBy('created_at', 'desc')
+    ->get();
+
+    foreach ($reservations as $item) {
+        $statusName = $item->status->name ?? 'Pending';
+        $lowerStatus = strtolower($statusName);
+
+        // --- BUS STATUS LOGIC ---
+        $isBusRefunded = str_contains($lowerStatus, 'refund');
+        $isBusCompleted = str_contains($lowerStatus, 'completed');
+        $isBusPaid = str_contains($lowerStatus, 'paid') && !$isBusCompleted && !$isBusRefunded;
+        $isBusPending = !$isBusPaid && !$isBusRefunded && !$isBusCompleted;
+
+        // --- DETERMINING IF WE SHOULD EVEN PROCESS THIS ROW ---
+        // We only skip if BOTH the bus and ALL taxis fail the filter.
+        $hasMatchingTaxi = $item->taxiReservations->some(function($t) use ($statusFilter) {
+            $tLower = strtolower($t->status->name ?? '');
+            if ($statusFilter === 'paid') return str_contains($tLower, 'paid');
+            if ($statusFilter === 'pending') return str_contains($tLower, 'pending');
+            if ($statusFilter === 'refund') return str_contains($tLower, 'refund');
+            return false;
+        });
+
+        $busMatchesFilter = false;
+        if ($statusFilter === 'paid' && $isBusPaid) $busMatchesFilter = true;
+        if ($statusFilter === 'pending' && $isBusPending) $busMatchesFilter = true;
+        if ($statusFilter === 'refund' && $isBusRefunded) $busMatchesFilter = true;
+
+        // If neither the bus nor the taxi matches what the user clicked, skip to next reservation
+        if (!$busMatchesFilter && !$hasMatchingTaxi) continue;
+
+        // Date calculations for Bus
+        $departureDateTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_from_time, 'Asia/Manila');
+        $endOfDayExpiry = Carbon::parse($item->reserve_date, 'Asia/Manila')->endOfDay();
+        $tenMinsPastDept = $departureDateTime->copy()->addMinutes(10);
+        $canRefundBus = $isBusPaid && $now->greaterThanOrEqualTo($tenMinsPastDept) && $now->lessThanOrEqualTo($endOfDayExpiry);
+        $isBusExpired = $now->greaterThan($endOfDayExpiry) && ($isBusPaid || $isBusPending);
+
+        // 1. ADD BUS (Only if it matches filter and type)
+        if ($busMatchesFilter && ($typeFilter === 'all' || $typeFilter === 'bus')) {
             $allTransactions->push([
                 'id' => $item->id,
                 'type' => 'bus',
@@ -62,10 +131,10 @@ class TransactionHistoryController extends Controller
                 'book_at' => Carbon::parse($item->reserve_date)->format('M d, Y'),
                 'time_window' => date('h:i A', strtotime($item->reserve_from_time)) . ' - ' . date('h:i A', strtotime($item->reserve_to_time)),
                 'status_text' => $statusName,
-                'is_paid' => $isPaid,
-                'is_pending' => $isPending,
-                'is_completed' => $isCompleted,
-                'is_refunded' => $isRefunded,
+                'is_paid' => $isBusPaid,
+                'is_pending' => $isBusPending,
+                'is_completed' => false,
+                'is_refunded' => $isBusRefunded,
                 'can_refund' => $canRefundBus,
                 'is_expired' => $isBusExpired,
                 'date_at' => $item->created_at->format('M d, Y'),
@@ -74,67 +143,73 @@ class TransactionHistoryController extends Controller
                 'passenger_count' => $item->passenger_count,
                 'from_bus_station_id' => $item->from_bus_station_id,
             ]);
-
-            if ($item->taxiReservations && $item->taxiReservations->count() > 0) {
-                foreach ($item->taxiReservations as $taxi) {
-                    $tStatus = $taxi->status->name ?? 'Pending';
-                    $tLower = strtolower($tStatus);
-                    $isPaidStatus = str_contains($tLower, 'paid');
-                    $isTaxiCompleted = str_contains($tLower, 'completed');
-                    $isTaxiRefunded = str_contains($tLower, 'refund');
-                    $isTaxiExpired = $now->greaterThan($endOfDayExpiry);
-                    $canShowTaxiActions = $isPaidStatus && !$isTaxiCompleted && !$isTaxiExpired;
-
-                    $formattedPickupTime = 'Pending Payment';
-                    if ($isPaidStatus || $isTaxiCompleted) {
-                        if ($taxi->time_pickup) {
-                            $formattedPickupTime = Carbon::parse($taxi->time_pickup)->format('h:i A');
-                        } else {
-                            $busArrivalTime = Carbon::parse($item->reserve_date . ' ' . $item->reserve_to_time, 'Asia/Manila');
-                            $formattedPickupTime = $now->greaterThanOrEqualTo($busArrivalTime->copy()->subMinutes(30))
-                                ? "Est. Pickup: " . $busArrivalTime->format('h:i A')
-                                : "Wait for bus arrival";
-                        }
-                    }
-
-                    $allTransactions->push([
-                        'id' => $taxi->id,
-                        'parent_res_id' => $item->id,
-                        'type' => 'taxi',
-                        'qrcode_name' => $taxi->qrcode_name,
-                        'origin' => $taxi->pickup_loc_name,
-                        'destination' => $taxi->destination_loc_name,
-                        'amount' => (float)$taxi->amount,
-                        'book_at' => Carbon::parse($item->reserve_date)->format('M d, Y'),
-                        'time_window' => $formattedPickupTime,
-                        'status_text' => $tStatus,
-                        'is_paid' => $isPaidStatus,
-                        'is_pending' => str_contains($tLower, 'pending'),
-                        'is_completed' => $isTaxiCompleted,
-                        'is_refunded' => $isTaxiRefunded,
-                        'can_refund' => $canShowTaxiActions,
-                        'can_view_ticket' => $canShowTaxiActions,
-                        'is_expired' => $isTaxiExpired,
-                        'date_at' => $taxi->created_at->format('M d, Y'),
-                        'created_at_raw' => $taxi->created_at,
-                        'vehicle_name' => $taxi->vehicle_id
-                            ? ($taxi->vehicle->model . ' (' . $taxi->vehicle->plate_number . ')')
-                            : 'Searching for driver...',
-                        'passenger_count' => $taxi->passenger_count,
-                        'from_bus_station_id' => $item->from_bus_station_id,
-                    ]);
-                }
-            }
         }
 
-        $sortedTransactions = $allTransactions->sortByDesc('created_at_raw')->values();
+        // 2. ADD TAXIS (Check each taxi individually against the filter)
+        if ($item->taxiReservations && ($typeFilter === 'all' || $typeFilter === 'taxi')) {
+            foreach ($item->taxiReservations as $taxi) {
+                $tStatus = $taxi->status->name ?? 'Pending';
+                $tLower = strtolower($tStatus);
 
-        return Inertia::render('passenger/dashboard/TransactionHistory', [
-            'transactions' => $sortedTransactions,
-            'initialFilter' => $statusFilter,
-            'initialType' => $typeFilter
-        ]);
+                $tIsRefunded = str_contains($tLower, 'refund');
+                $tIsCompleted = str_contains($tLower, 'completed');
+                $tIsPaid = str_contains($tLower, 'paid') && !$tIsCompleted && !$tIsRefunded;
+                $tIsPending = str_contains($tLower, 'pending');
+
+                // Taxi specific filter check
+                $taxiMatches = false;
+                if ($statusFilter === 'paid' && $tIsPaid) $taxiMatches = true;
+                if ($statusFilter === 'pending' && $tIsPending) $taxiMatches = true;
+                if ($statusFilter === 'refund' && $tIsRefunded) $taxiMatches = true;
+
+                if (!$taxiMatches) continue;
+
+                $isTaxiExpired = $now->greaterThan($endOfDayExpiry);
+                $canShowTaxiActions = $tIsPaid && !$isTaxiExpired;
+
+                $formattedPickupTime = $tIsPaid
+                    ? ($taxi->time_pickup ? Carbon::parse($taxi->time_pickup)->format('h:i A') : "Wait for bus arrival")
+                    : 'Pending Payment';
+
+                $allTransactions->push([
+                    'id' => $taxi->id,
+                    'parent_res_id' => $item->id,
+                    'type' => 'taxi',
+                    'qrcode_name' => $taxi->qrcode_name,
+                    'origin' => $taxi->pickup_loc_name,
+                    'destination' => $taxi->destination_loc_name,
+                    'amount' => (float)$taxi->amount,
+                    'book_at' => Carbon::parse($item->reserve_date)->format('M d, Y'),
+                    'time_window' => $formattedPickupTime,
+                    'status_text' => $tStatus,
+                    'is_paid' => $tIsPaid,
+                    'is_pending' => $tIsPending,
+                    'is_completed' => false,
+                    'is_refunded' => $tIsRefunded,
+                    'can_refund' => $canShowTaxiActions,
+                    'can_view_ticket' => $canShowTaxiActions,
+                    'is_expired' => $isTaxiExpired,
+                    'date_at' => $taxi->created_at->format('M d, Y'),
+                    'created_at_raw' => $taxi->created_at,
+                    'vehicle_name' => $taxi->vehicle_id
+                        ? ($taxi->vehicle->model . ' (' . $taxi->vehicle->plate_number . ')')
+                        : 'Searching for driver...',
+                    'passenger_count' => $taxi->passenger_count,
+                    'from_bus_station_id' => $item->from_bus_station_id,
+                ]);
+            }
+        }
     }
+}
+
+    $sortedTransactions = $allTransactions->sortByDesc('created_at_raw')->values();
+
+    return Inertia::render('passenger/dashboard/TransactionHistory', [
+        'transactions' => $sortedTransactions,
+        'initialFilter' => $statusFilter,
+        'initialType' => $typeFilter
+    ]);
+}
 
     public function refund(Request $request, $id)
     {

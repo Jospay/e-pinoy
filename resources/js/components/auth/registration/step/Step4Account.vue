@@ -144,8 +144,8 @@ const computedValidIdNumber = computed<string | undefined>({
   get: () => props.validIdNumber,
   set: (value) => emit('update:validIdNumber', value),
 });
-const computedVehicleType = computed<string | undefined>({
-  get: () => props.selectedVehicleType,
+const computedVehicleType = computed<string>({
+  get: () => props.selectedVehicleType ?? '',
   set: (value) => emit('update:selectedVehicleType', value),
 });
 
@@ -336,29 +336,26 @@ function removeFile(side: 'front' | 'back') {
     <InputError :message="errors?.[fields.backValidIdPicture]" />
   </div>
 
-  <div class="grid gap-2" v-if="show.vehicleType">
-    <Label class="font-semibold text-auth-blue">{{ labels.vehicleType }}</Label>
-    <div
-      class="flex w-full max-w-sm overflow-hidden rounded-md border border-gray-300"
+  <div v-if="show.vehicleType" class="grid gap-2">
+    <Label :for="fields.vehicleType" class="font-semibold text-auth-blue">{{
+      labels.vehicleType
+    }}</Label>
+    <select
+      :id="fields.vehicleType"
+      :name="fields.vehicleType"
+      required
+      v-model="computedVehicleType"
+      class="flex h-10 w-full cursor-pointer rounded-md border border-gray-300 px-3 py-2 font-mono text-sm font-semibold focus-visible:ring-2 focus-visible:ring-auth-blue focus-visible:ring-offset-2 focus-visible:outline-none"
     >
-      <div class="flex items-center justify-center bg-auth-blue px-3">
-        <Car class="h-5 w-5 text-white" />
-      </div>
-      <Select v-model="computedVehicleType">
-        <SelectTrigger
-          class="flex-1 border-0 font-mono font-semibold capitalize focus-visible:ring-0"
-          ><SelectValue placeholder="Select Vehicle Type"
-        /></SelectTrigger>
-        <SelectContent class="font-mono font-semibold capitalize">
-          <SelectItem
-            v-for="vehicleType in vehicleTypes"
-            :key="vehicleType.value"
-            :value="vehicleType.value"
-            >{{ vehicleType.label }}</SelectItem
-          >
-        </SelectContent>
-      </Select>
-    </div>
+      <option value="" disabled>Select Vehicle Type</option>
+      <option
+        v-for="vehicleType in vehicleTypes"
+        :key="vehicleType.value"
+        :value="vehicleType.value"
+      >
+        {{ vehicleType.label }}
+      </option>
+    </select>
     <InputError :message="errors?.[fields.vehicleType]" />
   </div>
 

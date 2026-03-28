@@ -219,7 +219,7 @@ watch(
           :errors="errors"
           :show-fields="identityStep3Show"
           :vehicle-types="vehicleTypes"
-          v-model:selected-vehicle-type="selectedVehicleType"
+          v-model:selectedVehicleType="selectedVehicleType"
           v-model:validIdFront="driverIdFront"
           v-model:validIdBack="driverIdBack"
           :field-names="identityfields"
