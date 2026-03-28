@@ -295,7 +295,7 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                     tx.is_expired
                       ? 'bg-slate-200 text-slate-500'
                       : tx.is_completed
-                        ? 'bg-blue-600 text-white' // Stronger blue for historical completion
+                        ? 'bg-brand-blue text-white' // Stronger blue for historical completion
                         : tx.is_paid
                           ? 'bg-green-100 text-green-700'
                           : tx.is_refunded
