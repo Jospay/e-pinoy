@@ -18,6 +18,8 @@ class Route extends Model
         'vehicle_id',
         'passenger_id',
         'revenue_id',
+        'reservation_id',
+        'taxi_reservation_id',
         'passenger_count',
         'start_trip',
         'end_trip',

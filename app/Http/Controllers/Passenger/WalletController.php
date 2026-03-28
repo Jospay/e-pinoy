@@ -159,7 +159,7 @@ class WalletController extends Controller
                                 'currency' => 'PHP',
                                 'quantity' => 1,
                             ]],
-                            'payment_method_types' => ['card', 'paymaya', 'qrph', 'grab_pay', 'gcash'],
+                            'payment_method_types' => ['card', 'paymaya', 'qrph', 'billease', 'grab_pay', 'dob'],
                             'description' => 'Wallet Load for ' . $user->name,
                         ],
                     ],
