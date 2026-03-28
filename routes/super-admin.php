@@ -17,6 +17,7 @@ use App\Http\Controllers\SuperAdmin\RevenueController;
 use App\Http\Controllers\SuperAdmin\TransactionController;
 use App\Http\Controllers\SuperAdmin\VehicleController;
 use App\Http\Controllers\SuperAdmin\BranchController;
+use App\Http\Controllers\SuperAdmin\RateMetricController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-admin')->name('super-admin.')->group(function () {
@@ -81,6 +82,9 @@ Route::middleware(['auth', 'verified', 'user_type:super_admin'])->prefix('super-
     Route::get('/expense/show', [ExpenseController::class, 'show'])->name('expense.show');
     Route::get('/expense/export/index', [ExpenseController::class, 'exportIndex'])->name('expense.export.index');
     Route::get('/expense/export/show', [ExpenseController::class, 'exportShow'])->name('expense.export.show');
+
+    Route::get('/rate-metric', [RateMetricController::class, 'index'])->name('rateMetric.index');
+    Route::patch('/rate-metric/{rateMetric}', [RateMetricController::class, 'update'])->name('rateMetric.update');
 
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::get('/inventory/{inventory}', [InventoryController::class, 'show'])->name('inventory.show');
