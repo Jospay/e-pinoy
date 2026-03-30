@@ -1,17 +1,7 @@
 <script setup lang="ts">
-import ExpensePaymentOptionsBreakDownPieChart from '@/components/owner/charts/expense-management/ExpensePaymentOptionsBreakDownPieChart.vue';
 import ExpenseTrendSparkLine from '@/components/owner/charts/expense-management/ExpenseTrendSparkLine.vue';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Pagination,
   PaginationContent,
@@ -50,13 +40,9 @@ interface Expense {
   invoice_no: string;
   amount: number;
   currency: string;
-  // expense_type: string;
   payment_date: string | null;
   notes: string | null;
-  status: string | null;
   franchise: string | null;
-  branch: string | null;
-  payment_option: string | null;
 }
 
 interface ExpensesPaginator<T = any> {
@@ -81,23 +67,15 @@ interface ExpensesPaginator<T = any> {
 
 interface Props {
   expenses: ExpensesPaginator;
-
-  // expenseTypeBreakdownData: { name: string; total: number }[];
-  expenseByPaymentOption: { name: string; total: number }[];
-
+  expenseByPaymentOption: { name: string; total: number }[]; // Keeping name for compatibility
   expenseTrendData: { year: number; expense: number }[];
 }
 
 // -------------------------
 // Props and State
 // -------------------------
-const {
-  // expenseTypeBreakdownData,
-  expenseByPaymentOption,
-  expenses,
-  expenseTrendData,
-} = defineProps<Props>();
-const paginator = ref(expenses);
+const props = defineProps<Props>();
+const paginator = ref(props.expenses);
 
 // ─────────────────────────────
 // Breadcrumbs
@@ -108,80 +86,38 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const filters = ref({
   search: '',
-  status: 'all',
-  paymentOption: 'all',
   timePeriod: 'all',
 });
 
-// Reset filters when switching timePeriod to 'all'
+// Reset search when switching timePeriod
 watch(
   () => filters.value.timePeriod,
   (newPeriod) => {
-    if (newPeriod === 'all') {
-      filters.value.status = 'all';
-      filters.value.paymentOption = 'all';
+    if (newPeriod !== 'all') {
       filters.value.search = '';
     }
+    applyFilters();
   },
 );
-
-// Dialog
-const selectedExpense = ref<Expense | null>(null);
-const dialogOpen = ref(false);
-
-const viewExpense = (expense: Expense) => {
-  selectedExpense.value = expense;
-  dialogOpen.value = true;
-};
 
 // -------------------------
 // Computed: Filtered Data
 // -------------------------
 const isGrouped = computed(() => {
-  return (
-    filters.value.timePeriod === 'daily' ||
-    filters.value.timePeriod === 'weekly' ||
-    filters.value.timePeriod === 'monthly' ||
-    filters.value.timePeriod === 'yearly'
+  return ['daily', 'weekly', 'monthly', 'yearly'].includes(
+    filters.value.timePeriod,
   );
 });
 
 const filteredData = computed(() => {
-  if (isGrouped.value) {
-    return paginator.value.data;
-  }
-  if (!filters.value.search) return paginator.value.data;
-  const search = filters.value.search.toLowerCase();
-
-  return paginator.value.data.filter((item) =>
-    Object.values(item)
-      .filter((v) => v !== null && v !== undefined)
-      .some((v) => v.toString().toLowerCase().includes(search)),
-  );
+  return paginator.value.data;
 });
 
-// Computed: Pagination links without Previous/Next
 const paginationLinks = computed(() => {
   return paginator.value.links.filter(
     (link) => link.label !== 'Previous' && link.label !== 'Next',
   );
 });
-
-// -------------------------
-// Helpers
-// -------------------------
-const getStatusVariant = (status: string | null) => {
-  switch (status?.toLowerCase()) {
-    case 'paid':
-      return 'default';
-    case 'overdue':
-      return 'destructive';
-    case 'pending':
-      return 'outline';
-    default:
-      return 'secondary';
-  }
-};
 
 const goToPage = (pageUrl: string | null) => {
   if (pageUrl) applyFilters(pageUrl);
@@ -191,11 +127,6 @@ const applyFilters = (url?: string) => {
   router.get(
     url || paginator.value.path,
     {
-      status: filters.value.status !== 'all' ? filters.value.status : undefined,
-      paymentOption:
-        filters.value.paymentOption !== 'all'
-          ? filters.value.paymentOption
-          : undefined,
       search: filters.value.search || undefined,
       timePeriod: filters.value.timePeriod,
       per_page: paginator.value.per_page,
@@ -210,21 +141,36 @@ const applyFilters = (url?: string) => {
 // -------------------------
 // Watchers
 // -------------------------
+let searchTimeout: any;
 watch(
-  filters,
+  () => filters.value.search,
   () => {
-    applyFilters();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      applyFilters();
+    }, 300);
   },
-  { deep: true },
 );
 
 watch(
-  () => expenses,
+  () => props.expenses,
   (newExpenses) => {
     paginator.value = newExpenses;
   },
   { deep: true },
 );
+
+/**
+ * Helper to display correct date label for grouped rows
+ */
+const getGroupedLabel = (row: any) => {
+  if (filters.value.timePeriod === 'daily') return row.payment_date;
+  if (filters.value.timePeriod === 'weekly')
+    return `${row.week_start} to ${row.week_end}`;
+  if (filters.value.timePeriod === 'monthly') return row.month_name;
+  if (filters.value.timePeriod === 'yearly') return row.year;
+  return '—';
+};
 </script>
 
 <template>
@@ -232,7 +178,6 @@ watch(
 
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="space-y-6 p-6">
-      <!-- Header -->
       <div>
         <h1 class="mb-1 text-3xl font-bold">Expense Records</h1>
         <p class="text-gray-600">
@@ -241,65 +186,21 @@ watch(
       </div>
 
       <div class="flex flex-col gap-4 md:flex-row md:items-center">
-        <!-- Search/Filters/Period -->
         <div class="relative flex-1">
           <Search
             class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400"
           />
           <input
             v-model="filters.search"
-            placeholder="Search contracts..."
-            class="w-full rounded-md border px-10 py-2"
+            placeholder="Search invoice or notes..."
+            class="w-full rounded-md border px-10 py-2 focus:ring-2 focus:ring-primary focus:outline-none"
             :disabled="isGrouped"
           />
         </div>
-        <!-- ... omit for brevity: filter selects (same as before) ... -->
-        <Select v-model="filters.status">
-          <SelectTrigger class="w-full md:w-48">
-            <SelectValue>{{
-              filters.status === 'all' ? 'Filter by status' : filters.status
-            }}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Paid">Paid</SelectItem>
-            <SelectItem value="Overdue">Overdue</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select v-model="filters.paymentOption">
-          <SelectTrigger class="w-full md:w-48">
-            <SelectValue>{{
-              filters.paymentOption === 'all'
-                ? 'Payment Option'
-                : filters.paymentOption
-            }}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Payment Options</SelectItem>
-            <SelectItem value="Cash">Cash</SelectItem>
-            <SelectItem value="Credit Card">Credit Card</SelectItem>
-            <SelectItem value="Gcash">Gcash</SelectItem>
-            <SelectItem value="Paymaya">Paymaya</SelectItem>
-          </SelectContent>
-        </Select>
+
         <Select v-model="filters.timePeriod">
           <SelectTrigger class="w-full md:w-48">
-            <SelectValue>
-              {{
-                filters.timePeriod === 'all'
-                  ? 'All Time'
-                  : filters.timePeriod === 'daily'
-                    ? 'Daily'
-                    : filters.timePeriod === 'weekly'
-                      ? 'Weekly'
-                      : filters.timePeriod === 'monthly'
-                        ? 'Monthly'
-                        : filters.timePeriod === 'yearly'
-                          ? 'Yearly'
-                          : 'Select Period'
-              }}
-            </SelectValue>
+            <SelectValue placeholder="Select Period" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Time</SelectItem>
@@ -311,21 +212,16 @@ watch(
         </Select>
       </div>
 
-      <!-- Table -->
-      <div class="rounded-lg border">
+      <div class="rounded-lg border bg-white dark:bg-slate-900">
         <Table>
           <TableHeader>
             <template v-if="!isGrouped">
               <TableRow>
                 <TableHead>Invoice No</TableHead>
-                <!-- <TableHead>Expense Type</TableHead> -->
                 <TableHead>Amount</TableHead>
-                <TableHead>Payment Date</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Date Recorded</TableHead>
                 <TableHead>Franchise</TableHead>
-                <TableHead>Branch</TableHead>
-                <TableHead>Payment Option</TableHead>
-                <TableHead>Action</TableHead>
+                <TableHead>Notes</TableHead>
               </TableRow>
             </template>
 
@@ -336,12 +232,10 @@ watch(
                     filters.timePeriod === 'daily'
                       ? 'Date'
                       : filters.timePeriod === 'weekly'
-                        ? 'Week'
+                        ? 'Week Range'
                         : filters.timePeriod === 'monthly'
                           ? 'Month'
-                          : filters.timePeriod === 'yearly'
-                            ? 'Year'
-                            : 'Group'
+                          : 'Year'
                   }}
                 </TableHead>
                 <TableHead>Total Expense</TableHead>
@@ -352,8 +246,8 @@ watch(
           <TableBody>
             <TableRow v-if="filteredData.length === 0">
               <TableCell
-                :colspan="isGrouped ? 2 : 9"
-                class="py-6 text-center text-gray-500"
+                :colspan="isGrouped ? 2 : 5"
+                class="py-10 text-center text-gray-500"
               >
                 No results found.
               </TableCell>
@@ -362,110 +256,49 @@ watch(
             <template v-if="!isGrouped">
               <TableRow
                 v-for="expense in filteredData"
-                :key="expense.id"
-                class="hover:bg-gray-50"
+                :key="'exp-' + expense.id"
+                class="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
               >
                 <TableCell class="font-medium">{{
                   expense.invoice_no
                 }}</TableCell>
-                <!-- <TableCell>{{ expense.expense_type }}</TableCell> -->
-                <TableCell class="font-medium">
-                  {{ expense.currency }} {{ expense.amount }}
+                <TableCell>
+                  {{ expense.currency }}
+                  {{
+                    (expense.amount || 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })
+                  }}
                 </TableCell>
                 <TableCell>{{ expense.payment_date || '—' }}</TableCell>
-                <TableCell>
-                  <Badge
-                    :variant="getStatusVariant(expense.status)"
-                    class="px-2 py-1"
-                  >
-                    {{ expense.status }}
-                  </Badge>
-                </TableCell>
                 <TableCell>{{ expense.franchise || '—' }}</TableCell>
-                <TableCell>{{ expense.branch || '—' }}</TableCell>
-                <TableCell>{{ expense.payment_option || '—' }}</TableCell>
-                <TableCell>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    @click="viewExpense(expense)"
-                  >
-                    View
-                  </Button>
+                <TableCell
+                  class="max-w-[250px] truncate text-xs text-muted-foreground"
+                >
+                  {{ expense.notes || '—' }}
                 </TableCell>
-                <!-- <TableCell class="flex gap-2">
-                <template v-if="record.status === 'Pending'">
-                  <Button
-                    size="sm"
-                    class="bg-green-600 text-white hover:bg-green-700"
-                    @click="handleApprove(record)"
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    class="bg-red-600 text-white hover:bg-red-700"
-                    @click="handleReject(record)"
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    size="sm"
-                    class="bg-cyan-500 text-white hover:bg-cyan-600"
-                  >
-                    Upload Receipt
-                  </Button>
-                </template>
-                <template v-else-if="record.status === 'Rejected'">
-                  <Button
-                    size="sm"
-                    class="bg-cyan-500 text-white hover:bg-cyan-600"
-                  >
-                    Upload Receipt
-                  </Button>
-                </template>
-                <template v-else>
-                  <Button size="sm" variant="secondary" disabled> View </Button>
-                </template>
-              </TableCell> -->
               </TableRow>
             </template>
 
             <template v-else>
-              <TableRow
-                v-for="(row, gidx) in filteredData"
-                :key="
-                  row.payment_date ||
-                  row.week_start ||
-                  row.month_name ||
-                  row.year ||
-                  gidx
-                "
-                class="hover:bg-gray-50"
-              >
-                <TableCell>
-                  <template v-if="filters.timePeriod === 'daily'">
-                    {{ row.payment_date }}
-                  </template>
-                  <template v-else-if="filters.timePeriod === 'weekly'">
-                    {{ row.week_start }} - {{ row.week_end }}
-                  </template>
-                  <template v-else-if="filters.timePeriod === 'monthly'">
-                    {{ row.month_name }}
-                  </template>
-                  <template v-else-if="filters.timePeriod === 'yearly'">
-                    {{ row.year }}
-                  </template>
-                  <template v-else> &mdash; </template>
+              <TableRow v-for="(row, idx) in filteredData" :key="'grp-' + idx">
+                <TableCell class="font-medium">{{
+                  getGroupedLabel(row)
+                }}</TableCell>
+                <TableCell class="font-bold text-primary">
+                  ₱
+                  {{
+                    (row.total || 0).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })
+                  }}
                 </TableCell>
-                <TableCell> ₱ {{ row.total || row.amount || 0 }} </TableCell>
               </TableRow>
             </template>
           </TableBody>
         </Table>
       </div>
 
-      <!-- Pagination -->
       <div class="flex items-center justify-between pt-4">
         <span class="text-sm text-gray-600">
           Showing {{ paginator.from || 0 }} to {{ paginator.to || 0 }} of
@@ -473,6 +306,7 @@ watch(
         </span>
 
         <Pagination
+          v-if="paginator.total > paginator.per_page"
           :items-per-page="paginator.per_page"
           :total="paginator.total"
           :default-page="paginator.current_page"
@@ -492,7 +326,9 @@ watch(
                 <Button
                   variant="ghost"
                   size="sm"
-                  :class="{ 'bg-gray-100': link.active }"
+                  :class="{
+                    'bg-slate-100 font-bold dark:bg-slate-800': link.active,
+                  }"
                   :disabled="!link.url"
                   @click="goToPage(link.url)"
                 >
@@ -510,56 +346,13 @@ watch(
         </Pagination>
       </div>
 
-      <!-- Charts Section -->
-      <!-- <div class="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Expense Breakdown by Type</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ExpenseBreakDownDonutChart
-              :data="expenseTypeBreakdownData"
-              category="total"
-              title="Expenses"
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader
-            ><CardTitle
-              >Revenue Breakdown by Payment Options</CardTitle
-            ></CardHeader
-          >
-          <CardContent>
-            <ExpensePaymentOptionsBreakDownPieChart
-              :data="expenseByPaymentOption"
-              category="total"
-              title="Expenses"
-            />
-          </CardContent>
-        </Card>
-      </div> -->
-      <Card>
-        <CardHeader
-          ><CardTitle
-            >Revenue Breakdown by Payment Options</CardTitle
-          ></CardHeader
-        >
-        <CardContent>
-          <ExpensePaymentOptionsBreakDownPieChart
-            :data="expenseByPaymentOption"
-            category="total"
-            title="Expenses"
-          />
-        </CardContent>
-      </Card>
       <Card>
         <CardHeader>
           <CardTitle>Expense Trend</CardTitle>
         </CardHeader>
         <CardContent>
           <ExpenseTrendSparkLine
+            v-if="expenseTrendData.length > 0"
             :data="
               expenseTrendData.map((item) => ({
                 year: item.year,
@@ -573,50 +366,11 @@ watch(
                 `₱ ${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
             "
           />
+          <div v-else class="py-10 text-center text-muted-foreground">
+            No trend data available.
+          </div>
         </CardContent>
       </Card>
     </div>
-
-    <Dialog v-model:open="dialogOpen">
-      <DialogContent class="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Expense Details</DialogTitle>
-          <DialogDescription>
-            Detailed information for invoice
-            <strong>{{ selectedExpense?.invoice_no }}</strong
-            >.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div class="mt-2 space-y-2">
-          <p><strong>Invoice No:</strong> {{ selectedExpense?.invoice_no }}</p>
-          <!-- <p>
-            <strong>Service Type:</strong> {{ selectedExpense?.expense_type }}
-          </p> -->
-          <p>
-            <strong>Amount:</strong> {{ selectedExpense?.currency }}
-            {{ selectedExpense?.amount.toLocaleString() }}
-          </p>
-          <p>
-            <strong>Payment Date:</strong>
-            {{ selectedExpense?.payment_date || '—' }}
-          </p>
-          <p><strong>Status:</strong> {{ selectedExpense?.status || '—' }}</p>
-          <p>
-            <strong>Franchise:</strong> {{ selectedExpense?.franchise || '—' }}
-          </p>
-          <p><strong>Branch:</strong> {{ selectedExpense?.branch || '—' }}</p>
-          <p>
-            <strong>Payment Option:</strong>
-            {{ selectedExpense?.payment_option || '—' }}
-          </p>
-          <p><strong>Notes:</strong> {{ selectedExpense?.notes || '—' }}</p>
-        </div>
-
-        <DialogFooter>
-          <Button @click="dialogOpen = false">Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   </AppLayout>
 </template>

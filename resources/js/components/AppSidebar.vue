@@ -317,6 +317,13 @@ const navConfig: Record<string, NavItem[]> = {
       requiresActive: true,
     },
 
+    {
+      title: 'Inventory Management',
+      href: owner.inventory.index(),
+      icon: Box,
+      group: 'Management',
+    },
+
     // {
     //   title: 'Assign Drivers',
     //   href: owner.vehicleDrivers.index(),

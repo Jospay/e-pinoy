@@ -17,36 +17,40 @@ class Maintenance extends Model
         'technician_id',
         'franchise_id',
         'inventory_id',
+        'quantity',
         'description',
         'maintenance_date',
         'next_maintenance_date',
     ];
 
-    // relationship to status, one to many
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'maintenance_date' => 'date',
+        'next_maintenance_date' => 'date',
+    ];
+
     public function status(): BelongsTo
     {
         return $this->belongsTo(Status::class);
     }
 
-    // relationship to vehicle, one to many
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class);
     }
 
-    // relationship to technician, one to many
     public function technician(): BelongsTo
     {
-        return $this->belongsTo(UserTechnician::class);
+        return $this->belongsTo(UserTechnician::class, 'technician_id');
     }
 
-    // relationship to inventory, one to many
     public function inventory(): BelongsTo
     {
         return $this->belongsTo(Inventory::class);
     }
 
-    // relationship to expenses, one to many
     public function expenses(): HasMany
     {
         return $this->hasMany(Expense::class);

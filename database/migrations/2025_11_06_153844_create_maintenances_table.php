@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('vehicle_id')->constrained('vehicles')->onDelete('restrict');
             $table->foreignId('inventory_id')->constrained('inventories')->onDelete('restrict');
+            $table->integer('quantity');
             $table->text('description');
             $table->date('maintenance_date');
             $table->date('next_maintenance_date');
