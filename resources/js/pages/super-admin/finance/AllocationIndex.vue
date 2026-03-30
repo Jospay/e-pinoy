@@ -29,7 +29,7 @@ import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
 import { Pencil, Percent, PhilippinePeso, Plus } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
 // --- Types ---
@@ -40,7 +40,7 @@ interface PercentageType {
   value: string | number;
 }
 
-defineProps<{
+const props = defineProps<{
   percentageTypes: PercentageType[];
 }>();
 
@@ -81,6 +81,12 @@ const openEditModal = (item: PercentageType) => {
 };
 
 const submitForm = () => {
+  const maxLimit = form.type === 'PHP' ? 10 : 5;
+  if (Number(form.value) > maxLimit) {
+    form.setError('value', `Maximum value is ${maxLimit}`);
+    return;
+  }
+
   if (editingItem.value) {
     form.put(superAdmin.allocation.update(editingItem.value.id).url, {
       onSuccess: () => {
@@ -99,6 +105,8 @@ const submitForm = () => {
     });
   }
 };
+
+const isLimitReached = computed(() => props.percentageTypes.length >= 7);
 </script>
 
 <template>
@@ -165,6 +173,11 @@ const submitForm = () => {
         <!-- Add New Item Card (Last Card) -->
         <button
           @click="openCreateModal"
+          :disabled="isLimitReached"
+          :class="{
+            'cursor-not-allowed opacity-50 hover:border-muted-foreground/25 hover:bg-transparent':
+              isLimitReached,
+          }"
           class="group relative flex h-full min-h-[180px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/25 transition-all hover:border-primary hover:bg-muted/50 focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:outline-none"
         >
           <div

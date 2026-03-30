@@ -241,6 +241,20 @@ watchEffect(() => {
   form.city = ownerAddress.selectedCity;
   form.barangay = ownerAddress.selectedBarangay;
 });
+
+const reset = () => {
+  form.reset();
+  franchiseAddress.selectedRegion = '';
+  franchiseAddress.selectedProvince = '';
+  franchiseAddress.selectedCity = '';
+  franchiseAddress.selectedBarangay = '';
+  ownerAddress.selectedRegion = '';
+  ownerAddress.selectedProvince = '';
+  ownerAddress.selectedCity = '';
+  ownerAddress.selectedBarangay = '';
+
+  toast.info('Form has been reset.');
+};
 </script>
 
 <template>
@@ -370,7 +384,11 @@ watchEffect(() => {
         </div>
 
         <div class="flex justify-end gap-4">
-          <Button type="button" variant="outline" @click="form.reset()"
+          <Button
+            type="button"
+            variant="outline"
+            @click="reset()"
+            :disabled="form.processing"
             >Reset</Button
           >
           <Button type="submit" :disabled="form.processing || disableSubmit">
