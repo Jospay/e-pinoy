@@ -12,6 +12,7 @@ class Inventory extends Model
     use HasFactory;
 
     protected $fillable = [
+        'franchise_id',
         'code_no',
         'name',
         'category',
@@ -21,15 +22,18 @@ class Inventory extends Model
         'notes'
     ];
 
-    // relationship to franchise, one to many
     public function franchise(): BelongsTo
     {
         return $this->belongsTo(Franchise::class);
     }
 
-    // relations to maintenances, one to many
     public function maintenances(): HasMany
     {
         return $this->hasMany(Maintenance::class);
+    }
+
+    // Helper to subtract stock
+    public function subtractStock($amount) {
+        $this->decrement('quantity', $amount);
     }
 }

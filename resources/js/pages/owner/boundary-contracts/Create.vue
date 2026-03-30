@@ -33,8 +33,15 @@ interface VehicleRate {
   vehicle_type_id: number | '';
   amount: string;
 }
+interface Vehicle {
+  id: number;
+  vehicle_type_id: number;
+  label: string;
+}
+
 interface BoundaryForm {
-  driver_id: string; // Changed to string for Select compatibility
+  driver_id: string;
+  vehicle_id: string;
   name: string;
   coverage_area: string;
   contract_terms: string;
@@ -46,8 +53,9 @@ interface BoundaryForm {
 
 interface Props {
   drivers: Driver[];
+  vehicles: Vehicle[];
 }
-const { drivers } = defineProps<Props>();
+const { drivers, vehicles } = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Boundary Contract', href: owner.boundaryContracts.index().url },
@@ -59,6 +67,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const form = useForm<BoundaryForm>({
   driver_id: '',
+  vehicle_id: '',
   name: '',
   coverage_area: '',
   contract_terms: '',
@@ -68,11 +77,24 @@ const form = useForm<BoundaryForm>({
   vehicle_rates: [{ vehicle_type_id: '', amount: '' }],
 });
 
-// Watch driver selection to auto-fill vehicle type
+// Filter vehicles based ONLY on vehicle_type compatibility for the driver
+const filteredVehicles = computed(() => {
+  const selectedDriver = drivers.find(
+    (d) => d.id.toString() === form.driver_id,
+  );
+  if (!selectedDriver || selectedDriver.vehicle_types.length === 0) return [];
+
+  const allowedTypeId = selectedDriver.vehicle_types[0].id;
+  return vehicles.filter((v) => v.vehicle_type_id === allowedTypeId);
+});
+
+// Watch driver selection to auto-fill vehicle type id and clear previous vehicle selection
 watch(
   () => form.driver_id,
   (driverId) => {
+    form.vehicle_id = ''; // Reset vehicle when driver changes
     if (!driverId) return;
+
     const selectedDriver = drivers.find((d) => d.id.toString() === driverId);
     if (selectedDriver && selectedDriver.vehicle_types.length > 0) {
       form.vehicle_rates[0].vehicle_type_id =
@@ -85,6 +107,7 @@ const disableSubmit = computed(() => {
   const rate = form.vehicle_rates[0];
   return !(
     form.driver_id &&
+    form.vehicle_id && // Now required
     form.name &&
     form.start_date &&
     rate.vehicle_type_id &&
@@ -99,7 +122,6 @@ const submit = () => {
       toast.success('Boundary contract created successfully!');
     },
     onError: (errors) => {
-      // Show the first error message clearly
       const firstError = Object.values(errors)[0] as string;
       toast.error(firstError);
     },
@@ -116,6 +138,18 @@ const submit = () => {
       </h2>
 
       <form @submit.prevent="submit" class="flex flex-col gap-6">
+        <div class="grid grid-cols-1 gap-6">
+          <div class="grid gap-2">
+            <Label>Contract Name</Label>
+            <Input
+              v-model="form.name"
+              placeholder="e.g. Daily Boundary Agreement"
+              :class="{ 'border-red-500': form.errors.name }"
+            />
+            <InputError :message="form.errors.name" />
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Driver Assignment</Label>
@@ -131,41 +165,19 @@ const submit = () => {
                   "
                 />
               </SelectTrigger>
-
               <SelectContent>
-                <template v-if="drivers.length > 0">
-                  <SelectItem
-                    v-for="driver in drivers"
-                    :key="driver.id"
-                    :value="driver.id.toString()"
-                  >
-                    {{ driver.username }}
-                  </SelectItem>
-                </template>
-
-                <div
-                  v-else
-                  class="p-4 text-center text-sm text-muted-foreground"
+                <SelectItem
+                  v-for="driver in drivers"
+                  :key="driver.id"
+                  :value="driver.id.toString()"
                 >
-                  No approved drivers found.
-                </div>
+                  {{ driver.username }}
+                </SelectItem>
               </SelectContent>
             </Select>
             <InputError :message="form.errors.driver_id" />
           </div>
 
-          <div class="grid gap-2">
-            <Label>Contract Name</Label>
-            <Input
-              v-model="form.name"
-              placeholder="e.g. Daily Boundary Agreement"
-              :class="{ 'border-red-500': form.errors.name }"
-            />
-            <InputError :message="form.errors.name" />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Vehicle Type</Label>
             <Input
@@ -173,11 +185,45 @@ const submit = () => {
                 drivers.find((d) => d.id.toString() === form.driver_id)
                   ?.vehicle_types?.[0]?.name || 'N/A'
               "
-              placeholder="Auto assigned"
               disabled
               class="bg-gray-50"
             />
           </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div class="grid gap-2">
+            <Label>Vehicle (Plate - Brand Model)</Label>
+            <Select
+              v-model="form.vehicle_id"
+              :disabled="!form.driver_id || filteredVehicles.length === 0"
+            >
+              <SelectTrigger
+                :class="{ 'border-red-500': form.errors.vehicle_id }"
+              >
+                <SelectValue
+                  :placeholder="
+                    form.driver_id
+                      ? filteredVehicles.length > 0
+                        ? 'Select Vehicle'
+                        : 'No matching vehicles found'
+                      : 'Select a driver first'
+                  "
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="vehicle in filteredVehicles"
+                  :key="vehicle.id"
+                  :value="vehicle.id.toString()"
+                >
+                  {{ vehicle.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <InputError :message="form.errors.vehicle_id" />
+          </div>
+
           <div class="grid gap-2">
             <Label>Daily Rate (PHP)</Label>
             <Input
