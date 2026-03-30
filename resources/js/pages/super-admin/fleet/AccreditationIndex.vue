@@ -18,7 +18,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -26,13 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/AppLayout.vue';
 import superAdmin from '@/routes/super-admin';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { debounce } from 'lodash-es';
 import { MoreHorizontal } from 'lucide-vue-next';
 import { computed, h, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -45,18 +42,21 @@ const props = defineProps<{
   franchises: { id: number; name: string }[];
   vehicleTypes: { id: number; name: string }[];
   filters: {
-    tab: string;
     franchises: string[];
-    status: 'active' | 'pending' | 'inactive';
   };
 }>();
 
 // --- Define accreditationRow Interface ---
 interface accreditationRow {
   id: number;
-  franchise_name?: string;
-  vehicle_type: string;
-  status_name: string;
+  franchise_name: string;
+  vehicle_types: vehicleTypeEntry[];
+}
+
+interface vehicleTypeEntry {
+  id: number;
+  name: string;
+  status: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -64,49 +64,80 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 // --- 4. Setup Reactive State for Filters ---
-const activeTab = ref(props.filters.tab);
 const selectedFranchise = ref<string[]>(props.filters.franchises || []);
-const selectedStatus = ref(props.filters.status || 'active');
 
 // Options for MultiSelect
 const franchiseOptions = computed(() =>
   props.franchises.map((f) => ({ id: f.id, label: f.name })),
 );
 
-// --- Change Status Modal State ---
-const isChangeModalOpen = ref(false);
-const selectedAccreditation = ref<Partial<accreditationRow>>({});
-
-const changeForm = useForm({
+const statusForm = useForm({
   vehicle_type: '' as string,
-  status: '' as string,
+  status: '' as 'active' | 'inactive',
+});
+const statusModal = ref<{
+  isOpen: boolean;
+  parentId: number | null;
+  parentName: string;
+  row: accreditationRow | null;
+  pendingStatus: Record<string, 'active' | 'inactive' | null>;
+}>({
+  isOpen: false,
+  parentId: null,
+  parentName: '',
+  row: null,
+  pendingStatus: {},
 });
 
-const openChangeModal = (franchise: accreditationRow) => {
-  selectedAccreditation.value = franchise;
-  isChangeModalOpen.value = true;
+const openStatusModal = (row: accreditationRow) => {
+  statusModal.value = {
+    isOpen: true,
+    parentId: row.id,
+    parentName: row.franchise_name,
+    row,
+    pendingStatus: Object.fromEntries(
+      row.vehicle_types.map((s) => [s.name, null]),
+    ),
+  };
 };
 
-const handleChangeAccreditation = () => {
-  if (!selectedAccreditation.value?.id) return;
-  changeForm.vehicle_type = selectedAccreditation.value.vehicle_type as string;
+const closeStatusModal = () => {
+  statusModal.value.isOpen = false;
+  statusForm.clearErrors('status');
+};
 
-  changeForm.patch(
-    superAdmin.accreditation.change(selectedAccreditation.value.id).url,
+const statusOptions = (current: string): ('active' | 'inactive')[] => {
+  if (current === 'active') return ['inactive'];
+  if (current === 'inactive') return ['active'];
+  return ['active', 'inactive'];
+};
+
+const submittingCode = ref<string | null>(null);
+
+const applyStatusChange = (vehicleType: vehicleTypeEntry) => {
+  const newStatus = statusModal.value.pendingStatus[vehicleType.name];
+  if (!newStatus) return;
+
+  statusForm.clearErrors('status');
+  statusForm.vehicle_type = vehicleType.name;
+  statusForm.status = newStatus;
+  submittingCode.value = vehicleType.name;
+
+  statusForm.patch(
+    `${superAdmin.accreditation.change(statusModal.value.parentId!).url}`,
     {
+      preserveScroll: true,
       onSuccess: () => {
-        changeForm.reset();
-        isChangeModalOpen.value = false;
-        toast.success('Accreditation change status successfully!');
+        vehicleType.status = newStatus;
+        statusModal.value.pendingStatus[vehicleType.name] = null;
+        submittingCode.value = null;
+        statusForm.reset();
+        statusModal.value.isOpen = false;
+        toast.success('Accreditation status updated successfully!');
       },
     },
   );
 };
-
-const statuses = [
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
-];
 
 // Computed columns for the data table
 const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
@@ -118,26 +149,42 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
     {
       accessorKey: 'vehicle_type',
       header: 'Vehicle Category',
-      cell: ({ row }) =>
-        h(Badge, { variant: 'secondary' }, () => row.original.vehicle_type),
+      cell: ({ row }) => {
+        const vehicleTypes = row.original.vehicle_types;
+        if (!vehicleTypes?.length)
+          return h('span', { class: 'text-muted-foreground' }, 'N/A');
+        return h(
+          'div',
+          { class: 'flex flex-wrap gap-1' },
+          vehicleTypes.map((s) =>
+            h(Badge, { variant: 'secondary', key: s.name }, () => s.name),
+          ),
+        );
+      },
     },
     {
-      accessorKey: 'status_name',
-      header: () => h('div', { class: 'text-center' }, 'Status'),
+      id: 'statuses',
+      header: 'Statuses',
       cell: ({ row }) => {
-        const status = row.getValue('status_name') as string;
-        const badgeClass = {
-          'bg-blue-500 hover:bg-blue-600': status === 'active',
-          'bg-amber-500 hover:bg-amber-600': status === 'pending',
-          'bg-rose-500 hover:bg-rose-600': status === 'inactive',
-        };
-        return h('div', { class: 'text-center' }, [
-          h(
-            Badge,
-            { class: [badgeClass, 'text-white'] },
-            () => status || 'N/A',
-          ),
-        ]);
+        const vehicleTypes = row.original.vehicle_types;
+        if (!vehicleTypes?.length)
+          return h('div', { class: 'text-muted-foreground' }, 'N/A');
+        return h(
+          'div',
+          { class: 'flex flex-wrap gap-1' },
+          vehicleTypes.map((v) => {
+            const badgeClass = {
+              'bg-blue-500 hover:bg-blue-600': v.status === 'active',
+              'bg-amber-500 hover:bg-amber-600': v.status === 'pending',
+              'bg-rose-500 hover:bg-rose-600': v.status === 'inactive',
+            };
+            return h(
+              Badge,
+              { class: [badgeClass, 'text-white'], key: v.name },
+              () => v.status,
+            );
+          }),
+        );
       },
     },
     {
@@ -145,6 +192,7 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
       header: () => h('div', { class: 'text-center' }, 'Actions'),
       cell: ({ row }) => {
         const franchise = row.original;
+        const hasVehicles = franchise.vehicle_types?.length > 0;
 
         return h('div', { class: 'relative text-center' }, [
           h(DropdownMenu, null, () => [
@@ -159,15 +207,20 @@ const accreditationColumns = computed<ColumnDef<accreditationRow>[]>(() => {
             ),
             h(DropdownMenuContent, { align: 'end', class: 'border-2' }, () => [
               h(DropdownMenuLabel, null, () => 'Actions'),
-
-              h(
-                DropdownMenuItem,
-                {
-                  class: 'cursor-pointer text-blue-500 focus:text-blue-600',
-                  onClick: () => openChangeModal(franchise),
-                },
-                () => 'Change Status',
-              ),
+              hasVehicles
+                ? h(
+                    DropdownMenuItem,
+                    {
+                      class: 'cursor-pointer text-blue-500 focus:text-blue-600',
+                      onClick: () => openStatusModal(franchise),
+                    },
+                    () => 'Change Status',
+                  )
+                : h(
+                    DropdownMenuItem,
+                    { disabled: true, class: 'text-muted-foreground' },
+                    () => 'No Vehicle Types',
+                  ),
             ]),
           ]),
         ]);
@@ -182,8 +235,6 @@ const updateFilters = () => {
   router.get(
     superAdmin.accreditation.index().url,
     {
-      tab: activeTab.value,
-      status: selectedStatus.value,
       franchises: selectedFranchise.value || [],
     },
     {
@@ -193,22 +244,9 @@ const updateFilters = () => {
   );
 };
 
-watch([activeTab], () => {
-  selectedFranchise.value = [];
-  updateFilters();
-});
-
 watch(selectedFranchise, () => {
   updateFilters();
 });
-
-// Watch for select filter changes (debounced)
-watch(
-  [selectedStatus],
-  debounce(() => {
-    updateFilters();
-  }, 300), // Debounce to avoid firing on every keystroke/click
-);
 </script>
 
 <template>
@@ -216,20 +254,6 @@ watch(
 
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="flex h-full flex-1 flex-col gap-4 p-4">
-      <Tabs v-model="activeTab" class="w-full">
-        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
-          <TabsTrigger
-            v-for="type in vehicleTypes"
-            :key="type.id"
-            :value="type.name"
-            class="cursor-pointer px-8 py-2 font-semibold capitalize"
-            :class="{ 'pointer-events-none': activeTab === type.name }"
-          >
-            {{ type.name }}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
       <div class="rounded-xl border p-4">
         <div class="mb-4 flex items-center justify-between">
           <h2 class="font-mono text-xl font-semibold">
@@ -237,17 +261,6 @@ watch(
           </h2>
 
           <div class="flex gap-4">
-            <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-
             <MultiSelect
               v-model="selectedFranchise"
               :options="franchiseOptions"
@@ -272,52 +285,105 @@ watch(
       </div>
     </div>
 
-    <Dialog v-model:open="isChangeModalOpen">
-      <DialogContent class="max-w-md font-mono">
-        <DialogHeader>
-          <DialogTitle class="text-xl">Change Accreditation Status</DialogTitle>
-          <DialogDescription>
-            Change the status of this accreditation for
-            <strong class="text-blue-500">{{
-              selectedAccreditation?.franchise_name
-            }}</strong
-            >. From {{ selectedAccreditation?.status_name }} to
-            <em>"{{ changeForm.status }}"</em>.
-          </DialogDescription>
-        </DialogHeader>
+    <!-- Change Status Modal -->
+    <Dialog v-model:open="statusModal.isOpen">
+      <DialogContent class="overflow-hidden p-0 sm:max-w-2xl">
+        <div class="flex max-h-[90vh] flex-col">
+          <DialogHeader class="ps-3 pt-6 pb-2">
+            <DialogTitle class="flex items-center gap-2">
+              <ShieldCheck class="h-5 w-5 text-blue-600" />
+              Change Accreditation Status
+            </DialogTitle>
+            <DialogDescription class="ps-7">
+              <span class="font-bold text-blue-500">{{
+                statusModal.parentName
+              }}</span>
+            </DialogDescription>
+          </DialogHeader>
 
-        <div class="grid gap-4 py-4">
-          <div class="grid gap-2">
-            <Label>Status</Label>
-            <Select v-model="changeForm.status">
-              <SelectTrigger>
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <template v-for="s in statuses" :key="s.value">
-                  <SelectItem
-                    v-if="selectedAccreditation?.status_name !== s.value"
-                    :value="s.value"
-                  >
-                    {{ s.label }}
-                  </SelectItem>
-                </template>
-              </SelectContent>
-            </Select>
+          <div
+            class="flex-1 overflow-y-auto p-4"
+            style="scrollbar-gutter: stable both-edges"
+          >
+            <div class="space-y-2">
+              <div v-for="v in statusModal.row?.vehicle_types" :key="v.name">
+                <div
+                  class="flex flex-wrap items-center justify-between rounded-lg border-2 px-4 py-3"
+                >
+                  <!-- Vehicle Type info -->
+                  <div class="flex items-center gap-3">
+                    <div>
+                      <p class="text-sm font-semibold uppercase">
+                        {{ v.name }}
+                      </p>
+                    </div>
+                    <span
+                      class="inline-block rounded px-2 py-0.5 text-[10px] font-bold text-white"
+                      :class="{
+                        'bg-blue-500': v.status === 'active',
+                        'bg-amber-500': v.status === 'pending',
+                        'bg-rose-500': v.status === 'inactive',
+                      }"
+                      >{{ v.status }}</span
+                    >
+                  </div>
+
+                  <!-- Status selector + apply -->
+                  <div class="flex items-center gap-2">
+                    <Select
+                      :model-value="statusModal.pendingStatus[v.name] ?? ''"
+                      @update:model-value="
+                        (val) =>
+                          (statusModal.pendingStatus[v.name] = val as
+                            | 'active'
+                            | 'inactive')
+                      "
+                    >
+                      <SelectTrigger class="w-[120px] cursor-pointer text-xs">
+                        <SelectValue placeholder="Change to..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="opt in statusOptions(v.status)"
+                          :key="opt"
+                          :value="opt"
+                          class="cursor-pointer text-xs"
+                        >
+                          {{ opt.charAt(0).toUpperCase() + opt.slice(1) }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Button
+                      variant="default"
+                      :disabled="
+                        !statusModal.pendingStatus[v.name] ||
+                        statusForm.processing
+                      "
+                      @click="applyStatusChange(v)"
+                    >
+                      {{
+                        statusForm.processing &&
+                        statusForm.vehicle_type === v.name
+                          ? 'Saving...'
+                          : 'Apply'
+                      }}
+                    </Button>
+                  </div>
+                </div>
+                <InputError
+                  v-if="submittingCode === v.name"
+                  :message="statusForm.errors.status"
+                  class="mt-.5 ms-1 w-full"
+                />
+              </div>
+            </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" @click="isChangeModalOpen = false"
-            >Cancel</Button
-          >
-          <Button
-            @click="handleChangeAccreditation"
-            :disabled="changeForm.processing || !changeForm.status"
-          >
-            {{ changeForm.processing ? 'Changing...' : 'Confirm Change' }}
-          </Button>
-        </DialogFooter>
+          <DialogFooter class="flex items-center justify-end border-t p-4">
+            <Button variant="outline" @click="closeStatusModal">Close</Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   </AppLayout>

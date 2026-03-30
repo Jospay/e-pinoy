@@ -18,15 +18,14 @@ class AccreditationDatatableResource extends JsonResource
 
     public function toArray(Request $request): array
     {
-        $vehicleType = $this->vehicleTypes->first();
-        $statusId    = $vehicleType?->pivot->status_id;
-        $statusName  = static::$statusMap?->get($statusId)?->name ?? 'N/A';
-
         return [
             'id'             => $this->id,
             'franchise_name' => $this->name,
-            'vehicle_type'   => $vehicleType?->name,
-            'status_name'    => $statusName,
+            'vehicle_types'   => $this->vehicleTypes->map(fn ($v) => [
+                'id'     => $v->id,
+                'name'   => $v->name,
+                'status' => static::$statusMap?->get($v->pivot->status_id)?->name ?? 'N/A',
+            ])->values(),
         ];
     }
 }
