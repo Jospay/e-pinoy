@@ -13,7 +13,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -32,31 +34,28 @@ import { Head, router } from '@inertiajs/vue3';
 import { Search } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
-// -------------------------
-// Interfaces
-// -------------------------
+interface Branch {
+  id: number;
+  name: string;
+}
+
 interface Expense {
   id: number;
   invoice_no: string;
   amount: number;
   currency: string;
-  payment_date: string | null;
+  created_at: string | null;
   notes: string | null;
-  franchise: string | null;
+  branch_id: number | null;
+  branch_name: string;
 }
 
-interface ExpensesPaginator<T = any> {
+interface ExpensesPaginator {
   current_page: number;
-  data: T[];
-  first_page_url: string | null;
+  data: any[];
   from: number | null;
   last_page: number;
-  last_page_url: string | null;
-  links: Array<{
-    url: string | null;
-    label: string;
-    active: boolean;
-  }>;
+  links: any[];
   next_page_url: string | null;
   path: string;
   per_page: number;
@@ -67,19 +66,13 @@ interface ExpensesPaginator<T = any> {
 
 interface Props {
   expenses: ExpensesPaginator;
-  expenseByPaymentOption: { name: string; total: number }[]; // Keeping name for compatibility
+  branches: Branch[];
   expenseTrendData: { year: number; expense: number }[];
 }
 
-// -------------------------
-// Props and State
-// -------------------------
 const props = defineProps<Props>();
 const paginator = ref(props.expenses);
 
-// ─────────────────────────────
-// Breadcrumbs
-// ─────────────────────────────
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Expense Management', href: owner.expenseManagement().url },
 ];
@@ -87,41 +80,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 const filters = ref({
   search: '',
   timePeriod: 'all',
+  branch: 'all',
 });
 
-// Reset search when switching timePeriod
-watch(
-  () => filters.value.timePeriod,
-  (newPeriod) => {
-    if (newPeriod !== 'all') {
-      filters.value.search = '';
-    }
-    applyFilters();
-  },
+const isGrouped = computed(() =>
+  ['daily', 'weekly', 'monthly', 'yearly'].includes(filters.value.timePeriod),
 );
-
-// -------------------------
-// Computed: Filtered Data
-// -------------------------
-const isGrouped = computed(() => {
-  return ['daily', 'weekly', 'monthly', 'yearly'].includes(
-    filters.value.timePeriod,
-  );
-});
-
-const filteredData = computed(() => {
-  return paginator.value.data;
-});
-
-const paginationLinks = computed(() => {
-  return paginator.value.links.filter(
-    (link) => link.label !== 'Previous' && link.label !== 'Next',
-  );
-});
-
-const goToPage = (pageUrl: string | null) => {
-  if (pageUrl) applyFilters(pageUrl);
-};
 
 const applyFilters = (url?: string) => {
   router.get(
@@ -129,40 +93,33 @@ const applyFilters = (url?: string) => {
     {
       search: filters.value.search || undefined,
       timePeriod: filters.value.timePeriod,
+      branch: filters.value.branch !== 'all' ? filters.value.branch : undefined,
       per_page: paginator.value.per_page,
     },
-    {
-      preserveState: true,
-      preserveScroll: true,
-    },
+    { preserveState: true, preserveScroll: true },
   );
 };
 
-// -------------------------
 // Watchers
-// -------------------------
+watch([() => filters.value.timePeriod, () => filters.value.branch], () =>
+  applyFilters(),
+);
+
 let searchTimeout: any;
 watch(
   () => filters.value.search,
   () => {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(() => {
-      applyFilters();
-    }, 300);
+    searchTimeout = setTimeout(() => applyFilters(), 300);
   },
 );
 
 watch(
   () => props.expenses,
-  (newExpenses) => {
-    paginator.value = newExpenses;
-  },
+  (newVal) => (paginator.value = newVal),
   { deep: true },
 );
 
-/**
- * Helper to display correct date label for grouped rows
- */
 const getGroupedLabel = (row: any) => {
   if (filters.value.timePeriod === 'daily') return row.payment_date;
   if (filters.value.timePeriod === 'weekly')
@@ -171,11 +128,17 @@ const getGroupedLabel = (row: any) => {
   if (filters.value.timePeriod === 'yearly') return row.year;
   return '—';
 };
+
+const paginationLinks = computed(() =>
+  paginator.value.links.filter(
+    (l) => l.label !== 'Previous' && l.label !== 'Next',
+  ),
+);
+const goToPage = (url: string | null) => url && applyFilters(url);
 </script>
 
 <template>
   <Head title="Expense Management" />
-
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="space-y-6 p-6">
       <div>
@@ -197,6 +160,39 @@ const getGroupedLabel = (row: any) => {
             :disabled="isGrouped"
           />
         </div>
+
+        <Select v-model="filters.branch">
+          <SelectTrigger class="w-full md:w-48">
+            <SelectValue placeholder="Select Assignment" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Assignments</SelectItem>
+            <SelectGroup>
+              <SelectLabel
+                class="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase"
+                >Franchise</SelectLabel
+              >
+              <SelectItem value="franchise"
+                >Main Franchise (Unassigned)</SelectItem
+              >
+            </SelectGroup>
+            <SelectGroup v-if="branches.length > 0">
+              <SelectLabel
+                class="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase"
+                >Branches</SelectLabel
+              >
+              <SelectItem v-if="branches.length > 1" value="only_branches"
+                >All Branches</SelectItem
+              >
+              <SelectItem
+                v-for="b in branches"
+                :key="b.id"
+                :value="b.id.toString()"
+                >{{ b.name }}</SelectItem
+              >
+            </SelectGroup>
+          </SelectContent>
+        </Select>
 
         <Select v-model="filters.timePeriod">
           <SelectTrigger class="w-full md:w-48">
@@ -220,71 +216,76 @@ const getGroupedLabel = (row: any) => {
                 <TableHead>Invoice No</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Date Recorded</TableHead>
-                <TableHead>Franchise</TableHead>
+                <TableHead>Assignment</TableHead>
                 <TableHead>Notes</TableHead>
               </TableRow>
             </template>
-
             <template v-else>
               <TableRow>
-                <TableHead>
-                  {{
-                    filters.timePeriod === 'daily'
-                      ? 'Date'
-                      : filters.timePeriod === 'weekly'
-                        ? 'Week Range'
-                        : filters.timePeriod === 'monthly'
-                          ? 'Month'
-                          : 'Year'
-                  }}
-                </TableHead>
+                <TableHead>{{
+                  filters.timePeriod === 'daily'
+                    ? 'Date'
+                    : filters.timePeriod === 'weekly'
+                      ? 'Week Range'
+                      : filters.timePeriod === 'monthly'
+                        ? 'Month'
+                        : 'Year'
+                }}</TableHead>
                 <TableHead>Total Expense</TableHead>
               </TableRow>
             </template>
           </TableHeader>
 
           <TableBody>
-            <TableRow v-if="filteredData.length === 0">
+            <TableRow v-if="paginator.data.length === 0">
               <TableCell
                 :colspan="isGrouped ? 2 : 5"
                 class="py-10 text-center text-gray-500"
+                >No results found.</TableCell
               >
-                No results found.
-              </TableCell>
             </TableRow>
 
             <template v-if="!isGrouped">
               <TableRow
-                v-for="expense in filteredData"
-                :key="'exp-' + expense.id"
-                class="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                v-for="exp in paginator.data"
+                :key="exp.id"
+                class="hover:bg-slate-50 dark:hover:bg-slate-800/50"
               >
-                <TableCell class="font-medium">{{
-                  expense.invoice_no
-                }}</TableCell>
-                <TableCell>
-                  {{ expense.currency }}
+                <TableCell class="font-medium">{{ exp.invoice_no }}</TableCell>
+                <TableCell
+                  >{{ exp.currency }}
                   {{
-                    (expense.amount || 0).toLocaleString(undefined, {
+                    (exp.amount || 0).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                     })
-                  }}
+                  }}</TableCell
+                >
+                <TableCell>{{ exp.created_at || '—' }}</TableCell>
+                <TableCell>
+                  <div class="flex flex-col">
+                    <span class="text-sm font-medium">{{
+                      exp.branch_name
+                    }}</span>
+                    <span class="text-[10px] text-muted-foreground uppercase">{{
+                      exp.branch_id ? 'Branch' : 'Franchise'
+                    }}</span>
+                  </div>
                 </TableCell>
-                <TableCell>{{ expense.payment_date || '—' }}</TableCell>
-                <TableCell>{{ expense.franchise || '—' }}</TableCell>
                 <TableCell
                   class="max-w-[250px] truncate text-xs text-muted-foreground"
+                  >{{ exp.notes || '—' }}</TableCell
                 >
-                  {{ expense.notes || '—' }}
-                </TableCell>
               </TableRow>
             </template>
 
             <template v-else>
-              <TableRow v-for="(row, idx) in filteredData" :key="'grp-' + idx">
-                <TableCell class="font-medium">{{
-                  getGroupedLabel(row)
-                }}</TableCell>
+              <TableRow
+                v-for="(row, idx) in paginator.data"
+                :key="'grp-' + idx"
+              >
+                <TableCell class="font-medium">
+                  {{ row.display_label }}
+                </TableCell>
                 <TableCell class="font-bold text-primary">
                   ₱
                   {{
@@ -300,25 +301,22 @@ const getGroupedLabel = (row: any) => {
       </div>
 
       <div class="flex items-center justify-between pt-4">
-        <span class="text-sm text-gray-600">
-          Showing {{ paginator.from || 0 }} to {{ paginator.to || 0 }} of
-          {{ paginator.total }} entries
-        </span>
-
+        <span class="text-sm text-gray-600"
+          >Showing {{ paginator.from }} to {{ paginator.to }} of
+          {{ paginator.total }} entries</span
+        >
         <Pagination
           v-if="paginator.total > paginator.per_page"
-          :items-per-page="paginator.per_page"
           :total="paginator.total"
+          :items-per-page="paginator.per_page"
           :default-page="paginator.current_page"
-          class="w-auto"
         >
           <PaginationContent>
             <PaginationPrevious
               :disabled="!paginator.prev_page_url"
               @click="goToPage(paginator.prev_page_url)"
             />
-
-            <template v-for="(link, index) in paginationLinks" :key="index">
+            <template v-for="(link, i) in paginationLinks" :key="i">
               <PaginationItem
                 v-if="!isNaN(Number(link.label))"
                 :value="Number(link.label)"
@@ -329,15 +327,12 @@ const getGroupedLabel = (row: any) => {
                   :class="{
                     'bg-slate-100 font-bold dark:bg-slate-800': link.active,
                   }"
-                  :disabled="!link.url"
                   @click="goToPage(link.url)"
+                  >{{ link.label }}</Button
                 >
-                  {{ link.label }}
-                </Button>
               </PaginationItem>
               <PaginationEllipsis v-else-if="link.label.includes('...')" />
             </template>
-
             <PaginationNext
               :disabled="!paginator.next_page_url"
               @click="goToPage(paginator.next_page_url)"

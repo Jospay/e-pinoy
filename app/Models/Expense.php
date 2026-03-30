@@ -27,6 +27,11 @@ class Expense extends Model
         return $this->belongsTo(Franchise::class);
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
     // relationship to maintenance
     public function maintenance(): BelongsTo
     {
