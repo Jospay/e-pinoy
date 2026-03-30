@@ -43,6 +43,7 @@ import {
   Users,
   Warehouse,
   Wrench,
+  Tickets,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
@@ -152,6 +153,12 @@ const navConfig: Record<string, NavItem[]> = {
       title: 'Allocation Management',
       href: superAdmin.allocation.index(),
       icon: HandCoins,
+      group: 'Finance',
+    },
+    {
+      title: 'Trip Matrix Management',
+      href: superAdmin.rateMetric.index(),
+      icon: Tickets,
       group: 'Finance',
     },
     {
@@ -447,7 +454,7 @@ const navConfig: Record<string, NavItem[]> = {
       title: 'Transaction History',
       href: passenger.transactionhisory(),
       icon: History,
-      group: 'Overview',
+      group: 'Transaction',
     },
   ],
 

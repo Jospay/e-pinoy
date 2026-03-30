@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
         $this->call(StatusSeeder::class);
         $this->call(PaymentOptionSeeder::class);
         $this->call(VehicleTypeSeeder::class);
+        $this->call(RateMetricSeeder::class);
 
         User::factory()->create([
             'user_type_id' => 1,

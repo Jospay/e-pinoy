@@ -12,6 +12,7 @@ use App\Models\Status;
 use App\Models\Vehicle;
 use App\Models\EWallet;
 use App\Models\TransactionHistory;
+use App\Models\Route; // Added explicit import
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -144,7 +145,6 @@ class ReservationController extends Controller
         $availableDestinations = $allSchedules->slice($originIndex + 1)
         ->map(function ($targetSchedule) use ($allSchedules, $originIndex) {
             $fareSum = 0;
-
             $startId = $allSchedules[$originIndex]->bus_station_id;
             $endId = $targetSchedule->bus_station_id;
 
@@ -153,7 +153,6 @@ class ReservationController extends Controller
 
             while ($currentId != $endId) {
                 $nextId = $currentId + $step;
-
                 $legFare = StationAmount::where(function ($q) use ($currentId, $nextId) {
                         $q->where('from_bus_station_id', $currentId)
                           ->where('to_bus_station_id', $nextId);
@@ -259,7 +258,7 @@ class ReservationController extends Controller
 
         try {
             DB::beginTransaction();
-            $qrName = 'QR-' . strtoupper(\Str::random(12));
+            $qrName = 'QR-' . strtoupper(Str::random(12));
 
             if ($validated['payment_method'] === 'Wallet') {
                 $walletRecord = EWallet::firstOrCreate(['user_id' => $user->id], ['amount' => 0]);
@@ -308,6 +307,9 @@ class ReservationController extends Controller
                     'payment_options' => 'Wallet',
                 ]);
 
+                // Use the helper to create Route record
+                $this->createRouteRecord($reservation, $user, $validated, $paidStatusId);
+
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
                     'status_id' => $paidStatusId,
@@ -343,6 +345,9 @@ class ReservationController extends Controller
                 'paymongo_checkout_session_id' => 'INITIALIZING',
             ]);
 
+            // Create route as pending/paid based on your preference
+            $this->createRouteRecord($reservation, $user, $validated, $pendingStatusId);
+
             $routeName = "{$origin->name} to {$destination->name}";
             $paymongoSession = $this->createPaymongoCheckoutSession($user, $validated['amount'], $routeName, $reservation);
             $reservation->update(['paymongo_checkout_session_id' => $paymongoSession['id']]);
@@ -358,73 +363,70 @@ class ReservationController extends Controller
     }
 
     public function success(Request $request, Reservation $reservation)
-{
-    try {
-        $reservation->lockForUpdate();
+    {
+        try {
+            $reservation->lockForUpdate();
+            $paidStatusId = $this->getStatusIdByWord('Paid');
 
-        // Use your helper to find the real 'Paid' ID
-        $paidStatusId = $this->getStatusIdByWord('Paid');
+            if (!$paidStatusId) {
+                Log::emergency("Critical Error: 'Paid' status not found.");
+                return redirect()->route('passenger.dashboard')->with('error', 'System configuration error.');
+            }
 
-        if (!$paidStatusId) {
-            Log::emergency("Critical Error: 'Paid' status not found in the statuses table.");
-            return redirect()->route('passenger.dashboard')->with('error', 'System configuration error.');
-        }
+            if ((int)$reservation->status_id === (int)$paidStatusId) {
+                return $this->renderSuccess($reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle']));
+            }
 
-        // 1. Check if already marked as Paid (Wallet or completed PayMongo)
-        if ((int)$reservation->status_id === (int)$paidStatusId) {
-            return $this->renderSuccess($reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle']));
-        }
+            if (!$reservation->paymongo_checkout_session_id) {
+                return redirect()->route('passenger.dashboard')->with('error', 'Payment session not found.');
+            }
 
-        // 2. Online Payment Flow
-        if (!$reservation->paymongo_checkout_session_id) {
-            return redirect()->route('passenger.dashboard')
-                ->with('error', 'Payment session not found.');
-        }
+            $sessionId = $reservation->paymongo_checkout_session_id;
+            $response = Http::withBasicAuth(env('PAYMONGO_SECRET_KEY'), '')
+                ->get("https://api.paymongo.com/v1/checkout_sessions/{$sessionId}");
 
-        $sessionId = $reservation->paymongo_checkout_session_id;
-        $response = Http::withBasicAuth(env('PAYMONGO_SECRET_KEY'), '')
-            ->get("https://api.paymongo.com/v1/checkout_sessions/{$sessionId}");
+            if ($response->failed()) {
+                throw new \Exception('Failed to fetch PayMongo session.');
+            }
 
-        if ($response->failed()) {
-            throw new \Exception('Failed to fetch PayMongo session.');
-        }
+            $attributes = $response->json()['data']['attributes'] ?? [];
+            $paymongoStatus = $attributes['status'] ?? 'open';
+            $payments = $attributes['payments'] ?? [];
 
-        $attributes = $response->json()['data']['attributes'] ?? [];
-        $paymongoStatus = $attributes['status'] ?? 'open';
-        $payments = $attributes['payments'] ?? [];
-
-        $isPaid = ($paymongoStatus === 'completed');
-        if (!$isPaid && !empty($payments)) {
-            foreach ($payments as $payment) {
-                if (($payment['attributes']['status'] ?? '') === 'paid') {
-                    $isPaid = true;
-                    break;
+            $isPaid = ($paymongoStatus === 'completed');
+            if (!$isPaid && !empty($payments)) {
+                foreach ($payments as $payment) {
+                    if (($payment['attributes']['status'] ?? '') === 'paid') {
+                        $isPaid = true;
+                        break;
+                    }
                 }
             }
+
+            if ($isPaid) {
+                $reservation->status_id = $paidStatusId;
+                $reservation->save();
+
+                // Update associated route status if necessary
+                Route::where('reservation_id', $reservation->id)->update(['status_id' => $paidStatusId]);
+
+                return $this->renderSuccess($reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle']));
+            }
+
+            return redirect()->route('passenger.dashboard')->with('error', 'Payment not completed.');
+
+        } catch (\Exception $e) {
+            Log::error("Payment Verification Error: " . $e->getMessage());
+            return redirect()->route('passenger.dashboard')->with('error', 'Verification failed.');
         }
-
-        if ($isPaid) {
-            $reservation->status_id = $paidStatusId;
-            $reservation->save();
-
-            return $this->renderSuccess($reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle']));
-        }
-
-        return redirect()->route('passenger.dashboard')
-            ->with('error', 'Payment not completed. Please try again.');
-
-    } catch (\Exception $e) {
-        Log::error("Payment Verification Error: " . $e->getMessage());
-        return redirect()->route('passenger.dashboard')->with('error', 'Verification failed.');
     }
-}
 
     private function renderSuccess($reservation)
     {
         $reservation->reserve_date = Carbon::parse($reservation->reserve_date)->format('M d, Y');
 
         return Inertia::render('passenger/dashboard/Success', [
-            'reservation' => $reservation->load(['fromStation', 'toStation', 'passenger', 'status', 'vehicle'])
+            'reservation' => $reservation
         ]);
     }
 
@@ -457,5 +459,38 @@ class ReservationController extends Controller
         if ($response->failed()) throw new \Exception('PayMongo Session Error: ' . ($response->json()['errors'][0]['detail'] ?? 'Unknown Error'));
 
         return $response->json()['data'];
+    }
+
+    private function createRouteRecord($reservation, $user, $validated, $statusId)
+    {
+        $dest = DB::table('station_schedules')
+            ->join('bus_stations', 'station_schedules.bus_station_id', '=', 'bus_stations.id')
+            ->where('station_schedules.id', $validated['station_schedule_id'])
+            ->select('bus_stations.name', 'bus_stations.latitude', 'bus_stations.longitude')
+            ->first();
+
+        $orig = DB::table('station_schedules')
+            ->join('bus_stations', 'station_schedules.bus_station_id', '=', 'bus_stations.id')
+            ->where('station_schedules.station_reservation_id', $validated['station_reservation_id'])
+            ->where('station_schedules.route_step', 1)
+            ->select('bus_stations.name', 'bus_stations.latitude', 'bus_stations.longitude')
+            ->first();
+
+        return Route::create([
+            'status_id'            => $statusId,
+            'vehicle_type_id'      => $reservation->vehicle->vehicle_type_id ?? null,
+            'driver_id'            => $reservation->vehicle->driver_id ?? null,
+            'vehicle_id'           => $reservation->vehicle_id,
+            'passenger_id'         => $user->id,
+            'passenger_count'      => $validated['passenger_count'],
+            'reservation_id'       => $reservation->id,
+            'pickup_loc_name'      => $orig->name ?? 'Unknown Origin',
+            'destination_loc_name' => $dest->name ?? 'Unknown Destination',
+            'start_lat'            => $orig->latitude ?? 0,
+            'start_lng'            => $orig->longitude ?? 0,
+            'end_lat'              => $dest->latitude ?? 0,
+            'end_lng'              => $dest->longitude ?? 0,
+            'is_favorite'          => false,
+        ]);
     }
 }

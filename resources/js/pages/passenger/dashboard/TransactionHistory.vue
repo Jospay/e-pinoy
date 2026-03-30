@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import {
   Clock,
-  RotateCcw,
+  // RotateCcw,
   Bus,
   ReceiptText,
   Undo2,
@@ -86,17 +86,27 @@ onMounted(() => {
 // Filter logic
 const filteredTransactions = computed(() => {
   return props.transactions.filter((t) => {
-    const matchesStatus =
-      (props.initialFilter === 'completed' && t.is_completed) ||
-      (props.initialFilter === 'paid' &&
-        t.is_paid &&
-        !t.is_completed &&
-        !t.is_refunded) ||
-      (props.initialFilter === 'refund' && t.is_refunded) ||
-      (props.initialFilter === 'pending' && t.is_pending);
+    // 1. Determine if the transaction matches the selected status filter
+    const matchesStatus = (() => {
+      switch (props.initialFilter) {
+        case 'completed':
+          return t.is_completed;
+        case 'paid':
+          // Show only items that are paid but NOT yet completed or refunded
+          return t.is_paid && !t.is_completed && !t.is_refunded;
+        case 'refund':
+          return t.is_refunded;
+        case 'pending':
+          return t.is_pending;
+        default:
+          return false;
+      }
+    })();
 
+    // 2. Determine if the transaction matches the vehicle type filter
     const matchesType =
       currentType.value === 'all' || t.type === currentType.value;
+
     return matchesStatus && matchesType;
   });
 });
@@ -285,7 +295,7 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                     tx.is_expired
                       ? 'bg-slate-200 text-slate-500'
                       : tx.is_completed
-                        ? 'bg-blue-100 text-brand-blue'
+                        ? 'bg-brand-blue text-white' // Stronger blue for historical completion
                         : tx.is_paid
                           ? 'bg-green-100 text-green-700'
                           : tx.is_refunded
@@ -293,7 +303,13 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                             : 'bg-amber-100 text-amber-700',
                   ]"
                 >
-                  {{ tx.is_expired ? 'Expired' : tx.status_text }}
+                  {{
+                    tx.is_expired
+                      ? 'Expired'
+                      : tx.is_completed
+                        ? 'Trip Finished'
+                        : tx.status_text
+                  }}
                 </span>
                 <span class="font-mono text-[10px] text-slate-400"
                   >#{{ tx.qrcode_name }}</span
@@ -468,13 +484,13 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                   </div>
 
                   <div class="flex gap-3">
-                    <button
+                    <!-- <button
                       v-if="tx.type === 'bus' && tx.is_completed"
                       @click="bookAgain(tx)"
                       class="flex-1 rounded-2xl bg-slate-900 py-3.5 text-xs font-bold text-white hover:bg-slate-800"
                     >
                       <RotateCcw class="mr-1 inline h-4 w-4" /> Book Again
-                    </button>
+                    </button> -->
 
                     <button
                       v-if="tx.type === 'taxi' && tx.is_completed"
@@ -489,7 +505,8 @@ const breadcrumbs = [{ title: 'Transaction History', href: '#' }];
                         tx.type === 'bus' &&
                         tx.is_paid &&
                         !tx.can_refund &&
-                        !tx.is_expired
+                        !tx.is_expired &&
+                        !tx.is_completed
                       "
                       @click="goToTicket(tx.qrcode_name)"
                       class="flex-1 rounded-2xl border-2 border-slate-900 py-3 text-xs font-bold text-slate-900 hover:bg-slate-50"

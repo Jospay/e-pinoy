@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Passenger;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Models\Route;
 use App\Models\TaxiReservation;
 use App\Models\EWallet;
 use App\Models\TransactionHistory;
@@ -120,6 +121,8 @@ class TaxiReservationController extends Controller
                     'status_id' => $paidStatusId,
                 ]));
 
+                $this->createRouteRecord($taxi, $user, $validated, $paidStatusId);
+
                 // 5. Log Transaction History
                 TransactionHistory::create([
                     'e_wallet_id' => $wallet->id,
@@ -141,6 +144,8 @@ class TaxiReservationController extends Controller
                 'status_id' => $pendingStatusId,
                 'paymongo_checkout_session_id' => 'INITIALIZING',
             ]));
+
+            $this->createRouteRecord($taxi, $user, $validated, $pendingStatusId);
 
             $paymongoSession = $this->createPaymongoTaxiSession($user, $validated['amount'], $taxi);
             $taxi->update(['paymongo_checkout_session_id' => $paymongoSession['id']]);
@@ -202,6 +207,7 @@ class TaxiReservationController extends Controller
 
                     if ($isPaid) {
                         $reservation->update(['status_id' => $paidStatusId]);
+                        Route::where('taxi_reservation_id', $reservation->id)->update(['status_id' => $paidStatusId]);
                         DB::commit();
                         return $this->renderTaxiSuccess($reservation->fresh());
                     }
@@ -259,6 +265,31 @@ class TaxiReservationController extends Controller
         return Inertia::render('passenger/dashboard/TaxiSuccess', [
             'reservation' => $reservation->load(['status', 'vehicle', 'reservation']),
             'bookingType' => $reservation->booking_type
+        ]);
+    }
+
+    private function createRouteRecord($taxiReservation, $user, $validated, $statusId)
+    {
+        $taxiReservation->load('vehicle');
+
+        return Route::create([
+            'status_id'            => $statusId,
+            'vehicle_type_id'      => $taxiReservation->vehicle->vehicle_type_id ?? null,
+            'driver_id'            => $taxiReservation->vehicle->driver_id ?? null,
+            'vehicle_id'           => $taxiReservation->vehicle_id,
+            'passenger_id'         => $user->id,
+            'passenger_count'      => $validated['passenger_count'],
+            'taxi_reservation_id'  => $taxiReservation->id,
+
+            // Locations from the validated Map/Form data
+            'pickup_loc_name'      => $validated['pickup_loc_name'],
+            'destination_loc_name' => $validated['destination_loc_name'],
+            'start_lat'            => $validated['start_lat'],
+            'start_lng'            => $validated['start_lng'],
+            'end_lat'              => $validated['end_lat'],
+            'end_lng'              => $validated['end_lng'],
+
+            'is_favorite'          => false,
         ]);
     }
 }

@@ -44,6 +44,12 @@ class Revenue extends Model
         return $this->belongsTo(UserDriver::class);
     }
 
+    // relationship to user passenger, one to many
+    public function passenger(): BelongsTo
+    {
+        return $this->belongsTo(UserPassenger::class);
+    }
+
     // relationship to revenue breakdowns, one to many
     public function revenueBreakdowns(): HasMany
     {

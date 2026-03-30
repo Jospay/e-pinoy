@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { toast } from 'vue-sonner';
 import {
   Wallet,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-vue-next';
 import LocationMap from '@/components/ReservedMap.vue';
 import { Button } from '@/components/ui/button';
+import { debounce } from 'lodash';
 import {
   Dialog,
   DialogContent,
@@ -267,46 +268,46 @@ const searchBusCode = async () => {
 
 const isProcessingPayment = ref(false);
 const passengerCount = ref(1);
+const balanceError = ref<string | null>(null);
 
 const confirmBusPayment = () => {
-  // 1. Check if Geolocation is supported
-  if (!navigator.geolocation) {
-    toast.error('Geolocation is not supported by your browser.');
+  // 1. Quick local check to save a server request
+  const totalCost = busData.value.total_amount * passengerCount.value;
+  if (parseFloat(props.walletBalance) < totalCost) {
+    balanceError.value = 'Insufficient wallet balance.';
+    toast.error('Insufficient balance. Please top up your wallet.');
     return;
   }
 
-  // 2. Set loading state
-  isProcessingPayment.value = true;
+  if (!navigator.geolocation) {
+    toast.error('Geolocation is required for secure payments.');
+    return;
+  }
 
-  // 3. Get current position before sending request
+  isProcessingPayment.value = true;
+  balanceError.value = null;
+
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
-
       router.post(
         '/passenger/wallet/pay-bus',
         {
-          amount: busData.value.total_amount * passengerCount.value,
+          amount: totalCost,
           unique_name: busSearchQuery.value,
           reservation_id: busData.value.destination.station_reservation_id,
           passengers: passengerCount.value,
-          latitude: lat,
-          longitude: lng,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
         },
         {
           onSuccess: () => {
             isPayBusOpen.value = false;
-            busData.value = null;
-            busSearchQuery.value = '';
-            passengerCount.value = 1;
-
-            toast.success('Payment Successful! Enjoy your trip.');
+            toast.success('Payment Successful!');
           },
           onError: (errors) => {
-            // Get the first error message from Laravel validation or Exception
-            const errorMessage = Object.values(errors)[0] || 'Payment failed.';
-            toast.error(errorMessage);
+            // This catches the 'back()->withErrors' from Laravel
+            balanceError.value = Object.values(errors)[0] as string;
+            toast.error(balanceError.value);
           },
           onFinish: () => {
             isProcessingPayment.value = false;
@@ -314,13 +315,50 @@ const confirmBusPayment = () => {
         },
       );
     },
-    (error) => {
+    () => {
       isProcessingPayment.value = false;
-      toast.error('Location access is required to complete the payment.');
+      toast.error('Location access denied.');
     },
-    { enableHighAccuracy: true, timeout: 5000 },
   );
 };
+
+watch(busSearchQuery, (newVal) => {
+  if (newVal.length < 3) {
+    busData.value = null; // Hide the route/price until they type enough
+  }
+  // Optional: Trigger search automatically after typing stops
+  debouncedSearch();
+});
+
+// 2. The Real-time Search Logic
+const debouncedSearch = debounce(async () => {
+  if (busSearchQuery.value.length < 3) return;
+
+  isSearchingBus.value = true;
+  try {
+    const response = await fetch(
+      `/passenger/wallet/search-bus?unique_name=${busSearchQuery.value.toUpperCase()}`,
+      {
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      },
+    );
+
+    const data = await response.json();
+
+    if (response.ok) {
+      busData.value = data;
+    } else {
+      busData.value = null; // Clear if not found
+    }
+  } catch (error) {
+    console.error('Search failed:', error);
+  } finally {
+    isSearchingBus.value = false;
+  }
+}, 500);
 
 watch(
   () => props.transactions.data,
@@ -586,141 +624,203 @@ watch(
     </Dialog>
 
     <Dialog :open="isPayBusOpen" @update:open="isPayBusOpen = $event">
-      <DialogContent class="max-w-xl rounded-2xl">
+      <DialogContent class="max-w-xl overflow-hidden rounded-2xl">
         <DialogHeader>
           <DialogTitle>Quick Bus Payment</DialogTitle>
-          <DialogDescription
-            >Enter the Bus Unique Code (e.g., EPINOY-00001)</DialogDescription
-          >
+          <DialogDescription>
+            Enter the Bus Unique Code (e.g., EPINOY-00001)
+          </DialogDescription>
         </DialogHeader>
 
         <div class="space-y-4 py-4">
-          <div class="flex gap-2">
+          <div class="relative">
             <Input
               v-model="busSearchQuery"
-              placeholder="Enter Unique Name..."
-              class="font-bold uppercase"
+              placeholder="TYPE BUS CODE..."
+              class="pr-10 font-bold uppercase transition-all duration-300 focus:ring-2"
+              :class="busData ? 'border-green-500 ring-green-50' : ''"
+              @input="busSearchQuery = $event.target.value.toUpperCase()"
             />
-            <Button
-              @click="searchBusCode"
-              :disabled="isSearchingBus"
-              class="bg-brand-blue"
-            >
-              <Loader2
-                v-if="isSearchingBus"
-                class="mr-2 h-4 w-4 animate-spin"
-              />
-              Search
-            </Button>
+            <div class="absolute top-2.5 right-3 flex items-center">
+              <Transition mode="out-in">
+                <Loader2
+                  v-if="isSearchingBus"
+                  key="loading"
+                  class="h-5 w-5 animate-spin text-slate-400"
+                />
+                <Check
+                  v-else-if="busData"
+                  key="success"
+                  class="h-5 w-5 text-green-500"
+                />
+              </Transition>
+            </div>
           </div>
 
-          <div
-            v-if="busData"
-            class="rounded-xl border border-slate-100 bg-slate-50 p-4"
+          <Transition
+            mode="out-in"
+            enter-active-class="transition duration-300 ease-out"
+            enter-from-class="transform translate-y-4 opacity-0"
+            enter-to-class="transform translate-y-0 opacity-100"
+            leave-active-class="transition duration-200 ease-in"
+            leave-from-class="transform translate-y-0 opacity-100"
+            leave-to-class="transform translate-y-2 opacity-0"
           >
-            <div class="relative mb-6 ml-2">
-              <div
-                class="absolute top-2 left-[11px] h-[calc(100%-24px)] w-0.5 border-l-2 border-dashed border-slate-200"
-              ></div>
-              <div
-                v-for="(stop, index) in busData.route_stations"
-                :key="index"
-                class="relative mb-6 pl-10 last:mb-0"
-              >
-                <div
-                  :class="[
-                    'absolute top-0 left-0 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-sm',
-                    stop.route_step === 1
-                      ? 'bg-brand-blue'
-                      : stop.unique_name?.toUpperCase() ===
-                          busSearchQuery.toUpperCase()
-                        ? 'bg-red-500'
-                        : 'bg-slate-200',
-                  ]"
+            <div
+              v-if="busData"
+              key="results"
+              class="rounded-xl border border-slate-100 bg-slate-50 p-4 shadow-inner"
+            >
+              <div class="mb-4 flex items-center justify-between border-b pb-2">
+                <span
+                  class="text-[10px] font-bold tracking-widest text-slate-500 uppercase"
+                  >Route Found</span
                 >
-                  <div class="h-1.5 w-1.5 rounded-full bg-white"></div>
-                </div>
-                <p
-                  class="text-xs font-bold"
-                  :class="
-                    stop.unique_name?.toUpperCase() ===
-                    busSearchQuery.toUpperCase()
-                      ? 'text-red-600'
-                      : 'text-slate-900'
-                  "
+                <span
+                  class="rounded bg-brand-blue/10 px-2 py-0.5 text-[10px] font-bold text-brand-blue"
                 >
-                  {{ stop.name }}
-                </p>
-                <p class="text-[10px] text-slate-500">
-                  {{ stop.address || 'Terminal Station' }}
-                </p>
+                  {{ busData.route_stations.length }} Stops
+                </span>
               </div>
-            </div>
 
-            <div class="border-t pt-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-[10px] font-black text-slate-400 uppercase">
-                    Total Fare
-                  </p>
-                  <h2 class="text-2xl font-black text-brand-blue">
-                    ₱{{ (busData.total_amount * passengerCount).toFixed(2) }}
-                  </h2>
-                </div>
-                <div class="">
-                  <p
-                    class="mb-1 text-[10px] font-black text-slate-400 uppercase"
-                  >
-                    Passengers
-                  </p>
+              <div class="relative mb-6 ml-2">
+                <div
+                  class="absolute top-2 left-[11px] h-[calc(100%-24px)] w-0.5 border-l-2 border-dashed border-slate-200"
+                ></div>
+                <div
+                  v-for="(stop, index) in busData.route_stations"
+                  :key="index"
+                  class="relative mb-6 pl-10 last:mb-0"
+                >
                   <div
-                    class="flex w-fit items-center gap-3 rounded-lg border bg-white p-1"
+                    :class="[
+                      'absolute top-0 left-0 z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-sm transition-transform duration-500',
+                      stop.route_step === 1
+                        ? 'bg-brand-blue'
+                        : stop.unique_name?.toUpperCase() ===
+                            busSearchQuery.toUpperCase()
+                          ? 'scale-125 bg-red-500 shadow-lg shadow-red-200'
+                          : 'bg-slate-200',
+                    ]"
                   >
-                    <button
-                      @click="passengerCount > 1 ? passengerCount-- : null"
-                      class="flex h-8 w-8 items-center justify-center rounded bg-slate-100"
+                    <div class="h-1.5 w-1.5 rounded-full bg-white"></div>
+                  </div>
+                  <p
+                    :class="[
+                      'text-xs font-bold transition-colors duration-300',
+                      stop.unique_name?.toUpperCase() ===
+                      busSearchQuery.toUpperCase()
+                        ? 'text-red-600'
+                        : 'text-slate-900',
+                    ]"
+                  >
+                    {{ stop.name }}
+                  </p>
+                  <p class="text-[10px] leading-tight text-slate-500">
+                    {{ stop.address || 'Terminal Station' }}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                class="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200 transition-all hover:shadow-md"
+              >
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-[10px] font-black text-slate-400 uppercase">
+                      Total Amount
+                    </p>
+                    <h2
+                      class="text-3xl font-black text-brand-blue tabular-nums"
                     >
-                      -
-                    </button>
-                    <span class="w-4 text-center text-sm font-bold">{{
-                      passengerCount
-                    }}</span>
-                    <button
-                      @click="passengerCount++"
-                      class="flex h-8 w-8 items-center justify-center rounded bg-slate-100"
+                      ₱{{ (busData.total_amount * passengerCount).toFixed(2) }}
+                    </h2>
+                  </div>
+                  <div class="text-right">
+                    <p
+                      class="mb-1 text-[10px] font-black text-slate-400 uppercase"
                     >
-                      +
-                    </button>
+                      Passengers
+                    </p>
+                    <div
+                      class="flex items-center gap-3 rounded-lg border bg-slate-50 p-1"
+                    >
+                      <button
+                        @click="passengerCount > 1 ? passengerCount-- : null"
+                        class="flex h-7 w-7 items-center justify-center rounded bg-white shadow-sm transition-colors hover:bg-slate-100"
+                      >
+                        -
+                      </button>
+                      <span
+                        class="w-4 text-center text-sm font-bold tabular-nums"
+                        >{{ passengerCount }}</span
+                      >
+                      <button
+                        @click="passengerCount++"
+                        class="flex h-7 w-7 items-center justify-center rounded bg-white shadow-sm transition-colors hover:bg-slate-100"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div class="grid gap-3 pt-5">
+                <Transition
+                  enter-active-class="transition duration-300 ease-out"
+                  enter-from-class="opacity-0 -translate-y-2"
+                  enter-to-class="opacity-100 translate-y-0"
+                  leave-active-class="transition duration-200 ease-in"
+                >
+                  <div
+                    v-if="balanceError"
+                    class="mt-4 flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3"
+                  >
+                    <div class="flex items-center gap-2 text-red-700">
+                      <AlertTriangle class="h-4 w-4 shrink-0" />
+                      <p class="text-[11px] font-bold">{{ balanceError }}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="h-8 w-full border-red-200 text-red-700 hover:bg-red-100"
+                      @click="
+                        isPayBusOpen = false;
+                        isLoadOpen = true;
+                      "
+                    >
+                      Top Up Wallet Now
+                    </Button>
+                  </div>
+                </Transition>
+
                 <Button
                   @click="confirmBusPayment"
                   :disabled="isProcessingPayment"
-                  class="w-full bg-brand-blue hover:bg-blue-900"
+                  class="mt-4 w-full bg-brand-blue py-6 text-lg font-bold transition-all hover:bg-blue-900 active:scale-[0.98]"
                 >
                   <Loader2
                     v-if="isProcessingPayment"
-                    class="mr-2 h-4 w-4 animate-spin"
+                    class="mr-2 h-5 w-5 animate-spin"
                   />
-                  {{
-                    isProcessingPayment
-                      ? 'Processing...'
-                      : `Confirm & Pay ₱${(busData.total_amount * passengerCount).toFixed(2)}`
-                  }}
+                  {{ isProcessingPayment ? 'Processing...' : 'Pay Now' }}
                 </Button>
-
-                <Button
-                  variant="outline"
-                  @click="isPayBusOpen = false"
-                  class="w-full"
-                  >Cancel</Button
-                >
               </div>
             </div>
-          </div>
+
+            <div
+              v-else-if="busSearchQuery.length >= 3 && !isSearchingBus"
+              key="no-results"
+              class="flex flex-col items-center py-12 text-center"
+            >
+              <div class="mb-4 rounded-full bg-amber-50 p-4">
+                <AlertTriangle class="h-10 w-10 animate-pulse text-amber-500" />
+              </div>
+              <p class="text-sm font-bold text-slate-600">Bus Code Not Found</p>
+              <p class="mx-auto max-w-[200px] text-xs text-slate-400">
+                We couldn't find a bus matching "{{ busSearchQuery }}".
+              </p>
+            </div>
+          </Transition>
         </div>
       </DialogContent>
     </Dialog>
