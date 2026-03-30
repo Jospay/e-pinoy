@@ -22,16 +22,12 @@ class AccreditationController extends Controller
     {
         // 1. Validate all filters
         $validated = $request->validate([
-            'tab' => ['sometimes', 'string', 'exists:vehicle_types,name'],
             'franchises' => ['sometimes', 'nullable', 'array'],
-            'status' => ['sometimes', 'string', Rule::in(['active', 'pending', 'inactive'])],
         ]);
 
         // 2. Set defaults
         $filters = [
-            'tab' => $validated['tab'] ?? 'taxi',
             'franchises' => $validated['franchises'] ?? [],
-            'status' => $validated['status'] ?? 'active',
         ];
 
         // 3. Build and execute query
@@ -44,9 +40,8 @@ class AccreditationController extends Controller
         $activeStatusId = Status::where('name', 'active')->value('id');
 
         $franchiseList = Franchise::select('id', 'name')
-            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId, $filters) {
-                $q->where('vehicle_types.name', $filters['tab'])
-                ->where('franchise_vehicle_type.status_id', $activeStatusId);
+            ->whereHas('vehicleTypes', function ($q) use ($activeStatusId) {
+                $q->where('franchise_vehicle_type.status_id', $activeStatusId);
             })
             ->get();
 
@@ -65,23 +60,13 @@ class AccreditationController extends Controller
     private function buildBaseQuery(array $filters): Builder
     {
         $activeFranchiseStatusId = Status::where('name', 'active')->value('id');
-        $pivotStatusId = Status::where('name', $filters['status'])->value('id');
 
-        $query = Franchise::with([
-                'vehicleTypes' => function ($q) use ($filters, $pivotStatusId) {
-                    $q->where('vehicle_types.name', $filters['tab'])
-                    ->where('franchise_vehicle_type.status_id', $pivotStatusId)
-                    ->withPivot('status_id');
-                },
-            ])
-            ->where('status_id', $activeFranchiseStatusId)
-            ->whereHas('vehicleTypes', function ($q) use ($filters, $pivotStatusId) {
-                $q->where('vehicle_types.name', $filters['tab'])
-                ->where('franchise_vehicle_type.status_id', $pivotStatusId);
-            });
+        $query = Franchise::with('vehicleTypes')
+            ->where('status_id', $activeFranchiseStatusId);
 
+        // Filter by Franchise ID if provided
         if (!empty($filters['franchises'])) {
-            $query->whereIn('franchises.id', $filters['franchises']);
+            $query->whereIn('id', $filters['franchises']);
         }
 
         return $query;
