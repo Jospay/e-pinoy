@@ -395,13 +395,13 @@ const navConfig: Record<string, NavItem[]> = {
       group: 'Support',
       requiresActive: true,
     },
-    {
-      title: 'Maintenance Requests',
-      href: owner.maintenanceRequests.index(),
-      icon: Wrench,
-      group: 'Support',
-      requiresActive: true,
-    },
+    // {
+    //   title: 'Maintenance Requests',
+    //   href: owner.maintenanceRequests.index(),
+    //   icon: Wrench,
+    //   group: 'Support',
+    //   requiresActive: true,
+    // },
 
     {
       title: 'My Contract',
