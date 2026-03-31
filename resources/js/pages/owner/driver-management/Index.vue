@@ -78,6 +78,12 @@ interface Driver {
   address: string;
   vehicle_types: VehicleType[];
   details: DriverDetails;
+  vehicle: {
+    plate_number: string;
+    brand: string;
+    model: string;
+    color: string;
+  };
   assignment: {
     type: 'branch' | 'franchise';
     name: string;
@@ -477,6 +483,7 @@ const removeDriverFromFranchise = () => {
               <TableHead>Email</TableHead>
               <TableHead>Assignment</TableHead>
               <TableHead>Vehicle Type</TableHead>
+              <TableHead>Plate Number</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -520,6 +527,23 @@ const removeDriverFromFranchise = () => {
                   >
                 </div>
               </TableCell>
+
+              <TableCell class="font-bold text-primary">
+                <div
+                  v-if="
+                    driver?.vehicle &&
+                    driver.vehicle.plate_number !== 'No Vehicle'
+                  "
+                >
+                  {{ driver.vehicle.plate_number }}
+                </div>
+                <div v-else>
+                  <p class="text-sm text-muted-foreground italic">
+                    No vehicle currently assigned
+                  </p>
+                </div>
+              </TableCell>
+
               <TableCell>
                 <Badge :variant="getStatusVariant(driver.status)">{{
                   driver.status
@@ -695,69 +719,132 @@ const removeDriverFromFranchise = () => {
             <p class="text-xs font-bold text-gray-500 uppercase">
               Address Information:
             </p>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase"
-                  >Region</label
-                >
-                <select
-                  v-if="isEditing"
-                  v-model="selectedRegion"
-                  class="w-full rounded border bg-white px-2 py-1 text-xs"
-                >
-                  <option v-for="r in regions" :key="r.code" :value="r.name">
-                    {{ r.name }}
-                  </option>
-                </select>
-                <p v-else class="text-xs">{{ selectedDriver?.region }}</p>
+                <p class="text-xs font-bold text-gray-500 uppercase">Regions</p>
+                <Select v-if="isEditing" v-model="selectedRegion">
+                  <SelectTrigger
+                    class="w-full rounded border bg-white px-2 py-1 text-xs"
+                  >
+                    <SelectValue
+                      :placeholder="selectedRegion || 'Select a region'"
+                    />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem
+                      v-for="r in regions"
+                      :key="r.code"
+                      :value="r.name"
+                    >
+                      {{ r.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <p v-else class="text-xs">
+                  {{ selectedDriver?.region || 'No region assigned' }}
+                </p>
               </div>
+
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase"
-                  >Province</label
-                >
-                <select
+                <p class="text-xs font-bold text-gray-500 uppercase">
+                  Province
+                </p>
+                <Select
                   v-if="isEditing"
                   v-model="selectedProvince"
                   :disabled="isNcr || isLoadingProvinces"
-                  class="w-full rounded border bg-white px-2 py-1 text-xs"
                 >
-                  <option v-for="p in provinces" :key="p.code" :value="p.name">
-                    {{ p.name }}
-                  </option>
-                </select>
-                <p v-else class="text-xs">{{ selectedDriver?.province }}</p>
+                  <SelectTrigger
+                    class="w-full rounded border bg-white px-2 py-1 text-xs"
+                  >
+                    <SelectValue
+                      :placeholder="selectedProvince || 'Select a province'"
+                    />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem
+                      v-for="r in provinces"
+                      :key="r.code"
+                      :value="r.name"
+                    >
+                      {{ r.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <p v-else class="text-xs">
+                  {{ selectedDriver?.province || 'No province assigned' }}
+                </p>
               </div>
+
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase"
-                  >City</label
-                >
-                <select
+                <p class="text-xs font-bold text-gray-500 uppercase">
+                  City / Municipality
+                </p>
+
+                <Select
                   v-if="isEditing"
                   v-model="selectedCity"
                   :disabled="isLoadingCities"
-                  class="w-full rounded border bg-white px-2 py-1 text-xs"
                 >
-                  <option v-for="c in cities" :key="c.code" :value="c.name">
-                    {{ c.name }}
-                  </option>
-                </select>
-                <p v-else class="text-xs">{{ selectedDriver?.city }}</p>
+                  <SelectTrigger
+                    class="w-full rounded border bg-white px-2 py-1 text-xs"
+                  >
+                    <SelectValue
+                      :placeholder="selectedCity || 'Select a city'"
+                    />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem
+                      v-for="r in cities"
+                      :key="r.code"
+                      :value="r.name"
+                    >
+                      {{ r.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <p v-else class="text-xs">
+                  {{ selectedDriver?.city || 'No city assigned' }}
+                </p>
               </div>
+
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-gray-400 uppercase"
-                  >Barangay</label
-                >
-                <select
+                <p class="text-xs font-bold text-gray-500 uppercase">
+                  Barangay
+                </p>
+                <Select
                   v-if="isEditing"
                   v-model="selectedBarangay"
                   :disabled="isLoadingBarangays"
-                  class="w-full rounded border bg-white px-2 py-1 text-xs"
                 >
-                  <option v-for="b in barangays" :key="b.code" :value="b.name">
-                    {{ b.name }}
-                  </option>
-                </select>
-                <p v-else class="text-xs">{{ selectedDriver?.barangay }}</p>
+                  <SelectTrigger
+                    class="w-full rounded border bg-white px-2 py-1 text-xs"
+                  >
+                    <SelectValue
+                      :placeholder="selectedBarangay || 'Select a Barangay'"
+                    />
+                  </SelectTrigger>
+
+                  <SelectContent>
+                    <SelectItem
+                      v-for="r in barangays"
+                      :key="r.code"
+                      :value="r.name"
+                    >
+                      {{ r.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <p v-else class="text-xs">
+                  {{ selectedDriver?.barangay || 'No barangay assigned' }}
+                </p>
               </div>
             </div>
           </div>
@@ -825,6 +912,45 @@ const removeDriverFromFranchise = () => {
               <X class="mr-1 h-3 w-3" /> Cancel
             </Button>
           </template>
+        </div>
+
+        <div class="mt-4 border-t pt-4">
+          <h3 class="mb-2 text-sm font-semibold">Vehicle Information</h3>
+          <div
+            v-if="
+              selectedDriver?.vehicle &&
+              selectedDriver.vehicle.plate_number !== 'No Vehicle'
+            "
+            class="grid grid-cols-1 gap-x-6 gap-y-3 pt-2 text-sm sm:grid-cols-2"
+          >
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase">
+                Plate Number
+              </p>
+
+              <p>{{ selectedDriver?.vehicle.plate_number }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase">Brand</p>
+
+              <p>{{ selectedDriver?.vehicle.brand }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase">Model</p>
+
+              <p>{{ selectedDriver?.vehicle.model }}</p>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase">Color</p>
+
+              <p>{{ selectedDriver?.vehicle.color }}</p>
+            </div>
+          </div>
+          <div v-else class="pt-2">
+            <p class="text-sm text-muted-foreground italic">
+              No vehicle currently assigned
+            </p>
+          </div>
         </div>
 
         <div v-if="selectedDriver?.details" class="mt-4 border-t pt-4">

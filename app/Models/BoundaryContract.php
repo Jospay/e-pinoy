@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class BoundaryContract extends Model
 {
@@ -13,6 +14,7 @@ class BoundaryContract extends Model
 
     protected $fillable = [
         'franchise_id',
+        'branch_id',
         'driver_id',
         'vehicle_id',
         'name',
@@ -24,31 +26,40 @@ class BoundaryContract extends Model
         'currency',
     ];
 
-    // relationship to franchise, one to many
+    /**
+     * Relationship to vehicle
+     * This fixes the RelationNotFoundException
+     */
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
+    // Relationship to franchise
     public function franchise(): BelongsTo
     {
         return $this->belongsTo(Franchise::class);
     }
 
-    // relationship to driver, one to many
+    // Relationship to driver
     public function driver(): BelongsTo
     {
-        return $this->belongsTo(UserDriver::class);
+        return $this->belongsTo(UserDriver::class, 'driver_id');
     }
 
-    // relationship to revenue, one to many
+    // Relationship to revenue
     public function revenues(): HasMany
     {
         return $this->hasMany(Revenue::class);
     }
 
-    public function vehicleTypes()
+    public function vehicleTypes(): BelongsToMany
     {
         return $this->belongsToMany(VehicleType::class)
                     ->withPivot('amount', 'status_id');
     }
 
-    // relationship to branch, one to many
+    // Relationship to branch
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

@@ -63,9 +63,12 @@ class HandleInertiaRequests extends Middleware
         'name' => config('app.name'),
         'quote' => ['message' => trim($message), 'author' => trim($author)],
         'auth' => [
-            'user' => $user,
+            'user' => $request->user() ? array_merge($request->user()->toArray(), [
+                // This adds role_name without breaking the other user fields
+                'role_name' => $request->user()->userType?->name ?? 'User',
+            ]) : null,
             'hasActiveVehicleType' => $hasActiveVehicleType,
-            'canAccessBus' => $canAccessBus, // Add this line!
+            'canAccessBus' => $canAccessBus,
         ],
         'flash' => [
             'success' => $request->session()->get('success'),
