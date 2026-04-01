@@ -97,7 +97,7 @@ const toResult = computed(() => {
 <template>
   <div class="flex flex-col gap-4">
     <!-- Search Filter -->
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between gap-2">
       <Input
         v-model="globalFilter"
         type="text"
