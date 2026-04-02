@@ -96,20 +96,20 @@ const toResult = computed(() => {
 
 <template>
   <div class="flex flex-col gap-4">
-    <!-- Search Filter -->
-    <div class="flex items-center justify-between gap-2">
+    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      
       <Input
         v-model="globalFilter"
         type="text"
         :placeholder="searchPlaceholder || 'Search all columns...'"
-        class="max-w-sm"
+        class="w-full md:max-w-sm"
       />
-      <div class="flex items-center gap-2">
+      
+      <div class="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center md:w-auto md:justify-end">
         <slot name="custom-actions"></slot>
       </div>
     </div>
 
-    <!-- Data Table -->
     <div class="w-full overflow-x-auto rounded-md border">
       <Table class="w-full">
         <TableHeader>
@@ -154,10 +154,7 @@ const toResult = computed(() => {
       </Table>
     </div>
 
-    <!-- Pagination Controls -->
-    <div
-      class="flex flex-col items-center justify-between gap-4 px-2 sm:flex-row"
-    >
+    <div class="flex flex-col items-center justify-between gap-4 px-2 sm:flex-row">
       <div class="text-sm text-muted-foreground">
         Showing
         <strong>{{ fromResult }}</strong>
@@ -175,7 +172,6 @@ const toResult = computed(() => {
             @update:model-value="(value) => table.setPageSize(Number(value))"
           >
             <SelectTrigger class="h-8 w-[70px]">
-              <!-- Using a string for the placeholder -->
               <SelectValue :placeholder="`${currentPageSize}`" />
             </SelectTrigger>
             <SelectContent side="top">
@@ -189,13 +185,8 @@ const toResult = computed(() => {
             </SelectContent>
           </Select>
         </div>
-        <div
-          class="flex w-[100px] items-center justify-center text-sm font-medium"
-        >
-          Page
-          {{ currentPageIndex + 1 }}
-          of
-          {{ pageCount }}
+        <div class="flex w-[100px] items-center justify-center text-sm font-medium">
+          Page {{ currentPageIndex + 1 }} of {{ pageCount }}
         </div>
         <div class="flex items-center space-x-2">
           <Button
