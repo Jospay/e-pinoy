@@ -255,34 +255,34 @@ watch(selectedFranchise, () => {
   <AppLayout :breadcrumbs="breadcrumbs">
     <div class="flex h-full flex-1 flex-col gap-4 p-4">
       <div class="rounded-xl border p-4">
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">
-            Franchise Accreditations
-          </h2>
+  <div class="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <h2 class="font-mono text-xl font-semibold">
+      Franchise Accreditations
+    </h2>
 
-          <div class="flex gap-4">
-            <MultiSelect
-              v-model="selectedFranchise"
-              :options="franchiseOptions"
-              placeholder="Select Franchises"
-              all-label="All Franchises"
-              @change="
-                (val) => {
-                  selectedFranchise = val;
+    <div class="flex w-full gap-4 md:w-auto">
+      <MultiSelect
+        v-model="selectedFranchise"
+        :options="franchiseOptions"
+        placeholder="Select Franchises"
+        all-label="All Franchises"
+        class="w-full md:w-[250px]"
+        @change="
+          (val) => {
+            selectedFranchise = val;
+            updateFilters();
+          }
+        "
+      />
+    </div>
+  </div>
 
-                  updateFilters();
-                }
-              "
-            />
-          </div>
-        </div>
-
-        <DataTable
-          :columns="accreditationColumns"
-          :data="accreditations.data"
-          search-placeholder="Search franchises..."
-        />
-      </div>
+  <DataTable
+    :columns="accreditationColumns"
+    :data="accreditations.data"
+    search-placeholder="Search franchises..."
+  />
+</div>
     </div>
 
     <!-- Change Status Modal -->
