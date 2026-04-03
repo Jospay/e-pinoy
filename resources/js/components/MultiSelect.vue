@@ -71,12 +71,16 @@ const handleOpenChange = (isOpen: boolean) => {
 <template>
     <Popover :open="open" @update:open="handleOpenChange">
         <PopoverTrigger as-child>
-            <Button variant="outline" role="combobox" :aria-expanded="open"
-                class="w-[200px] justify-between font-normal p-5">
-                <span class="truncate">{{ selectedLabels }}</span>
-                <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-        </PopoverTrigger>
+    <Button 
+        variant="outline" 
+        role="combobox" 
+        :aria-expanded="open"
+        class="w-full sm:w-[200px] justify-between font-normal p-5"
+    >
+        <span class="truncate">{{ selectedLabels }}</span>
+        <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
+    </Button>
+</PopoverTrigger>
         <PopoverContent class="w-[200px] p-0" align="start">
             <div class="flex flex-col">
                 <div class="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
