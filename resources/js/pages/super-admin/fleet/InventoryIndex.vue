@@ -195,44 +195,31 @@ const updateFilters = () => {
   <Head title="Inventory Management" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div
-      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
-      <div
-        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
-      >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Franchise Inventory</h2>
+    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+  <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
+    
+    <div class="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <h2 class="font-mono text-xl font-semibold">Franchise Inventory</h2>
 
-          <div class="flex gap-4">
-            <MultiSelect
-              v-model="selectedFranchise"
-              :options="contextOptions"
-              placeholder="
-               Select Franchises
-                 
-              "
-              all-label="
-                All Franchises
-              "
-              @change="
-                (val) => {
-                  selectedFranchise = val;
-
-                  updateFilters();
-                }
-              "
-            />
-          </div>
-        </div>
-
-        <DataTable
-          :columns="inventoryColumns"
-          :data="inventories.data"
-          search-placeholder="Search inventories..."
+      <div class="flex w-full sm:w-auto">
+        <MultiSelect
+          class="w-full sm:w-[250px]"
+          v-model="selectedFranchise"
+          :options="contextOptions"
+          placeholder="Select Franchises"
+          all-label="All Franchises"
+          @change="(val) => { selectedFranchise = val; updateFilters(); }"
         />
       </div>
     </div>
+
+    <DataTable
+      :columns="inventoryColumns"
+      :data="inventories.data"
+      search-placeholder="Search inventories..."
+    />
+  </div>
+</div>
   </AppLayout>
   <Dialog v-model:open="inventoryModal.isOpen.value">
     <DialogContent class="max-w-3xl overflow-y-auto">
