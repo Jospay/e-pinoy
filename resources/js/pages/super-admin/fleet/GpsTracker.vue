@@ -184,64 +184,52 @@ watch(selectedFranchises, () => {
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold capitalize">
-            {{ selectedType }} Monitoring
-          </h2>
+       <div class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+  <h2 class="whitespace-nowrap font-mono text-xl font-semibold capitalize">
+    {{ selectedType }} Monitoring
+  </h2>
 
-          <div class="flex gap-4">
-            <Select v-model="selectedType">
-              <SelectTrigger class="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="franchise" class="cursor-pointer">
-                  Franchise
-                </SelectItem>
-                <SelectItem value="branch" class="cursor-pointer">
-                  Branch
-                </SelectItem>
-              </SelectContent>
-            </Select>
+  <div class="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end">
+    
+    <Select v-model="selectedType">
+      <SelectTrigger class="w-full cursor-pointer sm:w-[150px]">
+        <SelectValue placeholder="Filter by..." />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="franchise" class="cursor-pointer">Franchise</SelectItem>
+        <SelectItem value="branch" class="cursor-pointer">Branch</SelectItem>
+      </SelectContent>
+    </Select>
 
-            <MultiSelect
-              v-model="selectedDrivers"
-              :options="driverOptions"
-              placeholder="Select Drivers"
-              all-label="All Drivers"
-              @change="updateFilters"
-            />
+    <MultiSelect
+      class="w-full sm:w-[200px]"
+      v-model="selectedDrivers"
+      :options="driverOptions"
+      placeholder="Select Drivers"
+      all-label="All Drivers"
+      @change="updateFilters"
+    />
 
-            <MultiSelect
-              v-model="selectedFranchises"
-              :options="franchiseOptions"
-              placeholder="Select Franchises"
-              all-label="All Franchises"
-              @change="
-                (val) => {
-                  selectedFranchises = val;
+    <MultiSelect
+      class="w-full sm:w-[200px]"
+      v-model="selectedFranchises"
+      :options="franchiseOptions"
+      placeholder="Select Franchises"
+      all-label="All Franchises"
+      @change="(val) => { selectedFranchises = val; updateFilters(); }"
+    />
 
-                  updateFilters();
-                }
-              "
-            />
-
-            <MultiSelect
-              v-if="selectedType === 'branch'"
-              v-model="selectedBranches"
-              :options="branchOptions"
-              placeholder="Select Branches"
-              all-label="All Branches"
-              @change="
-                (val) => {
-                  selectedBranches = val;
-
-                  updateFilters();
-                }
-              "
-            />
-          </div>
-        </div>
+    <MultiSelect
+      class="w-full sm:w-[200px]"
+      v-if="selectedType === 'branch'"
+      v-model="selectedBranches"
+      :options="branchOptions"
+      placeholder="Select Branches"
+      all-label="All Branches"
+      @change="(val) => { selectedBranches = val; updateFilters(); }"
+    />
+  </div>
+</div>
 
         <div class="w-full rounded-lg border shadow-sm">
           <LeafletMap
