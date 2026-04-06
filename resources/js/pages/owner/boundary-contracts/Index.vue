@@ -165,17 +165,20 @@ const goToPage = (url: string | null) => {
         </TabsList>
       </Tabs>
 
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-3xl font-bold tracking-tight">Boundary Contracts</h1>
-          <p class="text-muted-foreground">
-            Manage and monitor driver lease agreements
-          </p>
-        </div>
-        <Button @click="router.get('/owner/boundary-contracts/create')">
-          <Plus class="mr-2 h-4 w-4" /> Add Contract
-        </Button>
-      </div>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Boundary Contracts</h1>
+    <p class="text-sm sm:text-base text-muted-foreground">
+      Manage and monitor driver lease agreements
+    </p>
+  </div>
+  <Button 
+    @click="router.get('/owner/boundary-contracts/create')" 
+    class="w-full sm:w-auto"
+  >
+    <Plus class="mr-2 h-4 w-4" /> Add Contract
+  </Button>
+</div>
 
       <div class="flex flex-col gap-4 md:flex-row md:items-center">
         <Input
