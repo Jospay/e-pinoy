@@ -344,45 +344,46 @@ watch(
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">
-            {{ title }}
-          </h2>
-          <div class="flex gap-4">
-            <Select v-model="selectedPeriod">
-              <SelectTrigger class="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Filter by Period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="daily" class="cursor-pointer">
-                  Daily
-                </SelectItem>
-                <SelectItem value="weekly" class="cursor-pointer">
-                  Weekly
-                </SelectItem>
-                <SelectItem value="monthly" class="cursor-pointer">
-                  Monthly
-                </SelectItem>
-              </SelectContent>
-            </Select>
+        <div class="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <h2 class="font-mono text-xl font-semibold">
+    {{ title }}
+  </h2>
+  
+  <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+    <Select v-model="selectedPeriod">
+      <SelectTrigger class="w-full sm:w-[150px] cursor-pointer">
+        <SelectValue placeholder="Filter by Period" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="daily" class="cursor-pointer">
+          Daily
+        </SelectItem>
+        <SelectItem value="weekly" class="cursor-pointer">
+          Weekly
+        </SelectItem>
+        <SelectItem value="monthly" class="cursor-pointer">
+          Monthly
+        </SelectItem>
+      </SelectContent>
+    </Select>
 
-            <Select v-model="selectedDriver">
-              <SelectTrigger class="w-[200px] cursor-pointer">
-                <SelectValue placeholder="Select Driver" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Drivers</SelectItem>
-                <SelectItem
-                  v-for="driver in drivers"
-                  :key="driver.id"
-                  :value="String(driver.id)"
-                >
-                  {{ driver.username }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+    <Select v-model="selectedDriver">
+      <SelectTrigger class="w-full sm:w-[200px] cursor-pointer">
+        <SelectValue placeholder="Select Driver" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">All Drivers</SelectItem>
+        <SelectItem
+          v-for="driver in drivers"
+          :key="driver.id"
+          :value="String(driver.id)"
+        >
+          {{ driver.username }}
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  </div>
+</div>
 
         <DataTable
           :columns="revenueColumns"
