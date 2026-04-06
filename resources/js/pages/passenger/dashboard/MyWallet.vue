@@ -404,38 +404,37 @@ watch(
           </div>
         </div>
 
-        <div
-          class="flex flex-col items-center justify-between gap-4 rounded-xl border border-gray-100 bg-white p-6 shadow-md md:flex-row"
-        >
-          <div class="flex items-center space-x-4">
-            <div class="rounded-full bg-brand-blue/10 p-3">
-              <Wallet class="h-10 w-10 text-brand-blue" />
-            </div>
-            <div class="text-left">
-              <p class="text-sm text-gray-500">Wallet Balance</p>
-              <h1 class="text-3xl font-bold text-brand-blue">
-                ₱ {{ walletBalance }}
-              </h1>
-            </div>
-          </div>
-          <div class="flex gap-5">
-            <Button
-              @click="isLoadOpen = true"
-              class="w-full rounded-xl bg-brand-blue px-6 py-6 font-bold hover:bg-brand-blue/90 md:w-auto"
-            >
-              <PlusCircle class="mr-2 h-5 w-5" />
-              Buy Load
-            </Button>
-            <Button
-              variant="outline"
-              @click="isPayBusOpen = true"
-              class="w-full rounded-xl border-2 border-brand-blue px-6 py-5.5 font-bold text-brand-blue md:w-auto"
-            >
-              <Wallet class="mr-2 h-5 w-5" />
-              Pay with Wallet
-            </Button>
-          </div>
-        </div>
+       <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 rounded-xl border border-gray-100 bg-white p-6 shadow-md">
+  <div class="flex items-center space-x-4">
+    <div class="rounded-full bg-brand-blue/10 p-3 shrink-0">
+      <Wallet class="h-10 w-10 text-brand-blue" />
+    </div>
+    <div class="text-left">
+      <p class="text-sm text-gray-500">Wallet Balance</p>
+      <h1 class="text-2xl sm:text-3xl font-bold text-brand-blue">
+        ₱ {{ walletBalance }}
+      </h1>
+    </div>
+  </div>
+
+  <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+    <Button
+      @click="isLoadOpen = true"
+      class="w-full sm:w-auto rounded-xl bg-brand-blue px-6 py-6 font-bold hover:bg-brand-blue/90"
+    >
+      <PlusCircle class="mr-2 h-5 w-5" />
+      Buy Load
+    </Button>
+    <Button
+      variant="outline"
+      @click="isPayBusOpen = true"
+      class="w-full sm:w-auto rounded-xl border-2 border-brand-blue px-6 py-6 font-bold text-brand-blue"
+    >
+      <Wallet class="mr-2 h-5 w-5" />
+      Pay with Wallet
+    </Button>
+  </div>
+</div>
 
         <div class="space-y-4 pt-8">
           <h2 class="text-lg font-bold">Transaction History</h2>
