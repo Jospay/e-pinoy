@@ -87,13 +87,13 @@ class DatabaseSeeder extends Seeder
         //     'phone' => '09914288276',
         // ]);
 
-        User::factory()->create([
-            'user_type_id' => 6,
-            'username' => 'Alexis D Boy',
-            'name' => 'Alexis D Boy',
-            'email' => 'potjud30@gmail.com',
-            'phone' => '09917184547',
-        ]);
+        // User::factory()->create([
+        //     'user_type_id' => 6,
+        //     'username' => 'Alexis D Boy',
+        //     'name' => 'Alexis D Boy',
+        //     'email' => 'potjud30@gmail.com',
+        //     'phone' => '09917184547',
+        // ]);
 
         // User::factory()->create([
         //     'user_type_id' => 6,
