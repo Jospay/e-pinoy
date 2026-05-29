@@ -26,6 +26,7 @@ return new class extends Migration
             $table->string('nbi_clearance');
             $table->string('selfie_picture');
             $table->date('hire_date')->nullable();
+            $table->string('prangkisa_attachment')->nullable();
             $table->timestamps();
         });
     }
