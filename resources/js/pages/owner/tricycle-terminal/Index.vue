@@ -56,7 +56,7 @@ interface TricycleTerminalRow {
 }
 
 const createTricycleTerminal = () => {
-  //
+  router.get(owner.tricycleToda.create().url);
 };
 
 const breadcrumbs: BreadcrumbItem[] = [

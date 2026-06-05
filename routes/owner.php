@@ -86,9 +86,12 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
 
         Route::get('/branch', [BranchController::class, 'index'])->name('branch.index');
         Route::get('/branch/create', [BranchController::class, 'create'])->name('branch.create');
+        Route::post('/branch', [BranchController::class, 'store'])->name('branch.store');
         Route::get('/branch/{branch}', [BranchController::class, 'show'])->name('branch.show');
 
         Route::get('/tricycle-toda', [TricycleTerminalController::class, 'index'])->name('tricycleToda.index');
+        Route::get('/tricycle-toda/create', [TricycleTerminalController::class, 'create'])->name('tricycleToda.create');
+        Route::post('/tricycle-toda', [TricycleTerminalController::class, 'store'])->name('tricycleToda.store');
         Route::get('/tricycle-toda/{tricycleTerminal}', [TricycleTerminalController::class, 'show'])->name('tricycleToda.show');
     });
 });
