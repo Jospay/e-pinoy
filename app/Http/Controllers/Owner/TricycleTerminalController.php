@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Owner\TricycleTerminalDatatableResource;
+use App\Http\Resources\Owner\TricycleTerminalShowResource;
 use App\Models\TricycleTerminal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,7 +26,7 @@ class TricycleTerminalController extends Controller
                         '=',
                         'statuses.id'
                     )
-                    ->where('statuses.name', 'Active');
+                    ->where('statuses.name', 'active');
             })
             ->first();
 
@@ -110,6 +111,54 @@ class TricycleTerminalController extends Controller
                     'scope' => $selectedScopes,
                 ],
             ]
+        );
+    }
+
+    public function show(TricycleTerminal $tricycleTerminal)
+    {
+        $user = Auth::user();
+        $franchise = $user->ownerDetails->franchises()
+            ->whereHas('vehicleTypes', function ($query) {
+                $query->where('vehicle_types.name', 'tricycle')
+                    ->join(
+                        'statuses',
+                        'franchise_vehicle_type.status_id',
+                        '=',
+                        'statuses.id'
+                    )
+                    ->where('statuses.name', 'active');
+            })
+            ->first();
+
+        if (! $franchise) {
+            abort(403);
+        }
+
+        $ownedBranchIds = $franchise
+            ->branches()
+            ->pluck('id');
+
+        $authorized =
+            (
+                $tricycleTerminal->franchise_id === $franchise->id
+                && is_null($tricycleTerminal->branch_id)
+            )
+            ||
+            (
+                $ownedBranchIds->contains($tricycleTerminal->branch_id)
+            );
+        abort_unless($authorized, 403);
+
+        $tricycleTerminal->load([
+            'status',
+            'franchise',
+            'branch',
+        ]);
+
+        return response()->json(
+            new TricycleTerminalShowResource(
+                $tricycleTerminal
+            )
         );
     }
 }

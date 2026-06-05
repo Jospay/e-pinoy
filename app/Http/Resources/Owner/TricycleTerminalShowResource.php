@@ -5,7 +5,7 @@ namespace App\Http\Resources\Owner;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class TricycleTerminalDatatableResource extends JsonResource
+class TricycleTerminalShowResource extends JsonResource
 {
     /**
      * Transform the resource into an array.
@@ -17,19 +17,19 @@ class TricycleTerminalDatatableResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'status_name' => $this->status?->name,
-
+            'status' => $this->status?->name,
             'source_type' => $this->branch_id
                 ? 'Branch'
                 : 'Franchise',
-
             'source_name' => $this->branch_id
                 ? $this->branch?->name
                 : $this->franchise?->name,
 
-            'full_address' => trim(
+            'address' => trim(
                 "{$this->street}, {$this->barangay}, {$this->city}, {$this->province} {$this->postal_code}"
             ),
+            'latitude' => $this->latitude,
+            'longitude' => $this->longitude,
         ];
     }
 }
