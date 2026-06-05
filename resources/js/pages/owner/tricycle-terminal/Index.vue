@@ -1,14 +1,33 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
+import LightWeightMap from '@/components/LightWeightMap.vue';
 import MultiSelect from '@/components/MultiSelect.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useDetailsModal } from '@/composables/useDetailsModal';
 import AppLayout from '@/layouts/AppLayout.vue';
 import owner from '@/routes/owner';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
 import { type ColumnDef } from '@tanstack/vue-table';
-import { PlusIcon } from 'lucide-vue-next';
+import { AlertCircleIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-vue-next';
 import { computed, h, ref } from 'vue';
 
 // --- Define Props ---
@@ -30,8 +49,6 @@ const props = defineProps<{
 interface TricycleTerminalRow {
   id: number;
   name: string;
-  latitude: string;
-  longitude: string;
   status_name: string;
   source_type: 'Franchise' | 'Branch';
   source_name: string;
@@ -48,6 +65,32 @@ const breadcrumbs: BreadcrumbItem[] = [
     href: owner.tricycleToda.index().url,
   },
 ];
+
+interface TricycleTodaModal {
+  id: number;
+  status: string;
+  name: string;
+  source_type: string;
+  source_name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+}
+const tricycleTerminalDetails = computed(() => {
+  const data = tricycleTerminalModal.data.value;
+  if (!data) return [];
+
+  return [
+    { label: 'Name', value: data.name, type: 'text' },
+    { label: 'Status', value: data.status, type: 'text' },
+    { label: data.source_type, value: data.source_name, type: 'text' },
+    { label: 'Address', value: data.address, type: 'text' },
+  ].filter((item) => item.value);
+});
+
+const tricycleTerminalModal = useDetailsModal<TricycleTodaModal>({
+  baseUrl: '/owner/tricycle-toda',
+});
 
 const tricycleTerminalColumns: ColumnDef<TricycleTerminalRow>[] = [
   {
@@ -73,20 +116,10 @@ const tricycleTerminalColumns: ColumnDef<TricycleTerminalRow>[] = [
     },
   },
   {
-    id: 'location',
-    header: () => h('div', { class: 'text-center' }, 'Location (Lat, Long)'),
-
-    cell: ({ row }) => {
-      const { latitude, longitude } = row.original;
-
-      return h(
-        'div',
-        {
-          class: 'text-center text-sm text-muted-foreground',
-        },
-        `${latitude}, ${longitude}`,
-      );
-    },
+    accessorKey: 'full_address',
+    header: () => h('div', { class: 'text-center' }, 'Address'),
+    cell: (info) =>
+      h('div', { class: 'text-center truncate' }, info.getValue<string>()),
   },
   {
     accessorKey: 'status_name',
@@ -113,6 +146,38 @@ const tricycleTerminalColumns: ColumnDef<TricycleTerminalRow>[] = [
           () => status || 'N/A',
         ),
       );
+    },
+  },
+  {
+    id: 'actions',
+    header: () => h('div', { class: 'text-center' }, 'Actions'),
+    cell: ({ row }) => {
+      const tricycleTerminal = row.original as any;
+
+      return h('div', { class: 'relative text-center' }, [
+        h(DropdownMenu, null, () => [
+          h(
+            DropdownMenuTrigger,
+            { asChild: true, class: 'cursor-pointer' },
+            () =>
+              h(Button, { variant: 'ghost', class: 'h-8 w-8 p-0' }, () => [
+                h('span', { class: 'sr-only' }, 'Open menu'),
+                h(MoreHorizontalIcon, { class: 'h-4 w-4' }),
+              ]),
+          ),
+          h(DropdownMenuContent, { align: 'end', class: 'border-2' }, () => [
+            h(DropdownMenuLabel, null, () => 'Actions'),
+            h(
+              DropdownMenuItem,
+              {
+                class: 'cursor-pointer',
+                onClick: () => tricycleTerminalModal.open(tricycleTerminal.id),
+              },
+              () => 'View Toda Details',
+            ),
+          ]),
+        ]),
+      ]);
     },
   },
 ];
@@ -178,5 +243,75 @@ const applyFilter = (values: string[]) => {
         </DataTable>
       </div>
     </div>
+
+    <Dialog v-model:open="tricycleTerminalModal.isOpen.value">
+      <DialogContent class="max-w-4xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Tricycle Toda Details</DialogTitle>
+        </DialogHeader>
+        <DialogDescription>
+          <div
+            v-if="tricycleTerminalModal.isLoading.value"
+            class="grid grid-cols-2 gap-4"
+          >
+            <template v-for="item in 10" :key="item">
+              <Skeleton class="h-5 w-24" />
+              <Skeleton class="h-5 w-3/4" />
+            </template>
+          </div>
+
+          <div
+            v-else-if="tricycleTerminalDetails.length > 0"
+            class="grid grid-cols-2 gap-4"
+          >
+            <template v-for="item in tricycleTerminalDetails" :key="item.label">
+              <div class="font-medium">{{ item.label }}:</div>
+
+              <div v-if="item.type === 'link'">
+                <a
+                  :href="item.value"
+                  target="_blank"
+                  class="text-blue-500 hover:underline"
+                  >View</a
+                >
+              </div>
+
+              <div v-else>
+                {{ item.value }}
+              </div>
+            </template>
+
+            <div class="col-span-2">
+              <LightWeightMap
+                v-if="
+                  tricycleTerminalModal.data.value?.latitude &&
+                  tricycleTerminalModal.data.value?.longitude
+                "
+                :latitude="Number(tricycleTerminalModal.data.value?.latitude)"
+                :longitude="Number(tricycleTerminalModal.data.value?.longitude)"
+              />
+            </div>
+          </div>
+
+          <div v-else-if="tricycleTerminalModal.isError.value">
+            <Alert
+              variant="destructive"
+              class="border-2 border-red-500 shadow-lg"
+            >
+              <AlertCircleIcon class="h-4 w-4" />
+              <AlertTitle class="font-bold">Error</AlertTitle>
+              <AlertDescription class="font-semibold">
+                Failed to load tricycle toda details.
+              </AlertDescription>
+            </Alert>
+          </div>
+        </DialogDescription>
+        <DialogFooter class="mt-5">
+          <Button variant="outline" @click="tricycleTerminalModal.close"
+            >Close</Button
+          >
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </AppLayout>
 </template>

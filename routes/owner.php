@@ -89,5 +89,6 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::get('/branch/{branch}', [BranchController::class, 'show'])->name('branch.show');
 
         Route::get('/tricycle-toda', [TricycleTerminalController::class, 'index'])->name('tricycleToda.index');
+        Route::get('/tricycle-toda/{tricycleTerminal}', [TricycleTerminalController::class, 'show'])->name('tricycleToda.show');
     });
 });
