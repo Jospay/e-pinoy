@@ -333,9 +333,12 @@ const getStatusVariant = (status: string) => {
       return 'default';
     case 'pending':
       return 'secondary';
-    case 'retired':
     case 'suspended':
       return 'destructive';
+    case 'retired':
+      return 'outline';
+    case 'inactive':
+      return 'secondary';
     default:
       return 'secondary';
   }
@@ -367,6 +370,11 @@ const removeDriverFromFranchise = () => {
     },
   });
 };
+
+// Add this to your script setup
+const editableStatuses = computed(() =>
+  props.statuses.filter((s) => s.name !== 'approved' && s.name !== 'active'),
+);
 </script>
 
 <template>
@@ -568,7 +576,7 @@ const removeDriverFromFranchise = () => {
                     <DropdownMenuLabel>Change Status</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      v-for="status in statuses"
+                      v-for="status in editableStatuses"
                       :key="status.id"
                       :disabled="driver.status === status.name"
                       @click="updateDriverStatus(driver.id, status.id)"

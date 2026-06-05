@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class UserDriver extends Model
 {
@@ -53,10 +54,10 @@ class UserDriver extends Model
     }
 
     // relationship to vehicles, one to many
-    public function vehicles(): HasMany
-    {
-        return $this->hasMany(Vehicle::class, 'driver_id');
-    }
+    public function vehicle(): HasOne
+{
+    return $this->hasOne(Vehicle::class, 'driver_id');
+}
 
     // relationship to routes, one to many
     public function routes(): HasMany
