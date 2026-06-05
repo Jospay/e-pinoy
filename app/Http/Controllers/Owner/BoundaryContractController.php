@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Owner\StoreBoundaryContractRequest;
 use App\Models\BoundaryContract;
 use App\Models\Status;
+use App\Models\TricycleTerminal;
+use Illuminate\Support\Facades\Storage;
 use App\Models\VehicleType;
 use App\Models\UserDriver;
 use App\Models\Vehicle;
@@ -110,84 +112,147 @@ class BoundaryContractController extends Controller
     }
 
     public function create()
-    {
-        $franchise = auth()->user()->ownerDetails?->franchises()->first();
-        if (!$franchise) abort(404, 'Franchise not found');
+{
+    $franchise = auth()->user()->ownerDetails?->franchises()->first();
 
-        $drivers = UserDriver::with(['user', 'vehicleTypes'])
-            ->whereHas('status', fn($q) => $q->where('name', 'Approved'))
-            ->whereDoesntHave('boundaryContracts')
-            ->whereHas('franchises', fn($f) => $f->where('franchises.id', $franchise->id))
-            ->whereDoesntHave('branches')
-            ->get()
-            ->map(function ($driver) {
-                return [
-                    'id' => $driver->id,
-                    'username' => "{$driver->user?->username} (Main Franchise)",
-                    'vehicle_types' => $driver->vehicleTypes->map(fn($vt) => ['id' => $vt->id, 'name' => $vt->name]),
-                ];
-            });
-
-        $vehicles = Vehicle::where('franchise_id', $franchise->id)
-            ->whereNull('branch_id')
-            ->whereNull('driver_id')
-            ->get()
-            ->map(function ($v) {
-                return [
-                    'id' => $v->id,
-                    'vehicle_type_id' => $v->vehicle_type_id,
-                    'label' => "{$v->plate_number} - {$v->brand} {$v->model}",
-                ];
-            });
-
-        return Inertia::render('owner/boundary-contracts/Create', [
-            'drivers' => $drivers,
-            'vehicles' => $vehicles,
-            'vehicleTypes' => VehicleType::all(),
-        ]);
+    if (!$franchise) {
+        abort(404, 'Franchise not found');
     }
+
+    $drivers = UserDriver::with([
+        'user',
+        'vehicleTypes',
+        'branches',
+        'tricycleTerminal'
+    ])
+    ->whereHas('status', fn($q) => $q->where('name', 'Approved'))
+    ->whereDoesntHave('boundaryContracts')
+    ->whereHas('franchises', fn($q) => $q->where('franchises.id', $franchise->id))
+    ->get()
+    ->map(function ($driver) use ($franchise) {
+
+        $branch = $driver->branches->first();
+
+        return [
+            'id' => $driver->id,
+
+            'username' => $driver->user?->username,
+
+            'branch_id' => $branch?->id,
+
+            'branch_name' => $branch?->name,
+
+            'assignment_name' => $branch
+                ? $branch->name
+                : $franchise->name,
+
+            'vehicle_types' => $driver->vehicleTypes->map(fn($vt) => [
+                'id' => $vt->id,
+                'name' => $vt->name,
+            ]),
+
+            'prangkisa_attachment' => $driver->prangkisa_attachment
+                ? asset('storage/' . $driver->prangkisa_attachment)
+                : null,
+        ];
+    });
+
+    $vehicles = Vehicle::where('franchise_id', $franchise->id)
+        ->whereNull('driver_id')
+        ->get()
+        ->map(function ($vehicle) {
+
+            return [
+                'id' => $vehicle->id,
+                'vehicle_type_id' => $vehicle->vehicle_type_id,
+                'branch_id' => $vehicle->branch_id,
+
+                'label' =>
+                    $vehicle->plate_number .
+                    ' - ' .
+                    $vehicle->brand .
+                    ' ' .
+                    $vehicle->model,
+            ];
+        });
+
+    $terminals = TricycleTerminal::where(
+        'franchise_id',
+        $franchise->id
+    )
+    ->get()
+    ->map(function ($terminal) {
+
+        return [
+            'id' => $terminal->id,
+            'name' => $terminal->name,
+            'branch_id' => $terminal->branch_id,
+        ];
+    });
+
+    return Inertia::render('owner/boundary-contracts/Create', [
+        'drivers' => $drivers,
+        'vehicles' => $vehicles,
+        'terminals' => $terminals,
+        'vehicleTypes' => VehicleType::all(),
+    ]);
+}
 
     public function store(StoreBoundaryContractRequest $request)
-    {
-        return DB::transaction(function () use ($request) {
-            $franchise = auth()->user()->ownerDetails?->franchises()->first();
+{
+    return DB::transaction(function () use ($request) {
+        $franchise = auth()->user()->ownerDetails?->franchises()->first();
+        $activeStatusId = Status::where('name', 'Active')->value('id');
 
-            // Get the ID for 'Active' status
-            $activeStatusId = Status::where('name', 'Active')->value('id');
+        // 1. Create the Contract
+        $contract = BoundaryContract::create([
+            'franchise_id'   => $franchise->id,
+            'driver_id'      => $request->driver_id,
+            'name'           => $request->name,
+            'start_date'     => $request->start_date,
+            'end_date'       => $request->end_date,
+            'coverage_area'  => $request->coverage_area,
+            'contract_terms' => $request->contract_terms,
+            'renewal_terms'  => $request->renewal_terms,
+            'currency'       => 'PHP',
+        ]);
 
-            // 1. Create the Contract
-            $contract = BoundaryContract::create([
-                'franchise_id'   => $franchise->id,
-                'driver_id'      => $request->driver_id,
-                'name'           => $request->name,
-                'start_date'     => $request->start_date,
-                'end_date'       => $request->end_date,
-                'coverage_area'  => $request->coverage_area,
-                'contract_terms' => $request->contract_terms,
-                'renewal_terms'  => $request->renewal_terms,
-                'currency'       => 'PHP',
-            ]);
-
-            // 2. Update the Vehicle: Assign driver and mark as Active
-            Vehicle::where('id', $request->vehicle_id)->update([
-                'driver_id' => $request->driver_id,
-                'status_id' => $activeStatusId // Update vehicle status
-            ]);
-
-            // 3. Update the Driver: Set their account status to Active
+        // [ADDED NEW BLOCK] Save Terminal Assignment
+        if ($request->filled('terminal_id')) {
             UserDriver::where('id', $request->driver_id)->update([
-                'status_id' => $activeStatusId
+                'tricycle_terminal_id' => $request->terminal_id,
             ]);
+        }
 
-            // 4. Attach Vehicle Rates for the contract
-            foreach ($request->vehicle_rates as $rate) {
-                $contract->vehicleTypes()->attach($rate['vehicle_type_id'], [
-                    'amount'    => $rate['amount'],
-                    'status_id' => $activeStatusId,
+        // [ADDED NEW BLOCK] Save Prangkisa Attachment
+        if ($request->hasFile('prangkisa_attachment')) {
+            $path = $request->file('prangkisa_attachment')->store('prangkisa_attachment', 'public');
+
+            UserDriver::where('id', $request->driver_id)->update([
+                'prangkisa_attachment' => $path,
+            ]);
+        }
+
+        // 2. Update the Vehicle
+        Vehicle::where('id', $request->vehicle_id)->update([
+            'driver_id' => $request->driver_id,
+            'status_id' => $activeStatusId
+        ]);
+
+        // 3. Update Driver account status
+        UserDriver::where('id', $request->driver_id)->update([
+            'status_id' => $activeStatusId
+        ]);
+
+        // 4. Attach Vehicle Rates
+        foreach ($request->vehicle_rates as $rate) {
+            $contract->vehicleTypes()->attach($rate['vehicle_type_id'], [
+                'amount'    => $rate['amount'],
+                'status_id' => $activeStatusId,
                 ]);
-            }
+        }
 
-            return redirect()->route('owner.boundary-contracts.index');
-        });
-    }
+        return redirect()->route('owner.boundary-contracts.index');
+    });
+}
 }
