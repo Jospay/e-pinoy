@@ -35,15 +35,16 @@ import {
   LayoutGrid,
   Map,
   MapPin,
-  Wallet,
+  Motorbike,
   ReceiptText,
   ShieldCheck,
   Ticket,
+  Tickets,
   UserCheck,
   Users,
+  Wallet,
   Warehouse,
   Wrench,
-  Tickets,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
@@ -344,6 +345,14 @@ const navConfig: Record<string, NavItem[]> = {
       group: 'Management',
       requiresBus: true, // Add this custom flag
     },
+    {
+      title: 'Tricycle Toda Terminal',
+      href: owner.tricycleToda.index(),
+      icon: Motorbike,
+      group: 'Management',
+      requiresTricycle: true,
+    },
+
     // {
     //   title: 'Suspend Drivers',
     //   href: owner.suspendDrivers.index(),
@@ -472,6 +481,7 @@ const navConfig: Record<string, NavItem[]> = {
 const allNavItems = computed(() => {
   const items = navConfig[userType] || [];
   const canAccessBus = (page.props.auth as any).canAccessBus;
+  const canAccessTricycle = (page.props.auth as any).canAccessTricycle;
 
   return items.map((item) => {
     let isDisabled = false;
@@ -483,6 +493,11 @@ const allNavItems = computed(() => {
 
     // 2. Check your new "requiresBus" logic
     if (item.requiresBus && !canAccessBus) {
+      isDisabled = true;
+    }
+
+    // 3. Check your new "requiresTricycle" logic
+    if (item.requiresTricycle && !canAccessTricycle) {
       isDisabled = true;
     }
 
