@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('tricycle_terminals', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('owner_id')->constrained('user_owners')->onDelete('restrict');
-            $table->foreignId('manager_id')->nullable()->constrained('user_managers')->onDelete('restrict');
+            $table->foreignId('franchise_id')->nullable()->constrained('franchises')->onDelete('restrict');
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->onDelete('restrict');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
             $table->string('name')->unique();
             $table->string('region');
