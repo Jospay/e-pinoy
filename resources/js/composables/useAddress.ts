@@ -147,6 +147,18 @@ export function useAddress() {
   // Fetch initial region list when composable is used
   onMounted(fetchRegions);
 
+  // Reset state
+  function reset() {
+    selectedRegion.value = '';
+    selectedProvince.value = '';
+    selectedCity.value = '';
+    selectedBarangay.value = '';
+
+    provinces.value = [];
+    cities.value = [];
+    barangays.value = [];
+  }
+
   // Expose all the state and methods
   return {
     regions,
@@ -162,5 +174,6 @@ export function useAddress() {
     isLoadingProvinces,
     isLoadingCities,
     isLoadingBarangays,
+    reset,
   };
 }
