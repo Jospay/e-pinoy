@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('user_passengers', function (Blueprint $table) {
             $table->foreignId('id')->primary()->constrained('users')->onDelete('cascade');
             $table->foreignId('status_id')->constrained('statuses')->onDelete('restrict');
+            $table->string('profile_pic')->nullable();
             $table->date('birth_date');
             $table->timestamps();
         });
