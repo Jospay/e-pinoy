@@ -318,65 +318,54 @@ watch(
       <div
         class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
       >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Franchise Contracts</h2>
+        <div class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+  <h2 class="whitespace-nowrap font-mono text-xl font-semibold">Franchise Contracts</h2>
 
-          <div class="flex gap-4">
-            <Select v-model="selectedType">
-              <SelectTrigger class="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="franchise" class="cursor-pointer">
-                  Franchise
-                </SelectItem>
-                <SelectItem value="branch" class="cursor-pointer">
-                  Branch
-                </SelectItem>
-              </SelectContent>
-            </Select>
+  <div class="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end">
+    
+    <div class="flex w-full gap-3 sm:w-auto">
+      <Select v-model="selectedType">
+        <SelectTrigger class="w-full cursor-pointer sm:w-[150px]">
+          <SelectValue placeholder="Filter by..." />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="franchise" class="cursor-pointer">Franchise</SelectItem>
+          <SelectItem value="branch" class="cursor-pointer">Branch</SelectItem>
+        </SelectContent>
+      </Select>
 
-            <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px]">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active"> Active </SelectItem>
-                <SelectItem value="pending"> Pending </SelectItem>
-                <SelectItem value="inactive"> Inactive </SelectItem>
-              </SelectContent>
-            </Select>
+      <Select v-model="selectedStatus">
+        <SelectTrigger class="w-full sm:w-[150px]">
+          <SelectValue placeholder="Filter by..." />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="pending">Pending</SelectItem>
+          <SelectItem value="inactive">Inactive</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
 
-            <MultiSelect
-              v-model="selectedFranchise"
-              :options="franchiseOptions"
-              placeholder="Select Franchises"
-              all-label="All Franchises"
-              @change="
-                (val) => {
-                  selectedFranchise = val;
+    <MultiSelect
+      class="w-full sm:w-[200px]"
+      v-model="selectedFranchise"
+      :options="franchiseOptions"
+      placeholder="Select Franchises"
+      all-label="All Franchises"
+      @change="(val) => { selectedFranchise = val; updateFilters(); }"
+    />
 
-                  updateFilters();
-                }
-              "
-            />
-
-            <MultiSelect
-              v-if="selectedType === 'branch'"
-              v-model="selectedBranches"
-              :options="branchOptions"
-              placeholder="Select Branches"
-              all-label="All Branches"
-              @change="
-                (val) => {
-                  selectedBranches = val;
-
-                  updateFilters();
-                }
-              "
-            />
-          </div>
-        </div>
+    <MultiSelect
+      class="w-full sm:w-[200px]"
+      v-if="selectedType === 'branch'"
+      v-model="selectedBranches"
+      :options="branchOptions"
+      placeholder="Select Branches"
+      all-label="All Branches"
+      @change="(val) => { selectedBranches = val; updateFilters(); }"
+    />
+  </div>
+</div>
 
         <DataTable
           :columns="contractColumns"

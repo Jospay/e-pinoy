@@ -274,95 +274,86 @@ watch(
   }, 300), // Debounce to avoid firing on every keystroke/click
 );
 </script>
-
 <template>
   <Head title="Driver Management" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div
-      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
+    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
       <Tabs v-model="activeTab" class="w-full">
-        <TabsList class="h-auto w-full justify-start bg-sidebar p-1.5">
+        <TabsList class="flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden bg-sidebar p-1.5">
           <TabsTrigger
             v-for="type in vehicleTypes"
             :key="type.id"
             :value="type.name"
-            class="cursor-pointer px-8 py-2 font-semibold capitalize"
+            class="cursor-pointer whitespace-nowrap px-8 py-2 font-semibold capitalize"
             :class="{ 'pointer-events-none': activeTab === type.name }"
           >
             {{ type.name }}
           </TabsTrigger>
         </TabsList>
       </Tabs>
-      <div
-        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
-      >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold capitalize">
+      
+      <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
+        
+        <div class="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <h2 class="whitespace-nowrap font-mono text-xl font-semibold capitalize">
             {{ selectedType }} Drivers
           </h2>
 
-          <div class="flex gap-4">
-            <Select v-model="selectedType">
-              <SelectTrigger class="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="franchise" class="cursor-pointer">
-                  Franchise
-                </SelectItem>
-                <SelectItem value="branch" class="cursor-pointer">
-                  Branch
-                </SelectItem>
-              </SelectContent>
-            </Select>
+          <div class="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap lg:w-auto lg:justify-end">
+            
+            <div class="flex w-full gap-3 sm:w-auto">
+              <Select v-model="selectedType">
+                <SelectTrigger class="w-full cursor-pointer sm:w-[150px]">
+                  <SelectValue placeholder="Filter by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="franchise" class="cursor-pointer">
+                    Franchise
+                  </SelectItem>
+                  <SelectItem value="branch" class="cursor-pointer">
+                    Branch
+                  </SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active" class="cursor-pointer">
-                  Active
-                </SelectItem>
-                <SelectItem value="retired" class="cursor-pointer">
-                  Retired
-                </SelectItem>
-                <SelectItem value="suspended" class="cursor-pointer">
-                  Suspended
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              <Select v-model="selectedStatus">
+                <SelectTrigger class="w-full cursor-pointer sm:w-[150px]">
+                  <SelectValue placeholder="Filter by..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active" class="cursor-pointer">
+                    Active
+                  </SelectItem>
+                  <SelectItem value="retired" class="cursor-pointer">
+                    Retired
+                  </SelectItem>
+                  <SelectItem value="suspended" class="cursor-pointer">
+                    Suspended
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             <MultiSelect
+              class="w-full sm:w-[200px]"
               v-model="selectedFranchise"
               :options="franchiseOptions"
               placeholder="Select Franchises"
               all-label="All Franchises"
-              @change="
-                (val) => {
-                  selectedFranchise = val;
-
-                  updateFilters();
-                }
-              "
+              @change="(val) => { selectedFranchise = val; updateFilters(); }"
             />
 
             <MultiSelect
+              class="w-full sm:w-[200px]"
               v-if="selectedType === 'branch'"
               v-model="selectedBranches"
               :options="branchOptions"
               placeholder="Select Branches"
               all-label="All Branches"
-              @change="
-                (val) => {
-                  selectedBranches = val;
-
-                  updateFilters();
-                }
-              "
+              @change="(val) => { selectedBranches = val; updateFilters(); }"
             />
+            
           </div>
         </div>
 
@@ -380,41 +371,37 @@ watch(
       <DialogHeader>
         <DialogTitle>Driver Details</DialogTitle>
       </DialogHeader>
+      
       <DialogDescription>
-        <div v-if="driverModal.isLoading.value" class="grid grid-cols-2 gap-4">
+        <div v-if="driverModal.isLoading.value" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <template v-for="item in 10" :key="item">
-            <Skeleton class="h-5 w-24" />
-            <Skeleton class="h-5 w-3/4" />
+            <div class="flex flex-col gap-1">
+              <Skeleton class="h-5 w-24" />
+              <Skeleton class="h-5 w-3/4" />
+            </div>
           </template>
         </div>
 
-        <div
-          v-else-if="driverDetails.length > 0"
-          class="grid grid-cols-2 gap-4"
-        >
+        <div v-else-if="driverDetails.length > 0" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <template v-for="item in driverDetails" :key="item.label">
-            <div class="font-medium">{{ item.label }}:</div>
+            <div class="flex flex-col sm:block">
+              <span class="font-medium sm:mr-2">{{ item.label }}:</span>
 
-            <div v-if="item.type === 'link'">
-              <a
-                :href="item.value"
-                target="_blank"
-                class="text-blue-500 hover:underline"
-                >View</a
-              >
-            </div>
+              <span v-if="item.type === 'link'">
+                <a :href="item.value" target="_blank" class="text-blue-500 hover:underline">
+                  View
+                </a>
+              </span>
 
-            <div v-else>
-              {{ item.value }}
+              <span v-else class="text-muted-foreground sm:text-foreground">
+                {{ item.value }}
+              </span>
             </div>
           </template>
         </div>
 
         <div v-else-if="driverModal.isError.value">
-          <Alert
-            variant="destructive"
-            class="border-2 border-red-500 shadow-lg"
-          >
+          <Alert variant="destructive" class="border-2 border-red-500 shadow-lg">
             <AlertCircleIcon class="h-4 w-4" />
             <AlertTitle class="font-bold">Error</AlertTitle>
             <AlertDescription class="font-semibold">
@@ -424,8 +411,10 @@ watch(
         </div>
       </DialogDescription>
 
-      <DialogFooter class="mt-5">
-        <Button variant="outline" @click="driverModal.close">Close</Button>
+      <DialogFooter class="mt-5 sm:justify-end">
+        <Button class="w-full sm:w-auto" variant="outline" @click="driverModal.close">
+          Close
+        </Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

@@ -180,29 +180,32 @@ const markAsCompleted = (ticketId: number) => {
   <Head title="Support Center" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div class="flex flex-col gap-4 rounded-xl bg-white p-4 shadow">
+    <div class="flex flex-col gap-4 rounded-xl p-4 shadow">
       <!-- Header + Filters -->
-      <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
-        <h1 class="text-xl font-semibold">Support Center</h1>
+     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+  <h1 class="text-xl font-semibold">Support Center</h1>
 
-        <div class="flex gap-2">
-          <!-- Status Filter -->
-          <select v-model="status" class="rounded-md border px-3 py-2 text-sm">
-            <option value="all">All Status</option>
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Resolved">Resolved</option>
-          </select>
+  <div class="flex flex-col xs:flex-row items-center gap-2 w-full sm:w-auto">
+    <select 
+      v-model="status" 
+      class="w-full sm:w-auto rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+    >
+      <option value="all">All Status</option>
+      <option value="Open">Open</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Resolved">Resolved</option>
+    </select>
 
-          <!-- Search -->
-          <input
-            v-model="search"
-            type="text"
-            placeholder="Search tickets..."
-            class="rounded-md border px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
+    <div class="relative w-full sm:w-64">
+      <input
+        v-model="search"
+        type="text"
+        placeholder="Search tickets..."
+        class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+    </div>
+  </div>
+</div>
 
       <!-- Table -->
       <div class="rounded-lg border">

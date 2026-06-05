@@ -324,36 +324,34 @@ watch(
   <Head title="Driver Verification" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
-    <div
-      class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
-    >
-      <div
-        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
-      >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Driver Verification</h2>
+   <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+  <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
+    
+    <div class="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      
+      <h2 class="font-mono text-xl font-semibold">Driver Verification</h2>
 
-          <div class="flex gap-4">
-            <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px]">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="inactive"> Inactive </SelectItem>
-                <SelectItem value="for approval"> For Approval </SelectItem>
-                <SelectItem value="available"> Available </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <DataTable
-          :columns="driverColumns"
-          :data="drivers.data"
-          search-placeholder="Search drivers..."
-        />
+      <div class="flex w-full gap-4 md:w-auto">
+        <Select v-model="selectedStatus">
+          <SelectTrigger class="w-full md:w-[150px]">
+            <SelectValue placeholder="Filter by..." />
+          </SelectTrigger>
+          <SelectContent class="z-50">
+            <SelectItem value="inactive"> Inactive </SelectItem>
+            <SelectItem value="for approval"> For Approval </SelectItem>
+            <SelectItem value="available"> Available </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
+
+    <DataTable
+      :columns="driverColumns"
+      :data="drivers.data"
+      search-placeholder="Search drivers..."
+    />
+  </div>
+</div>
   </AppLayout>
 
   <Dialog v-model:open="driverModal.isOpen.value">

@@ -44,6 +44,34 @@ class DatabaseSeeder extends Seeder
             'email' => 'pedrodelacruz@gmail.com',
         ]);
 
+        User::factory()->create([
+            'user_type_id' => '4',
+            'username' => 'driver',
+            'name' => 'potpot',
+            'email' => 'potjud29@gmail.com',
+            'phone' => '09304206321',
+            'phone_verified_at' => now(),
+            'address' => 'Region VIII, Leyte, ALANGALANG, Binotong',
+            'region' => 'Region VIII',
+            'province' => 'Leyte',
+            'city' => 'ALANGALANG',
+            'barangay' => 'Binotong',
+        ]);
+
+        User::factory()->create([
+            'user_type_id' => '6',
+            'username' => 'potjud',
+            'name' => 'potjud',
+            'email' => 'potjud30@gmail.com',
+            'phone' => '09304206322',
+            'phone_verified_at' => now(),
+            'address' => 'Region IX, Zamboanga Sibugay, Diplahan, Lindang',
+            'region' => 'Region IX',
+            'province' => 'Zamboanga Sibugay',
+            'city' => 'Diplahan',
+            'barangay' => 'Lindang',
+        ]);
+
         // User::factory()->create([
         //     'user_type_id' => 4,
         //     'username' => 'dibbertmeda',
@@ -59,13 +87,13 @@ class DatabaseSeeder extends Seeder
         //     'phone' => '09914288276',
         // ]);
 
-        User::factory()->create([
-            'user_type_id' => 6,
-            'username' => 'Alexis D Boy',
-            'name' => 'Alexis D Boy',
-            'email' => 'potjud30@gmail.com',
-            'phone' => '09917184547',
-        ]);
+        // User::factory()->create([
+        //     'user_type_id' => 6,
+        //     'username' => 'Alexis D Boy',
+        //     'name' => 'Alexis D Boy',
+        //     'email' => 'potjud30@gmail.com',
+        //     'phone' => '09917184547',
+        // ]);
 
         // User::factory()->create([
         //     'user_type_id' => 6,

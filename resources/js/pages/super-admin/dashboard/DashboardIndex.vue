@@ -444,37 +444,37 @@ watch(
           </CardContent>
         </Card>
       </div>
-      <div
-        class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border"
-      >
-        <div class="mb-4 flex items-center justify-between">
-          <h2 class="font-mono text-xl font-semibold">Franchise Management</h2>
-        </div>
-        <DataTable
-          :columns="franchiseColumns"
-          :data="franchises.data"
-          search-placeholder="Search franchises..."
-        >
-          <template #custom-actions>
-            <Select v-model="selectedStatus">
-              <SelectTrigger class="w-[150px] cursor-pointer">
-                <SelectValue placeholder="Filter by..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active" class="cursor-pointer">
-                  Active
-                </SelectItem>
-                <SelectItem value="inactive" class="cursor-pointer">
-                  Inactive
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Button class="me-5" @click="createFranchise">
-              <PlusIcon />Add Franchise
-            </Button>
-          </template>
-        </DataTable>
-      </div>
+      <div class="relative rounded-xl border border-sidebar-border/70 p-4 md:min-h-min dark:border-sidebar-border">
+  <div class="mb-4 flex items-center justify-between">
+    <h2 class="font-mono text-xl font-semibold">Franchise Management</h2>
+  </div>
+  
+  <DataTable
+    :columns="franchiseColumns"
+    :data="franchises.data"
+    search-placeholder="Search franchises..."
+  >
+    <template #custom-actions>
+      <Select v-model="selectedStatus">
+        <SelectTrigger class="w-full shrink-0 cursor-pointer sm:w-[150px]">
+          <SelectValue placeholder="Filter by..." />
+        </SelectTrigger>
+        <SelectContent class="z-50">
+          <SelectItem value="active" class="cursor-pointer">
+            Active
+          </SelectItem>
+          <SelectItem value="inactive" class="cursor-pointer">
+            Inactive
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      
+      <Button class="w-full shrink-0 sm:w-auto" @click="createFranchise">
+        <PlusIcon class="mr-2 h-4 w-4" /> Add Franchise
+      </Button>
+    </template>
+  </DataTable>
+</div>
     </div>
   </AppLayout>
 
