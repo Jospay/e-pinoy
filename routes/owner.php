@@ -23,6 +23,7 @@ use App\Http\Controllers\Owner\VehicleController;
 use App\Http\Controllers\Owner\VehicleDriverController;
 use App\Http\Controllers\Owner\VehicleTypeController;
 use App\Http\Controllers\Owner\BranchController;
+use App\Http\Controllers\Owner\TricycleTerminalController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->prefix('owner')->name('owner.')->group(function () {
@@ -86,5 +87,7 @@ Route::middleware(['auth', 'verified', 'user_type:owner', 'check.active'])->pref
         Route::get('/branch', [BranchController::class, 'index'])->name('branch.index');
         Route::get('/branch/create', [BranchController::class, 'create'])->name('branch.create');
         Route::get('/branch/{branch}', [BranchController::class, 'show'])->name('branch.show');
+
+        Route::get('/tricycle-toda', [TricycleTerminalController::class, 'index'])->name('tricycleToda.index');
     });
 });
