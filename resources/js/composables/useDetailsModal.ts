@@ -68,7 +68,7 @@ export function useDetailsModal<TData = unknown>({
 
     try {
       const response = await fetchData(...args);
-      data.value = response.data.data;
+      data.value = response.data.data ?? response.data;
     } catch (error) {
       console.error('Error fetching details:', error);
       isError.value = true;
