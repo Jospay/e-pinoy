@@ -134,6 +134,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(DaySeeder::class);
 
+        $this->call(TricycleTerminalSeeder::class);
 
         // $this->call(InventorySeeder::class);
         // $this->call(MaintenanceSeeder::class);
