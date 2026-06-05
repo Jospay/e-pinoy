@@ -93,4 +93,9 @@ class Status extends Model
     {
         return $this->hasMany(Branch::class);
     }
+
+    public function tricycleTerminals(): HasMany
+    {
+        return $this->hasMany(TricycleTerminal::class);
+    }
 }

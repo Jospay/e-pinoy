@@ -95,4 +95,9 @@ class Branch extends Model
     {
         return $this->hasMany(BusStation::class);
     }
+
+    public function tricycleTerminals(): HasMany
+    {
+        return $this->hasMany(TricycleTerminal::class);
+    }
 }

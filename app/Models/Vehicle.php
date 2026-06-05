@@ -83,4 +83,9 @@ class Vehicle extends Model
     {
         return $this->hasMany(DateSchedule::class);
     }
+
+    public function tricycleTerminal(): BelongsTo
+    {
+        return $this->belongsTo(TricycleTerminal::class);
+    }
 }

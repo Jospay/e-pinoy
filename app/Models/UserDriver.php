@@ -108,4 +108,9 @@ class UserDriver extends Model
     {
         return $this->belongsToMany(Franchise::class);
     }
+
+    public function tricycleTerminal(): BelongsTo
+    {
+        return $this->belongsTo(TricycleTerminal::class);
+    }
 }

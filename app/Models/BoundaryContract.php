@@ -64,4 +64,9 @@ class BoundaryContract extends Model
     {
         return $this->belongsTo(Branch::class);
     }
+
+    public function tricycleTerminal(): BelongsTo
+    {
+        return $this->belongsTo(TricycleTerminal::class);
+    }
 }
