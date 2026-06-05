@@ -35,6 +35,7 @@ export interface NavItem {
   isActive?: boolean;
   requiresActive?: boolean;
   requiresBus?: boolean;
+  requiresTricycle?: boolean;
   disabled?: boolean;
 }
 

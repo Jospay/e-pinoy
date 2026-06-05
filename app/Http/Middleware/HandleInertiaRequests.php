@@ -40,7 +40,8 @@ class HandleInertiaRequests extends Middleware
 
     $user = $request->user();
     $hasActiveVehicleType = false;
-    $canAccessBus = false; // Initialize the variable
+    $canAccessBus = false;
+    $canAccessTricycle = false;
 
     if ($user && $user->user_type_id === 2) {
         $franchise = $user->ownerDetails?->franchises()->first();
@@ -53,6 +54,11 @@ class HandleInertiaRequests extends Middleware
             // Specific check for BUS (Vehicle Type 2)
             $canAccessBus = $franchise->vehicleTypes()
                 ->where('vehicle_type_id', 2)
+                ->where('status_id', 1)
+                ->exists();
+
+            $canAccessTricycle = $franchise->vehicleTypes()
+                ->where('vehicle_type_id', 3)
                 ->where('status_id', 1)
                 ->exists();
         }
@@ -69,6 +75,7 @@ class HandleInertiaRequests extends Middleware
             ]) : null,
             'hasActiveVehicleType' => $hasActiveVehicleType,
             'canAccessBus' => $canAccessBus,
+            'canAccessTricycle' => $canAccessTricycle
         ],
         'flash' => [
             'success' => $request->session()->get('success'),
