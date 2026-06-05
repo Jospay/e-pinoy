@@ -70,7 +70,7 @@ class GpsTrackerController extends Controller
     {
         $query = UserDriver::query()
             ->whereHas('status', fn ($q) => $q->where('name', 'active'))
-            ->whereHas('vehicles', function ($q) use ($filters) {
+            ->whereHas('vehicle', function ($q) use ($filters) {
                 $q->whereHas('status', fn ($subQ) => $subQ->where('name', 'active'))
 
                 ->whereHas('vehicleType', function ($typeQ) use ($filters) {
@@ -83,8 +83,8 @@ class GpsTrackerController extends Controller
             })
             ->with([
                 'user:id,username',
-                'vehicles:id,driver_id,plate_number,vehicle_type_id',
-                'vehicles.vehicleType:id,name',
+                'vehicle:id,driver_id,plate_number,vehicle_type_id',
+                'vehicle.vehicleType:id,name',
             ]);
 
         // Filter by specific driver if selected
@@ -120,7 +120,7 @@ class GpsTrackerController extends Controller
         $query = UserDriver::query()
             ->join('users', 'user_drivers.id', '=', 'users.id')
             ->select('user_drivers.id', 'users.username')
-            ->whereHas('vehicles', function ($q) use ($filters) {
+            ->whereHas('vehicle', function ($q) use ($filters) {
                 $q->whereHas('vehicleType', function ($typeQ) use ($filters) {
                     $typeQ->where('name', $filters['tab']);
                 });

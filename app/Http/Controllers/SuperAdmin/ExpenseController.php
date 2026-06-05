@@ -137,7 +137,6 @@ class ExpenseController extends Controller
     private function buildBaseQuery(array $filters, ?int $year = null, ?array $months = null): Builder
     {
         $query = Expense::query()
-            ->whereHas('status', fn ($q) => $q->where('name', 'paid'))
             ->whereNotNull('payment_date')
             ->whereHas('maintenance.vehicle.vehicleType', fn ($q) => $q->where('name', $filters['tab']));
 
