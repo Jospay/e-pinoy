@@ -25,6 +25,7 @@ class Vehicle extends Model
         'year',
         'color',
         'or_cr',
+        'tricycle_terminal_id',
     ];
 
     // relationship to status, one to many
@@ -86,6 +87,9 @@ class Vehicle extends Model
 
     public function tricycleTerminal(): BelongsTo
     {
-        return $this->belongsTo(TricycleTerminal::class);
+        return $this->belongsTo(
+            TricycleTerminal::class,
+            'tricycle_terminal_id'
+        );
     }
 }

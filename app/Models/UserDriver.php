@@ -39,6 +39,8 @@ class UserDriver extends Model
         'nbi_clearance',
         'selfie_picture',
         'hire_date',
+        'prangkisa_attachment',
+        'tricycle_terminal_id',
     ];
 
     // relationship to user, one to one
@@ -112,6 +114,9 @@ class UserDriver extends Model
 
     public function tricycleTerminal(): BelongsTo
     {
-        return $this->belongsTo(TricycleTerminal::class);
+        return $this->belongsTo(
+            TricycleTerminal::class,
+            'tricycle_terminal_id'
+        );
     }
 }

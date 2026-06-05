@@ -24,6 +24,7 @@ class BoundaryContract extends Model
         'end_date',
         'renewal_terms',
         'currency',
+        'tricycle_terminal_id',
     ];
 
     /**
@@ -67,6 +68,9 @@ class BoundaryContract extends Model
 
     public function tricycleTerminal(): BelongsTo
     {
-        return $this->belongsTo(TricycleTerminal::class);
+        return $this->belongsTo(
+            TricycleTerminal::class,
+            'tricycle_terminal_id'
+        );
     }
 }

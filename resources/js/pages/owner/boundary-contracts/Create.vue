@@ -24,24 +24,40 @@ interface VehicleType {
   id: number;
   name: string;
 }
+
 interface Driver {
   id: number;
   username: string;
+  branch_id: number | null;
+  branch_name: string | null;
+  assignment_name: string;
+  prangkisa_attachment: string | null;
   vehicle_types: VehicleType[];
 }
+
+interface Terminal {
+  id: number;
+  name: string;
+  branch_id: number | null;
+}
+
 interface VehicleRate {
   vehicle_type_id: number | '';
   amount: string;
 }
+
 interface Vehicle {
   id: number;
   vehicle_type_id: number;
+  branch_id: number | null;
   label: string;
 }
 
 interface BoundaryForm {
   driver_id: string;
   vehicle_id: string;
+  terminal_id: string;
+  prangkisa_attachment: File | null;
   name: string;
   coverage_area: string;
   contract_terms: string;
@@ -54,8 +70,10 @@ interface BoundaryForm {
 interface Props {
   drivers: Driver[];
   vehicles: Vehicle[];
+  terminals: Terminal[];
 }
-const { drivers, vehicles } = defineProps<Props>();
+
+const { drivers, vehicles, terminals } = defineProps<Props>();
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Boundary Contract', href: owner.boundaryContracts.index().url },
@@ -68,6 +86,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 const form = useForm<BoundaryForm>({
   driver_id: '',
   vehicle_id: '',
+  terminal_id: '',
+  prangkisa_attachment: null,
   name: '',
   coverage_area: '',
   contract_terms: '',
@@ -77,28 +97,60 @@ const form = useForm<BoundaryForm>({
   vehicle_rates: [{ vehicle_type_id: '', amount: '' }],
 });
 
-// Filter vehicles based ONLY on vehicle_type compatibility for the driver
-const filteredVehicles = computed(() => {
-  const selectedDriver = drivers.find(
-    (d) => d.id.toString() === form.driver_id,
-  );
-  if (!selectedDriver || selectedDriver.vehicle_types.length === 0) return [];
+const selectedDriver = computed(() =>
+  drivers.find((d) => d.id.toString() === form.driver_id),
+);
 
-  const allowedTypeId = selectedDriver.vehicle_types[0].id;
-  return vehicles.filter((v) => v.vehicle_type_id === allowedTypeId);
+const isTricycle = computed(() => {
+  return (
+    selectedDriver.value?.vehicle_types?.[0]?.name?.toLowerCase() === 'tricycle'
+  );
 });
 
-// Watch driver selection to auto-fill vehicle type id and clear previous vehicle selection
+// Filters terminals: shows only same branch terminals if driver has a branch, or main franchise (null) terminals if driver is direct
+const filteredTerminals = computed(() => {
+  if (!selectedDriver.value) return [];
+
+  const branchId = selectedDriver.value.branch_id;
+
+  return terminals.filter((terminal) => {
+    if (branchId !== null && branchId !== undefined) {
+      return terminal.branch_id === branchId;
+    }
+    return terminal.branch_id === null || terminal.branch_id === undefined;
+  });
+});
+
+// Filter vehicles based on vehicle type and operational branch structure
+const filteredVehicles = computed(() => {
+  if (!selectedDriver.value) return [];
+
+  const vehicleTypeId = selectedDriver.value.vehicle_types[0]?.id;
+
+  return vehicles.filter((vehicle) => {
+    const sameVehicleType = vehicle.vehicle_type_id === vehicleTypeId;
+
+    const sameBranch = selectedDriver.value?.branch_id
+      ? vehicle.branch_id === selectedDriver.value.branch_id
+      : vehicle.branch_id === null;
+
+    return sameVehicleType && sameBranch;
+  });
+});
+
+// Watch driver selection to auto-fill vehicle type id and clear conditional elements
 watch(
   () => form.driver_id,
   (driverId) => {
-    form.vehicle_id = ''; // Reset vehicle when driver changes
+    form.vehicle_id = '';
+    form.terminal_id = '';
+    form.prangkisa_attachment = null;
+
     if (!driverId) return;
 
-    const selectedDriver = drivers.find((d) => d.id.toString() === driverId);
-    if (selectedDriver && selectedDriver.vehicle_types.length > 0) {
+    if (selectedDriver.value && selectedDriver.value.vehicle_types.length > 0) {
       form.vehicle_rates[0].vehicle_type_id =
-        selectedDriver.vehicle_types[0].id;
+        selectedDriver.value.vehicle_types[0].id;
     }
   },
 );
@@ -107,7 +159,7 @@ const disableSubmit = computed(() => {
   const rate = form.vehicle_rates[0];
   return !(
     form.driver_id &&
-    form.vehicle_id && // Now required
+    form.vehicle_id &&
     form.name &&
     form.start_date &&
     rate.vehicle_type_id &&
@@ -117,6 +169,7 @@ const disableSubmit = computed(() => {
 
 const submit = () => {
   form.post(owner.boundaryContracts.store().url, {
+    forceFormData: true,
     onSuccess: () => {
       form.reset();
       toast.success('Boundary contract created successfully!');
@@ -172,6 +225,13 @@ const submit = () => {
                   :value="driver.id.toString()"
                 >
                   {{ driver.username }}
+                  <span class="ml-1 text-xs text-muted-foreground">
+                    ({{
+                      driver.branch_id
+                        ? driver.assignment_name
+                        : 'Main Franchise'
+                    }})
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -181,10 +241,7 @@ const submit = () => {
           <div class="grid gap-2">
             <Label>Vehicle Type</Label>
             <Input
-              :value="
-                drivers.find((d) => d.id.toString() === form.driver_id)
-                  ?.vehicle_types?.[0]?.name || 'N/A'
-              "
+              :value="selectedDriver?.vehicle_types?.[0]?.name || 'N/A'"
               disabled
               class="bg-gray-50"
             />
@@ -238,6 +295,63 @@ const submit = () => {
           </div>
         </div>
 
+        <div v-if="isTricycle" class="grid gap-2">
+          <Label>Terminal</Label>
+          <Select
+            v-model="form.terminal_id"
+            :disabled="filteredTerminals.length === 0"
+          >
+            <SelectTrigger
+              :class="{ 'border-red-500': form.errors.terminal_id }"
+            >
+              <SelectValue
+                :placeholder="
+                  filteredTerminals.length > 0
+                    ? 'Select Terminal'
+                    : 'No terminals found for this assignment'
+                "
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="terminal in filteredTerminals"
+                :key="terminal.id"
+                :value="terminal.id.toString()"
+              >
+                {{ terminal.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <InputError :message="form.errors.terminal_id" />
+        </div>
+
+        <div
+          v-if="isTricycle && selectedDriver?.prangkisa_attachment"
+          class="grid gap-2"
+        >
+          <Label>Current Prangkisa Attachment</Label>
+          <a
+            :href="selectedDriver.prangkisa_attachment"
+            target="_blank"
+            class="text-sm text-blue-600 underline"
+          >
+            View Current Attachment
+          </a>
+        </div>
+
+        <div v-if="isTricycle" class="grid gap-2">
+          <Label>Upload Prangkisa Attachment</Label>
+          <Input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            @change="
+              form.prangkisa_attachment =
+                ($event.target as HTMLInputElement).files?.[0] || null
+            "
+          />
+          <InputError :message="form.errors.prangkisa_attachment" />
+        </div>
+
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Start Date</Label>
@@ -277,9 +391,9 @@ const submit = () => {
         </div>
 
         <div class="flex justify-end gap-4 border-t pt-6">
-          <Button type="button" variant="outline" @click="form.reset()"
-            >Reset</Button
-          >
+          <Button type="button" variant="outline" @click="form.reset()">
+            Reset
+          </Button>
           <Button type="submit" :disabled="form.processing || disableSubmit">
             {{ form.processing ? 'Saving...' : 'Create Contract' }}
           </Button>

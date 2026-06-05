@@ -112,147 +112,143 @@ class BoundaryContractController extends Controller
     }
 
     public function create()
-{
-    $franchise = auth()->user()->ownerDetails?->franchises()->first();
+    {
+        $franchise = auth()->user()->ownerDetails?->franchises()->first();
 
-    if (!$franchise) {
-        abort(404, 'Franchise not found');
-    }
+        if (!$franchise) {
+            abort(404, 'Franchise not found');
+        }
 
-    $drivers = UserDriver::with([
-        'user',
-        'vehicleTypes',
-        'branches',
-        'tricycleTerminal'
-    ])
-    ->whereHas('status', fn($q) => $q->where('name', 'Approved'))
-    ->whereDoesntHave('boundaryContracts')
-    ->whereHas('franchises', fn($q) => $q->where('franchises.id', $franchise->id))
-    ->get()
-    ->map(function ($driver) use ($franchise) {
+        // Get all branch IDs belonging to this franchise to verify branch-assigned drivers
+        $franchiseBranchIds = $franchise->branches()->pluck('id')->toArray();
 
-        $branch = $driver->branches->first();
-
-        return [
-            'id' => $driver->id,
-
-            'username' => $driver->user?->username,
-
-            'branch_id' => $branch?->id,
-
-            'branch_name' => $branch?->name,
-
-            'assignment_name' => $branch
-                ? $branch->name
-                : $franchise->name,
-
-            'vehicle_types' => $driver->vehicleTypes->map(fn($vt) => [
-                'id' => $vt->id,
-                'name' => $vt->name,
-            ]),
-
-            'prangkisa_attachment' => $driver->prangkisa_attachment
-                ? asset('storage/' . $driver->prangkisa_attachment)
-                : null,
-        ];
-    });
-
-    $vehicles = Vehicle::where('franchise_id', $franchise->id)
-        ->whereNull('driver_id')
+        $drivers = UserDriver::with([
+            'user',
+            'vehicleTypes',
+            'branches',
+            'tricycleTerminal'
+        ])
+        ->whereHas('status', fn($q) => $q->where('name', 'Approved'))
+        ->whereDoesntHave('boundaryContracts')
+        ->where(function ($query) use ($franchise, $franchiseBranchIds) {
+            // Include drivers directly linked to the main franchise
+            $query->whereHas('franchises', fn($q) => $q->where('franchises.id', $franchise->id))
+                  // OR drivers belonging to any branch under this franchise
+                  ->orWhereHas('branches', fn($q) => $q->whereIn('branches.id', $franchiseBranchIds));
+        })
         ->get()
-        ->map(function ($vehicle) {
+        ->map(function ($driver) use ($franchise) {
+
+            $branch = $driver->branches->first();
 
             return [
-                'id' => $vehicle->id,
-                'vehicle_type_id' => $vehicle->vehicle_type_id,
-                'branch_id' => $vehicle->branch_id,
-
-                'label' =>
-                    $vehicle->plate_number .
-                    ' - ' .
-                    $vehicle->brand .
-                    ' ' .
-                    $vehicle->model,
+                'id' => $driver->id,
+                'username' => $driver->user?->username,
+                'branch_id' => $branch?->id,
+                'branch_name' => $branch?->name,
+                'assignment_name' => $branch ? $branch->name : $franchise->name,
+                'vehicle_types' => $driver->vehicleTypes->map(fn($vt) => [
+                    'id' => $vt->id,
+                    'name' => $vt->name,
+                ]),
+                'prangkisa_attachment' => $driver->prangkisa_attachment
+                    ? asset('storage/' . $driver->prangkisa_attachment)
+                    : null,
             ];
         });
 
-    $terminals = TricycleTerminal::where(
-        'franchise_id',
-        $franchise->id
-    )
-    ->get()
-    ->map(function ($terminal) {
+        $vehicles = Vehicle::where('franchise_id', $franchise->id)
+            ->whereNull('driver_id')
+            ->get()
+            ->map(function ($vehicle) {
+                return [
+                    'id' => $vehicle->id,
+                    'vehicle_type_id' => $vehicle->vehicle_type_id,
+                    'branch_id' => $vehicle->branch_id,
+                    'label' => $vehicle->plate_number . ' - ' . $vehicle->brand . ' ' . $vehicle->model,
+                ];
+            });
 
-        return [
-            'id' => $terminal->id,
-            'name' => $terminal->name,
-            'branch_id' => $terminal->branch_id,
-        ];
-    });
+        $terminals = TricycleTerminal::where('franchise_id', $franchise->id)
+            ->get()
+            ->map(function ($terminal) {
+                return [
+                    'id' => $terminal->id,
+                    'name' => $terminal->name,
+                    'branch_id' => $terminal->branch_id,
+                ];
+            });
 
-    return Inertia::render('owner/boundary-contracts/Create', [
-        'drivers' => $drivers,
-        'vehicles' => $vehicles,
-        'terminals' => $terminals,
-        'vehicleTypes' => VehicleType::all(),
-    ]);
-}
+        return Inertia::render('owner/boundary-contracts/Create', [
+            'drivers' => $drivers,
+            'vehicles' => $vehicles,
+            'terminals' => $terminals,
+            'vehicleTypes' => VehicleType::all(),
+        ]);
+    }
 
     public function store(StoreBoundaryContractRequest $request)
-{
-    return DB::transaction(function () use ($request) {
-        $franchise = auth()->user()->ownerDetails?->franchises()->first();
-        $activeStatusId = Status::where('name', 'Active')->value('id');
+    {
+        return DB::transaction(function () use ($request) {
+            $franchise = auth()->user()->ownerDetails?->franchises()->first();
+            $activeStatusId = Status::where('name', 'Active')->value('id');
 
-        // 1. Create the Contract
-        $contract = BoundaryContract::create([
-            'franchise_id'   => $franchise->id,
-            'driver_id'      => $request->driver_id,
-            'name'           => $request->name,
-            'start_date'     => $request->start_date,
-            'end_date'       => $request->end_date,
-            'coverage_area'  => $request->coverage_area,
-            'contract_terms' => $request->contract_terms,
-            'renewal_terms'  => $request->renewal_terms,
-            'currency'       => 'PHP',
-        ]);
-
-        // [ADDED NEW BLOCK] Save Terminal Assignment
-        if ($request->filled('terminal_id')) {
-            UserDriver::where('id', $request->driver_id)->update([
-                'tricycle_terminal_id' => $request->terminal_id,
+            // 1. Create the Contract
+            $contract = BoundaryContract::create([
+                'franchise_id'         => $franchise->id,
+                'driver_id'            => $request->driver_id,
+                'tricycle_terminal_id' => $request->filled('terminal_id') ? $request->terminal_id : null,
+                'name'                 => $request->name,
+                'start_date'           => $request->start_date,
+                'end_date'             => $request->end_date,
+                'coverage_area'        => $request->coverage_area,
+                'contract_terms'       => $request->contract_terms,
+                'renewal_terms'        => $request->renewal_terms,
+                'currency'             => 'PHP',
             ]);
-        }
 
-        // [ADDED NEW BLOCK] Save Prangkisa Attachment
-        if ($request->hasFile('prangkisa_attachment')) {
-            $path = $request->file('prangkisa_attachment')->store('prangkisa_attachment', 'public');
-
-            UserDriver::where('id', $request->driver_id)->update([
-                'prangkisa_attachment' => $path,
-            ]);
-        }
-
-        // 2. Update the Vehicle
-        Vehicle::where('id', $request->vehicle_id)->update([
-            'driver_id' => $request->driver_id,
-            'status_id' => $activeStatusId
-        ]);
-
-        // 3. Update Driver account status
-        UserDriver::where('id', $request->driver_id)->update([
-            'status_id' => $activeStatusId
-        ]);
-
-        // 4. Attach Vehicle Rates
-        foreach ($request->vehicle_rates as $rate) {
-            $contract->vehicleTypes()->attach($rate['vehicle_type_id'], [
-                'amount'    => $rate['amount'],
-                'status_id' => $activeStatusId,
+            // 2. Save Driver Terminal Assignment if present
+            if ($request->filled('terminal_id')) {
+                UserDriver::where('id', $request->driver_id)->update([
+                    'tricycle_terminal_id' => $request->terminal_id,
                 ]);
-        }
+            }
 
-        return redirect()->route('owner.boundary-contracts.index');
-    });
-}
+            // 3. Save Prangkisa Attachment
+            if ($request->hasFile('prangkisa_attachment')) {
+                $path = $request->file('prangkisa_attachment')->store('prangkisa_attachment', 'public');
+
+                UserDriver::where('id', $request->driver_id)->update([
+                    'prangkisa_attachment' => $path,
+                ]);
+            }
+
+            // 4. Update the Vehicle Assignment
+            $vehicleUpdateFields = [
+                'driver_id' => $request->driver_id,
+                'status_id' => $activeStatusId
+            ];
+
+            if ($request->filled('terminal_id')) {
+                $vehicleUpdateFields['tricycle_terminal_id'] = $request->terminal_id;
+            }
+
+            Vehicle::where('id', $request->vehicle_id)->update($vehicleUpdateFields);
+
+            // 5. Update Driver Account Status
+            UserDriver::where('id', $request->driver_id)->update([
+                'status_id' => $activeStatusId
+            ]);
+
+            // 6. Attach Vehicle Rates to contract
+            foreach ($request->vehicle_rates as $rate) {
+                $contract->vehicleTypes()->attach($rate['vehicle_type_id'], [
+                    'amount'    => $rate['amount'],
+                    'status_id' => $activeStatusId,
+                ]);
+            }
+
+            return redirect()->route('owner.boundary-contracts.index');
+        });
+    }
 }
