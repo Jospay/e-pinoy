@@ -249,6 +249,65 @@ const submit = () => {
         </div>
 
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div v-if="isTricycle" class="grid gap-2">
+            <Label>Terminal</Label>
+            <Select
+              v-model="form.terminal_id"
+              :disabled="filteredTerminals.length === 0"
+            >
+              <SelectTrigger
+                :class="{ 'border-red-500': form.errors.terminal_id }"
+              >
+                <SelectValue
+                  :placeholder="
+                    filteredTerminals.length > 0
+                      ? 'Select Terminal'
+                      : 'No terminals found for this assignment'
+                  "
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="terminal in filteredTerminals"
+                  :key="terminal.id"
+                  :value="terminal.id.toString()"
+                >
+                  {{ terminal.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <InputError :message="form.errors.terminal_id" />
+          </div>
+
+          <div
+            v-if="isTricycle && selectedDriver?.prangkisa_attachment"
+            class="grid gap-2"
+          >
+            <Label>Current Prangkisa Attachment</Label>
+            <a
+              :href="selectedDriver.prangkisa_attachment"
+              target="_blank"
+              class="text-sm text-blue-600 underline"
+            >
+              View Current Attachment
+            </a>
+          </div>
+
+          <div v-if="isTricycle" class="grid gap-2">
+            <Label>Upload Prangkisa Attachment</Label>
+            <Input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              @change="
+                form.prangkisa_attachment =
+                  ($event.target as HTMLInputElement).files?.[0] || null
+              "
+            />
+            <InputError :message="form.errors.prangkisa_attachment" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div class="grid gap-2">
             <Label>Vehicle (Plate - Brand Model)</Label>
             <Select
@@ -293,63 +352,6 @@ const submit = () => {
             />
             <InputError :message="form.errors['vehicle_rates.0.amount']" />
           </div>
-        </div>
-
-        <div v-if="isTricycle" class="grid gap-2">
-          <Label>Terminal</Label>
-          <Select
-            v-model="form.terminal_id"
-            :disabled="filteredTerminals.length === 0"
-          >
-            <SelectTrigger
-              :class="{ 'border-red-500': form.errors.terminal_id }"
-            >
-              <SelectValue
-                :placeholder="
-                  filteredTerminals.length > 0
-                    ? 'Select Terminal'
-                    : 'No terminals found for this assignment'
-                "
-              />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="terminal in filteredTerminals"
-                :key="terminal.id"
-                :value="terminal.id.toString()"
-              >
-                {{ terminal.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <InputError :message="form.errors.terminal_id" />
-        </div>
-
-        <div
-          v-if="isTricycle && selectedDriver?.prangkisa_attachment"
-          class="grid gap-2"
-        >
-          <Label>Current Prangkisa Attachment</Label>
-          <a
-            :href="selectedDriver.prangkisa_attachment"
-            target="_blank"
-            class="text-sm text-blue-600 underline"
-          >
-            View Current Attachment
-          </a>
-        </div>
-
-        <div v-if="isTricycle" class="grid gap-2">
-          <Label>Upload Prangkisa Attachment</Label>
-          <Input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            @change="
-              form.prangkisa_attachment =
-                ($event.target as HTMLInputElement).files?.[0] || null
-            "
-          />
-          <InputError :message="form.errors.prangkisa_attachment" />
         </div>
 
         <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
