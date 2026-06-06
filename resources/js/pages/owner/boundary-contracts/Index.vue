@@ -165,20 +165,24 @@ const goToPage = (url: string | null) => {
         </TabsList>
       </Tabs>
 
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-  <div>
-    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Boundary Contracts</h1>
-    <p class="text-sm sm:text-base text-muted-foreground">
-      Manage and monitor driver lease agreements
-    </p>
-  </div>
-  <Button 
-    @click="router.get('/owner/boundary-contracts/create')" 
-    class="w-full sm:w-auto"
-  >
-    <Plus class="mr-2 h-4 w-4" /> Add Contract
-  </Button>
-</div>
+      <div
+        class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
+      >
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">
+            Boundary Contracts
+          </h1>
+          <p class="text-sm text-muted-foreground sm:text-base">
+            Manage and monitor driver lease agreements
+          </p>
+        </div>
+        <Button
+          @click="router.get('/owner/boundary-contracts/create')"
+          class="w-full sm:w-auto"
+        >
+          <Plus class="mr-2 h-4 w-4" /> Add Contract
+        </Button>
+      </div>
 
       <div class="flex flex-col gap-4 md:flex-row md:items-center">
         <Input
@@ -242,6 +246,7 @@ const goToPage = (url: string | null) => {
             <TableRow>
               <TableHead>Contract Name</TableHead>
               <TableHead>Driver</TableHead>
+              <TableHead>TODA</TableHead>
               <TableHead>Assignment</TableHead>
               <TableHead>Vehicle Type</TableHead>
               <TableHead>Daily Amount</TableHead>
@@ -252,13 +257,28 @@ const goToPage = (url: string | null) => {
           <TableBody>
             <TableRow v-for="c in paginator.data" :key="c.id">
               <TableCell class="font-medium">{{ c.name }}</TableCell>
-              <TableCell>{{ c.driver_username }}</TableCell>
+
+              <TableCell>
+                <div class="flex flex-col">
+                  <span class="font-medium">{{ c.driver_username }}</span>
+                  <span class="text-xs text-muted-foreground">
+                    {{ c.driver_phone }}
+                  </span>
+                </div>
+              </TableCell>
+
+              <TableCell>
+                <Badge variant="outline">
+                  {{ c.toda_name }}
+                </Badge>
+              </TableCell>
+
               <TableCell>
                 <div class="flex flex-col">
                   <span class="text-sm font-medium">{{ c.branch_name }}</span>
-                  <span class="text-[10px] text-muted-foreground uppercase">{{
-                    c.is_branch ? 'Branch' : 'Franchise'
-                  }}</span>
+                  <span class="text-[10px] text-muted-foreground uppercase">
+                    {{ c.is_branch ? 'Branch' : 'Franchise' }}
+                  </span>
                 </div>
               </TableCell>
               <TableCell>
@@ -283,7 +303,7 @@ const goToPage = (url: string | null) => {
             </TableRow>
             <TableRow v-if="paginator.data.length === 0">
               <TableCell
-                colspan="7"
+                colspan="8"
                 class="py-10 text-center text-muted-foreground"
               >
                 No contracts found matching your filters.
@@ -375,13 +395,26 @@ const goToPage = (url: string | null) => {
                   {{ selectedContract.driver_username }}
                 </p>
               </div>
+
               <div>
                 <p class="text-[11px] text-gray-500">Phone</p>
-                <p class="font-medium">{{ selectedContract.driver_phone }}</p>
+                <p class="font-medium">
+                  {{ selectedContract.driver_phone }}
+                </p>
               </div>
-              <div class="col-span-2">
+
+              <div>
+                <p class="text-[11px] text-gray-500">TODA</p>
+                <p class="font-medium">
+                  {{ selectedContract.toda_name }}
+                </p>
+              </div>
+
+              <div>
                 <p class="text-[11px] text-gray-500">Email Address</p>
-                <p class="font-medium">{{ selectedContract.driver_email }}</p>
+                <p class="font-medium">
+                  {{ selectedContract.driver_email }}
+                </p>
               </div>
             </div>
           </div>

@@ -28,7 +28,7 @@ class BoundaryContractController extends Controller
 
         $selectedType = $request->vehicle_type ?: $franchiseVehicleTypes->first()?->name;
 
-        $query = BoundaryContract::with(['driver.user', 'driver.branches', 'franchise', 'vehicleTypes'])
+        $query = BoundaryContract::with(['driver.user', 'driver.branches', 'driver.tricycleTerminal', 'franchise', 'vehicleTypes'])
             ->where('franchise_id', $franchise->id);
 
         $query->when($request->search, function ($q, $search) {
@@ -84,6 +84,7 @@ class BoundaryContractController extends Controller
                     'driver_username' => $contract->driver?->user->username ?? 'N/A',
                     'driver_email' => $contract->driver?->user->email ?? 'N/A',
                     'driver_phone' => $contract->driver?->user->phone ?? 'N/A',
+                    'toda_name' => $contract->driver?->tricycleTerminal?->name ?? 'No TODA',
                     'branch_name' => $branch ? $branch->name : ($contract->franchise?->name ?? 'Main Franchise'),
                     'branch_email' => $branch ? $branch->email : ($contract->franchise?->email ?? 'N/A'),
                     'branch_phone' => $branch ? $branch->phone : ($contract->franchise?->phone ?? 'N/A'),
